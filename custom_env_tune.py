@@ -1,12 +1,11 @@
 import ray
 from ray import air, tune
-from ray.rllib.env.env_context import EnvContext
 #import ray.rllib.algorithms.ppo as ppo
 import ray.rllib.algorithms.a2c as a2c
 #import ray.rllib.algorithms.sac as sac
 
 from stop_logic import StopLogic
-from simple_env import SimpleCorridor
+from projects.cda0.simple_highway_with_ramp import SimpleHighwayRamp
 
 ray.init()
 
@@ -17,7 +16,7 @@ params = {} #a2c.DEFAULT_CONFIG.copy()
 # Define the custom environment for Ray
 env_config = {"corridor_length": 10}
 
-params["env"]                               = SimpleCorridor
+params["env"]                               = SimpleHighwayRamp
 params["env_config"]                        = env_config
 params["framework"]                         = "torch"
 params["num_gpus"]                          = 0 #for the local worker
