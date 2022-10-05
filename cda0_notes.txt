@@ -1,0 +1,13 @@
+Notes on the cda0 project
+=========================
+
+10/3/22:
+* Spent approx 3 hr setting up & beginning the coding.
+
+10/4/22:
+* Time spent:  
+  17:00 - 18:44 = 1:44
+  21:21 - 
+* Decided to go forward with the somewhat awkward and non-extensible approach of modeling observations to include states on
+  exactly 3 neighbor vehicles.  For a future version I will replace that with a more general approach that looks at the
+  roadway itself (analogous to an Atari agent viewing screen pixels rather than tracking a number of alien ships).
