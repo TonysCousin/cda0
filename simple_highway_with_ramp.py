@@ -112,9 +112,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
     metadata = {"render_modes": None}
     #metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    OBS_SIZE        = 30
-    VEHICLE_LENGTH  = 5.0   #m
-    MAX_ACCEL       = 3.0   #m/s^2
+    OBS_SIZE                = 30
+    VEHICLE_LENGTH          = 5.0   #m
+    MAX_ACCEL               = 3.0   #m/s^2
+    MAX_JERK                = 4.0   #m/s^3
+    #TODO: make this dependent upon time step size:
+    HALF_LANE_CHANGE_STEPS  = 3.0 / 0.5 // 2    #num steps to get half way across the lane (equally straddling both)
+    TOTAL_LANE_CHANGE_STEPS = 2 * HALF_LANE_CHANGE_STEPS
 
 
     def __init__(self, config: EnvContext, seed=None, render_mode=None):
@@ -218,6 +222,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Create the roadway geometry
         self.roadway = Roadway
 
+        # Other persistent data
+        self.lane_change_underway = "none" #possible values: "left", "right", "none"
+        self.lane_change_count = 0 #num consecutive time steps since a lane change was begun
+
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
         #self.render_mode = render_mode
         """
@@ -291,12 +299,78 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             CAUTION: the returned observation vector is at actual world scale and needs to be
                      preprocessed before going into a NN!
         """
-        assert action[0] in [0, 1], action
-        if action == 0 and self.cur_pos > 0:
-            self.cur_pos -= 1
-        elif action == 1:
-            self.cur_pos += 1
-        done = self.cur_pos >= self.end_pos
+        assert action[0] in [-SimpleHighwayRamp.MAX_ACCEL, SimpleHighwayRamp.MAX_ACCEL], "Input accel cmd invalid: {:.2f}".format(action[0])
+        assert action[1] in [-1.0, 1.0], "Input lane change cmd is invalid: {:.2f}".format(action[1])
+
+        #..........Calculate new state for the ego vehicle and determine if episode is complete
+
+        done = False
+
+        # Move all of the neighbor vehicles downtrack
+
+
+
+
+
+        # Determine new jerk, accel, speed & downtrack distance of the ego vehicle
+        #TODO: make a new method to do all of this
+
+        new_jerk = (action[0] - self.obs[self.EGO_ACCEL_CMD_CUR]) / self.time_step_size
+        if new_jerk < -SimpleHighwayRamp.MAX_JERK:
+            new_jerk = -SimpleHighwayRamp.MAX_JERK
+        elif new_jerk > SimpleHighwayRamp.MAX_JERK:
+            new_jerk = SimpleHighwayRamp.MAX_JERK
+
+        new_accel = self.obs[self.EGO_ACCEL_CMD_CUR] + self.time_step_size*new_jerk
+        new_ego_speed = self.obs[self.EGO_SPEED] + self.time_step_size*new_accel
+        new_ego_x = self.obs[self.EGO_X] + self.time_step_size*(new_ego_speed + 0.5*self.time_step_size*new_accel)
+
+        # Get updated metrics of ego vehicle relative to lane geometry
+        ego_rem, la, lb, l_rem, ra, rb, r_rem = self._get_current_lane_geom(self.obs[self.EGO_LANE_ID], new_ego_x)
+
+        # Determine if we are beginning or continuing a lane change maneuver (it's legal, but not desirable, to
+        # command opposite lane change directions in consecutive time steps)
+        if action[1] < -0.5  or  action[1] > 0.5: #a lane change has been commanded
+            if self.lane_change_underway == "none": #count should always be 0 in this case
+                if action[1] < -0.5:
+                    self.lane_change_underway = "left"
+                else:
+                    self.lane_change_underway = "right"
+                self.lane_change_count = 1
+            elif (self.lane_change_underway == "left"  and  action[1] < -0.5)  or  \
+                 (self.lane_change_underway == "right" and  action[1] >  0.5):
+                self.lane_change_count += 1
+
+        # Check that an adjoining lane is available in the direction commanded until maneuver is complete
+        tgt_lane = self.obs[self.EGO_LANE_ID]
+        if self.lane_change_count > 0:
+            if self.lane_change_count <= SimpleHighwayRamp.HALF_LANE_CHANGE_STEPS: #still in original lane
+                tgt_lane = self._get_target_lane(self.obs[self.EGO_LANE_ID], self.lane_change_underway, new_ego_x)
+                if tgt_lane < 0: #there is no more lane to change into
+                    done = True
+            else:
+                coming_from = "left"
+                if self.lane_change_underway == "left":
+                    coming_from = "right"
+                prev_lane = self._get_target_lane(tgt_lane, coming_from, new_ego_x))
+                if prev_lane < 0: #the lane we're coming from ended before the lane change maneuver completed
+                    done = True
+
+
+
+
+
+
+
+
+
+
+        # If lane change is complete, then reset its state and counter
+
+        # Update the obs vector with the new state info
+
+        # Determine the reward resulting from this time step's action
+        reward = self._get_reward(done)
 
         # According to gym docs, return tuple should have 5 elements:
         #   obs
@@ -309,15 +383,25 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
     def close(self):
         """Closes any resources that may have been used during the simulation."""
-        pass
+        pass #this method not needed for this version
 
 
     ##### internal methods #####
 
-    def _get_current_lane_geom(lane_id, dist_from_beg):
+    def _get_current_lane_geom(lane_id,
+                                dist_from_beg   : float = 0.0   #distance of ego vehicle from the beginning of the indicated lane, m
+                              ):
         """Determines all of the variable roadway geometry relative to the given vehicle location."""
 
         return 0, 0, 0, 0, 0, 0, 0 #TODO: bogus!!!
+
+
+    def _get_reward(self,
+                    done    : bool = False  #is this the final step in the episode?
+                   ):
+        """Calculates the reward for the current time step."""
+
+        pass    #TODO
 
 ######################################################################################################
 ######################################################################################################
@@ -342,6 +426,13 @@ class Roadway:
                     right_id = 1, right_join = 0.0, right_sep = inf)
         self.lanes.append(lane)
 
+        lane = Lane(1, Roadway.SCENARIO_LENGTH + Roadway.ONGOING_PAD,
+                    left_id = 0, left_join = 0.0, left_sep = inf,
+                    right_id = 2, right_join = 800.0, right_sep = 1320.0)
+        self.lanes.append(lane)
+
+        lane = Lane(2, 1000.0, left_id = 1, left_join = 480.0, left_sep = 1000.0)
+        self.lanes.append(lane)
 
 
 
