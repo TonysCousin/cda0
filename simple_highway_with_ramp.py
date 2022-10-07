@@ -114,6 +114,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
     OBS_SIZE                = 30
     VEHICLE_LENGTH          = 5.0   #m
+    MAX_SPEED               = 35.0  #m/s
     MAX_ACCEL               = 3.0   #m/s^2
     MAX_JERK                = 4.0   #m/s^3
     #TODO: make this dependent upon time step size:
@@ -137,79 +138,84 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             self.time_step_size = float(config["time_step_size"])
         print("///// Environment is using time step size of {:.2f} sec")
 
-        # Define the essential attributes required of any Env object: observation space and action space
+        # Define the vehicles used in this scenario - the ego vehicle (where the AI agent lives) is index 0
+        self.vehicles = [4 * Vehicle(self.time_step_size, SimpleHighwayRamp.MAX_JERK)]
 
-        # Indices into the observation vector
+        #
+        #..........Define the essential attributes required of any Env object: observation space and action space
+        #
+
+        # Indices into the observation vector (need to have all vehicles contiguous with ego being the first one)
         self.EGO_LANE_ID        =  0 #index of the lane the agent is occupying
         self.EGO_X              =  1 #agent's distance downtrack in that lane (center of bounding box), m
         self.EGO_SPEED          =  2 #agent's forward speed, m/s
         self.EGO_LANE_REM       =  3 #distance remaining in the agent's current lane, m
-        self.EGO_ACCEL_CMD_CUR  =  4 #agent's most recent accel_cmd, m/s^2
-        self.EGO_ACCEL_CMD_PREV1=  5 #agent's next most recent accel_cmd (1 time step old), m/s^2
-        self.EGO_ACCEL_CMD_PREV2=  6 #agent's next most recent accel_cmd (2 time steps old), m/s^2
-        self.EGO_LANE_CMD_CUR   =  7 #agent's most recent lane_change_cmd
-        self.EGO_LANE_CMD_PREV1 =  8 #agent's next most recent lane_change_cmd (1 time step old)
-        self.EGO_LANE_CMD_PREV2 =  9 #agent's next most recent lane_change_cmd (2 time steps old)
-        self.ADJ_LN_LEFT_ID     = 10 #index of the lane that is/will be adjacent to the left of ego lane (-1 if none)
-        self.ADJ_LN_LEFT_CONN_A = 11 #dist from agent to where adjacent lane first joins ego lane, m
-        self.ADJ_LN_LEFT_CONN_B = 12 #dist from agent to where adjacent lane separates from ego lane, m
-        self.ADJ_LN_LEFT_REM    = 13 #dist from agent to end of adjacent lane, m
-        self.ADJ_LN_RIGHT_ID    = 14 #index of the lane that is/will be adjacent to the right of ego lane (-1 if none)
-        self.ADJ_LN_RIGHT_CONN_A= 15 #dist from agent to where adjacent lane first joins ego lane, m
-        self.ADJ_LN_RIGHT_CONN_B= 16 #dist from agent to where adjacent lane separates from ego lane, m
-        self.ADJ_LN_RIGHT_REM   = 17 #dist from agent to end of adjacent lane, m
-        self.N1_LANE_ID         = 18 #neighbor vehicle 1, index of the lane occupied by that vehicle
-        self.N1_X               = 19 #neighbor vehicle 1, vehicle's dist downtrack in its current lane (center of bounding box), m
-        self.N1_SPEED           = 20 #neighbor vehicle 1, vehicle's forward speed, m/s
-        self.N1_LANE_REM        = 21 #neighbor vehicle 1, distance remaining in that vehicle's current lane, m
-        self.N2_LANE_ID         = 22 #neighbor vehicle 2, index of the lane occupied by that vehicle
-        self.N2_X               = 23 #neighbor vehicle 2, vehicle's dist downtrack in its current lane (center of bounding box), m
-        self.N2_SPEED           = 24 #neighbor vehicle 2, vehicle's forward speed, m/s
-        self.N2_LANE_REM        = 25 #neighbor vehicle 2, distance remaining in that vehicle's current lane, m
-        self.N3_LANE_ID         = 26 #neighbor vehicle 3, index of the lane occupied by that vehicle
-        self.N3_X               = 27 #neighbor vehicle 3, vehicle's dist downtrack in its current lane (center of bounding box), m
-        self.N3_SPEED           = 28 #neighbor vehicle 3, vehicle's forward speed, m/s
-        self.N3_LANE_REM        = 29 #neighbor vehicle 3, distance remaining in that vehicle's current lane, m
+        self.N1_LANE_ID         =  4 #neighbor vehicle 1, index of the lane occupied by that vehicle
+        self.N1_X               =  5 #neighbor vehicle 1, vehicle's dist downtrack in its current lane (center of bounding box), m
+        self.N1_SPEED           =  6 #neighbor vehicle 1, vehicle's forward speed, m/s
+        self.N1_LANE_REM        =  7 #neighbor vehicle 1, distance remaining in that vehicle's current lane, m
+        self.N2_LANE_ID         =  8 #neighbor vehicle 2, index of the lane occupied by that vehicle
+        self.N2_X               =  9 #neighbor vehicle 2, vehicle's dist downtrack in its current lane (center of bounding box), m
+        self.N2_SPEED           = 10 #neighbor vehicle 2, vehicle's forward speed, m/s
+        self.N2_LANE_REM        = 11 #neighbor vehicle 2, distance remaining in that vehicle's current lane, m
+        self.N3_LANE_ID         = 12 #neighbor vehicle 3, index of the lane occupied by that vehicle
+        self.N3_X               = 13 #neighbor vehicle 3, vehicle's dist downtrack in its current lane (center of bounding box), m
+        self.N3_SPEED           = 14 #neighbor vehicle 3, vehicle's forward speed, m/s
+        self.N3_LANE_REM        = 15 #neighbor vehicle 3, distance remaining in that vehicle's current lane, m
+        self.EGO_ACCEL_CMD_CUR  = 16 #agent's most recent accel_cmd, m/s^2
+        self.EGO_ACCEL_CMD_PREV1= 17 #agent's next most recent accel_cmd (1 time step old), m/s^2
+        self.EGO_ACCEL_CMD_PREV2= 18 #agent's next most recent accel_cmd (2 time steps old), m/s^2
+        self.EGO_LANE_CMD_CUR   = 19 #agent's most recent lane_change_cmd
+        self.EGO_LANE_CMD_PREV1 = 20 #agent's next most recent lane_change_cmd (1 time step old)
+        self.EGO_LANE_CMD_PREV2 = 21 #agent's next most recent lane_change_cmd (2 time steps old)
+        self.ADJ_LN_LEFT_ID     = 22 #index of the lane that is/will be adjacent to the left of ego lane (-1 if none)
+        self.ADJ_LN_LEFT_CONN_A = 23 #dist from agent to where adjacent lane first joins ego lane, m
+        self.ADJ_LN_LEFT_CONN_B = 24 #dist from agent to where adjacent lane separates from ego lane, m
+        self.ADJ_LN_LEFT_REM    = 25 #dist from agent to end of adjacent lane, m
+        self.ADJ_LN_RIGHT_ID    = 26 #index of the lane that is/will be adjacent to the right of ego lane (-1 if none)
+        self.ADJ_LN_RIGHT_CONN_A= 27 #dist from agent to where adjacent lane first joins ego lane, m
+        self.ADJ_LN_RIGHT_CONN_B= 28 #dist from agent to where adjacent lane separates from ego lane, m
+        self.ADJ_LN_RIGHT_REM   = 29 #dist from agent to end of adjacent lane, m
         #Note:  lane IDs are always non-negative; if adj_ln_*_id is -1 then the other respective values on that side
         #       are meaningless, as there is no lane.
-        #TODO: replace this kludgy vehicle-specific observations with general obs on lane occupancy
+        #TODO future: replace this kludgy vehicle-specific observations with general obs on lane occupancy
 
 
         lower_obs = np.zeros((30)) #most values are 0, so only the others are explicitly described here
-        lower_obs[4] = lower_obs[5] = lower_obs[6] = -SimpleHighwayRamp.MAX_ACCEL #historical ego acceleration cmds
-        lower_obs[7] = lower_obs[8] = lower_obs[9] = -1.0 #historical ego lane cmds
+        lower_obs[16] = lower_obs[17] = lower_obs[18] = -SimpleHighwayRamp.MAX_ACCEL #historical ego acceleration cmds
+        lower_obs[19] = lower_obs[20] = lower_obs[21] = -1.0 #historical ego lane cmds
 
-        upper_obs = np.array([  6.0,    #ego_lane_id
-                                2000.0, #ego_x
-                                35.0,   #ego_speed
-                                3000.0, #ego_lane_rem
-                                SimpleHighwayRamp.MAX_ACCEL,    #ego_accel_cmd_cur
-                                SimpleHighwayRamp.MAX_ACCEL,    #ego_accel_cmd_prev1
-                                SimpleHighwayRamp.MAX_ACCEL,    #ego_accel_cmd_prev2
-                                1.0,    #ego_lane_cmd_cur
-                                1.0,    #ego_lane_cmd_prev1
-                                1.0,    #ego_lane_cmd_prev2
-                                6.0,    #adj_ln_left_id
-                                3000.0, #adj_ln_left_conn_a
-                                3000.0, #adj_ln_left_conn_b
-                                3000.0, #adj_ln_left_rem
-                                6.0,    #adj_ln_right_id
-                                3000.0, #adj_ln_right_conn_a
-                                3000.0, #adj_ln_right_conn_b
-                                3000.0, #adj_ln_right_rem
-                                6.0,    #n1_lane_id
-                                2000.0, #n1_x
-                                35.0,   #n1_speed
-                                3000.0, #n1_lane_rem
-                                6.0,    #n2_lane_id
-                                2000.0, #n2_x
-                                35.0,   #n2_speed
-                                3000.0, #n2_lane_rem
-                                6.0,    #n3_lane_id
-                                2000.0, #n3_x
-                                35.0,   #n3_speed
-                                3000.0 #n3_lane_rem
-                            ])
+        upper_obs = np.ones(30)
+        upper_obs[self.EGO_LANE_ID]         = 6.0
+        upper_obs[self.EGO_X]               = 2000.0
+        upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
+        upper_obs[self.EGO_LANE_REM]        = 3000.0
+        upper_obs[self.N1_LANE_ID]          = 6.0
+        upper_obs[self.N1_X]                = 2000.0
+        upper_obs[self.N1_SPEED]            = SimpleHighwayRamp.MAX_SPEED
+        upper_obs[self.N1_LANE_REM]         = 3000.0
+        upper_obs[self.N2_LANE_ID]          = 6.0
+        upper_obs[self.N2_X]                = 2000.0
+        upper_obs[self.N2_SPEED]            = SimpleHighwayRamp.MAX_SPEED
+        upper_obs[self.N2_LANE_REM]         = 3000.0
+        upper_obs[self.N3_LANE_ID]          = 6.0
+        upper_obs[self.N3_X]                = 2000.0
+        upper_obs[self.N3_SPEED]            = SimpleHighwayRamp.MAX_SPEED
+        upper_obs[self.N3_LANE_REM]         = 3000.0
+        upper_obs[self.EGO_ACCEL_CMD_CUR]   = SimpleHighwayRamp.MAX_ACCEL
+        upper_obs[self.EGO_ACCEL_CMD_PREV1] = SimpleHighwayRamp.MAX_ACCEL
+        upper_obs[self.EGO_ACCEL_CMD_PREV2] = SimpleHighwayRamp.MAX_ACCEL
+        upper_obs[self.EGO_LANE_CMD_CUR]    = 1.0
+        upper_obs[self.EGO_LANE_CMD_PREV1]  = 1.0
+        upper_obs[self.EGO_LANE_CMD_PREV2]  = 1.0
+        upper_obs[self.ADJ_LN_LEFT_ID]      = 6.0
+        upper_obs[self.ADJ_LN_LEFT_CONN_A]  = 3000.0
+        upper_obs[self.ADJ_LN_LEFT_CONN_B]  = 3000.0
+        upper_obs[self.ADJ_LN_LEFT_REM]     = 3000.0
+        upper_obs[self.ADJ_LN_RIGHT_ID]     = 6.0
+        upper_obs[self.ADJ_LN_RIGHT_CONN_A] = 3000.0
+        upper_obs[self.ADJ_LN_RIGHT_CONN_B] = 3000.0
+        upper_obs[self.ADJ_LN_RIGHT_REM]    = 3000.0
 
         self.observation_space = Box(low=lower_obs, high=upper_obs, shape=(self.OBS_SIZE), dtype=np.float32)
 
@@ -265,10 +271,15 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Initialize a new set of observations
         self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE)
         ego_x = self.prng.random() * 200.0   #starting downtrack distance, m
-        ego_rem, la, lb, l_rem, ra, rb, r_rem = self._get_current_lane_geom(0, ego_x)
+        ego_speed = self.prng.random() * 15.0 + 5.0 #starting speed between 5 and 20 m/s
+        ego_rem, la, lb, l_rem, ra, rb, r_rem = self.roadway.get_current_lane_geom(0, ego_x)
         #future (all 3): n1_rem, _, _, _, _, _, _ = self._get_current_lane_geom(n1_lane, n1_x)
+        self.vehicles[0].lane_id = 2
+        self.vehicles[0].dist_downtrack = ego_x
+        self.vehicles[0].speed = ego_speed
+
         self.obs[self.EGO_X]                = ego_x
-        self.obs[self.EGO_SPEED]            = self.prng.random() * 15.0 + 5.0 #starting speed between 5 and 20 m/s
+        self.obs[self.EGO_SPEED]            = ego_speed
         self.obs[self.EGO_LANE_REM]         = ego_rem
         self.obs[self.ADJ_LN_LEFT_ID]       = 1 #fixed starting condition for this roadway scenario
         self.obs[self.ADJ_LN_LEFT_CONN_A]   = la
@@ -278,16 +289,27 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.ADJ_LN_RIGHT_CONN_A]  = ra
         self.obs[self.ADJ_LN_RIGHT_CONN_B]  = rb
         self.obs[self.ADJ_LN_RIGHT_REM]     = r_rem
-        #turning off neighbor vehicles for initial phase - since these are constant speed, they stay out of the way
-        self.obs[self.N1_LANE_ID]           = 1
-        self.obs[self.N1_X]                 = 4.0 * SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
-        self.obs[self.N1_SPEED]             = 0.0
-        self.obs[self.N2_LANE_ID]           = 1
-        self.obs[self.N2_X]                 = 2.0 * SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
-        self.obs[self.N2_SPEED]             = 0.0
-        self.obs[self.N3_LANE_ID]           = 1
-        self.obs[self.N3_X]                 = 0.0 #at beginning of lane
-        self.obs[self.N3_SPEED]             = 0.0
+
+        #neighbor vehicles don't move for initial phase - since these are constant speed, they stay out of the way
+        self.vehicles[1].lane_id = 1
+        self.vehicles[1].dist_downtrack = 4.0 * SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
+        self.vehicles[1].speed = 0.0
+        self.vehicles[2].lane_id = 1
+        self.vehicles[2].dist_downtrack = 2.0 * SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
+        self.vehicles[2].speed = 0.0
+        self.vehicles[3].lane_id = 1
+        self.vehicles[3].dist_downtrack = 0.0 #at beginning of lane
+        self.vehicles[3].speed = 0.0
+
+        self.obs[self.N1_LANE_ID]           = self.vehicles[1].lane_id
+        self.obs[self.N1_X]                 = self.vehicles[1].dist_downtrack
+        self.obs[self.N1_SPEED]             = self.vehicles[1].speed
+        self.obs[self.N2_LANE_ID]           = self.vehicles[2].lane_id
+        self.obs[self.N2_X]                 = self.vehicles[2].dist_downtrack
+        self.obs[self.N2_SPEED]             = self.vehicles[2].speed
+        self.obs[self.N3_LANE_ID]           = self.vehicles[3].lane_id
+        self.obs[self.N3_X]                 = self.vehicles[3].dist_downtrack
+        self.obs[self.N3_SPEED]             = self.vehicles[3].speed
 
         return self.obs
 
@@ -302,72 +324,100 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         assert action[0] in [-SimpleHighwayRamp.MAX_ACCEL, SimpleHighwayRamp.MAX_ACCEL], "Input accel cmd invalid: {:.2f}".format(action[0])
         assert action[1] in [-1.0, 1.0], "Input lane change cmd is invalid: {:.2f}".format(action[1])
 
+        #
         #..........Calculate new state for the ego vehicle and determine if episode is complete
+        #
 
         done = False
 
-        # Move all of the neighbor vehicles downtrack
+        # Move all of the neighbor vehicles downtrack (ASSUMES all vehicles are represented contiguously in the obs vector).
+        # This doesn't account for possible lane changes, which are handled seperately in the next section.
+        for i, v in enumerate(self.vehicles):
+            obs_idx = self.EGO_LANE_ID + 4*(i - 1)
+            lane_id = self.obs[obs_idx]
+            new_accel_cmd = 0.0 #non-ego vehicles are constant speed for now
+            prev_accel_cmd = 0.0
+            if i == 0:
+                new_accel_cmd = action[0]
+                prev_accel_cmd = self.obs[self.EGO_ACCEL_CMD_CUR]
+            new_speed, new_x = v.advance_vehicle(new_accel_cmd, prev_accel_cmd,
+                                                    self.obs[obs_idx + 2], self.obs[obs_ids + 1])
+            new_rem, _, _, _, _, _, _ = self.roadway.get_current_lane_geom(lane_id, new_x)
+            self.obs[obs_idx + 1] = new_x
+            self.obs[obs_idx + 2] = new_speed
+            self.obs[obs_idx + 3] = new_rem
 
+        new_ego_speed = self.obs[self.EGO_SPEED]
+        new_ego_x = self.obs[self.EGO_X]
+        new_ego_rem = self.obs[self.EGO_LANE_REM]
 
-
-
-
-        # Determine new jerk, accel, speed & downtrack distance of the ego vehicle
-        #TODO: make a new method to do all of this
-
-        new_jerk = (action[0] - self.obs[self.EGO_ACCEL_CMD_CUR]) / self.time_step_size
-        if new_jerk < -SimpleHighwayRamp.MAX_JERK:
-            new_jerk = -SimpleHighwayRamp.MAX_JERK
-        elif new_jerk > SimpleHighwayRamp.MAX_JERK:
-            new_jerk = SimpleHighwayRamp.MAX_JERK
-
-        new_accel = self.obs[self.EGO_ACCEL_CMD_CUR] + self.time_step_size*new_jerk
-        new_ego_speed = self.obs[self.EGO_SPEED] + self.time_step_size*new_accel
-        new_ego_x = self.obs[self.EGO_X] + self.time_step_size*(new_ego_speed + 0.5*self.time_step_size*new_accel)
-
-        # Get updated metrics of ego vehicle relative to lane geometry
-        ego_rem, la, lb, l_rem, ra, rb, r_rem = self._get_current_lane_geom(self.obs[self.EGO_LANE_ID], new_ego_x)
-
-        # Determine if we are beginning or continuing a lane change maneuver (it's legal, but not desirable, to
-        # command opposite lane change directions in consecutive time steps)
-        if action[1] < -0.5  or  action[1] > 0.5: #a lane change has been commanded
-            if self.lane_change_underway == "none": #count should always be 0 in this case
+        # Determine if we are beginning or continuing a lane change maneuver.
+        # Accept a lane change command that lasts for several time steps or only one time step.  Once the first
+        # command is received (when currently not in a lane change), then start the maneuver and ignore future
+        # lane change commands until the underway maneuver is complete, which takes several time steps.
+        # It's legal, but not desirable, to command opposite lane change directions in consecutive time steps.
+        if action[1] < -0.5  or  action[1] > 0.5  or  self.lane_change_underway != "none":
+            if self.lane_change_underway == "none": #count should always be 0 in this case, so initiate a new count
                 if action[1] < -0.5:
                     self.lane_change_underway = "left"
                 else:
                     self.lane_change_underway = "right"
                 self.lane_change_count = 1
-            elif (self.lane_change_underway == "left"  and  action[1] < -0.5)  or  \
-                 (self.lane_change_underway == "right" and  action[1] >  0.5):
+            else: #once a lane change is underway, contiinue until complete, regardless of new commands
                 self.lane_change_count += 1
 
         # Check that an adjoining lane is available in the direction commanded until maneuver is complete
-        tgt_lane = self.obs[self.EGO_LANE_ID]
+        new_ego_lane = self.obs[self.EGO_LANE_ID]
+        tgt_lane = new_ego_lane
         if self.lane_change_count > 0:
-            if self.lane_change_count <= SimpleHighwayRamp.HALF_LANE_CHANGE_STEPS: #still in original lane
-                tgt_lane = self._get_target_lane(self.obs[self.EGO_LANE_ID], self.lane_change_underway, new_ego_x)
-                if tgt_lane < 0: #there is no more lane to change into
-                    done = True
+
+            # If we are still in the original lane then
+            if self.lane_change_count <= SimpleHighwayRamp.HALF_LANE_CHANGE_STEPS:
+                # Ensure that there is a lane to change into and get its ID
+                tgt_lane = self.roadway.get_target_lane(self.obs[self.EGO_LANE_ID], self.lane_change_underway, new_ego_x)
+                if tgt_lane < 0:
+                    done = True #ran off the road
+
+                # Else, we are still going; if we are exactly half-way then change the current lane ID & downtrack dist
+                elif self.lane_change_count == SimpleHighwayRamp.HALF_LANE_CHANGE_STEPS:
+                    new_ego_lane = tgt_lane
+                    adjustment = self.roadway.adjust_downtrack_dist(self.obs[self.EGO_LANE_ID], tgt_lane)
+                    new_ego_x += adjustment
+                    # Apply adjustment to historical distance also (affects vehicle dynamics calcs)
+                    self.obs[self.EGO_X] += adjustment
+                    # Get updated metrics of ego vehicle relative to the new lane geometry
+                    new_ego_rem, la, lb, l_rem, ra, rb, r_rem = self.roadway.get_current_lane_geom(self.obs[self.EGO_LANE_ID], new_ego_x)
+
+            # Else, we have already crossed the dividing line and are now mostly in the target lane
             else:
                 coming_from = "left"
                 if self.lane_change_underway == "left":
                     coming_from = "right"
-                prev_lane = self._get_target_lane(tgt_lane, coming_from, new_ego_x))
+                # Ensure the lane we were coming from is still adjoining (since we still have 2 wheels there)
+                prev_lane = self.roadway.get_target_lane(tgt_lane, coming_from, new_ego_x)
                 if prev_lane < 0: #the lane we're coming from ended before the lane change maneuver completed
-                    done = True
-
-
-
-
-
-
-
-
-
+                    done = True #ran off the road
 
         # If lane change is complete, then reset its state and counter
+        if self.lane_change_count >= SimpleHighwayRamp.TOTAL_LANE_CHANGE_STEPS:
+            self.lane_change_underway = "none"
+            self.lane_change_count = 0
 
         # Update the obs vector with the new state info
+        self.obs[self.EGO_ACCEL_CMD_PREV2] = self.obs[self.EGO_ACCEL_CMD_PREV1]
+        self.obs[self.EGO_ACCEL_CMD_PREV1] = self.obs[self.EGO_ACCEL_CMD_CUR]
+        self.obs[self.EGO_ACCEL_CMD_CUR] = new_accel
+        self.obs[self.EGO_LANE_CMD_PREV2] = self.obs[self.EGO_LANE_CMD_PREV1]
+        self.obs[self.EGO_LANE_CMD_PREV1] = self.obs[self.EGO_LANE_CMD_CUR]
+        self.obs[self.EGO_LANE_CMD_CUR] = action[1]
+        self.obs[self.EGO_LANE_ID] = new_ego_lane
+        self.obs[self.EGO_LANE_REM] = new_ego_rem
+        self.obs[self.EGO_SPEED] = new_ego_speed
+        self.obs[self.EGO_X] = new_ego_x
+
+        # Check that none of the vehicles have crashed into each other, accounting for a lane change in progress
+        # taking up both lanes
+        done |= self._check_for_collisions()
 
         # Determine the reward resulting from this time step's action
         reward = self._get_reward(done)
@@ -388,20 +438,24 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
     ##### internal methods #####
 
-    def _get_current_lane_geom(lane_id,
-                                dist_from_beg   : float = 0.0   #distance of ego vehicle from the beginning of the indicated lane, m
-                              ):
-        """Determines all of the variable roadway geometry relative to the given vehicle location."""
+    def _check_for_collisions(self):
+        """Compares location and bounding box of each vehicle with all other vehicles to determine if there are
+            any overlaps.  If any two vehicle bounding boxes overlap, then returns True, otherwise False.
 
-        return 0, 0, 0, 0, 0, 0, 0 #TODO: bogus!!!
+            Return: (bool) has there been a collision?
+        """
+
+        # Loop through all vehicles
+
+        return False #TODO bogus!!!
 
 
     def _get_reward(self,
                     done    : bool = False  #is this the final step in the episode?
                    ):
-        """Calculates the reward for the current time step."""
+        """Returns the reward for the current time step (float)."""
 
-        pass    #TODO
+        return 0.0    #TODO bogus
 
 ######################################################################################################
 ######################################################################################################
@@ -435,9 +489,59 @@ class Roadway:
         self.lanes.append(lane)
 
 
+    def get_current_lane_geom(self,
+                                lane_id,                        #ID of the lane in question
+                                dist_from_beg   : float = 0.0   #distance of ego vehicle from the beginning of the indicated lane, m
+                             ):
+        """Determines all of the variable roadway geometry relative to the given vehicle location.
+            Returns a tuple of (remaining dist in this lane, dist to left adjoin point A, dist to left adjoin point B,
+                                remaining dist in left ajoining lane, dist to right adjoin point A, dist to right adjoin point B,
+                                remaining dist in right adjoining lane). If either adjoining lane doesn't exist, its return values
+                                will be 0, inf, inf.  All distances are in m.
+        """
+
+        rem_this_lane = self.lanes[lane_id].length - dist_from_beg
+        la = 0.0
+        lb = inf
+        l_rem = inf
+        left_id = self.lanes[lane_id].left_id
+        if left_id >= 0:
+            la = self.lanes[lane_id].left_join - dist_from_beg
+            lb = self.lanes[lane_id].left_sep - dist_from_beg
+            l_rem = self.lanes[left_id].length - dist_from_beg + self.adjust_downtrack_dist(lane_id, left_id)
+        ra = 0.0
+        rb = inf
+        r_rem = inf
+        right_id = self.lanes[lane_id].right_id
+        if right_id >= 0:
+            ra = self.lanes[lane_id].right_join - dist_from_beg
+            rb = self.lanes[lane_id].right_sep - dist_from_beg
+            r_rem = self.lanes[right_id].length - dist_from_beg + self.adjust_downtrack_dist(lane_id, right_id)
+
+        return rem_this_lane, la, lb, l_rem, ra, rb, r_rem
 
 
+    def adjust_downtrack_dist(self,
+                                prev_lane_id    : int,
+                                new_lane_id     : int
+                             ):
+        """Returns an adjustment to be applied to the downtrack distance in the current lane, as a result of changing lanes.
+            A vehicle's downtrack distance is relative to the beginning of its current lane, and each lane may start at a
+            different point.
+            Return value can be positive or negative (float), m
+        """
 
+        adjustment = 0.0
+
+        # If new lane is on the right and prev lane is on the left, and they adjoin, then
+        if self.lanes[new_lane_id].left_id == prev_lane_id  and  self.lanes[prev_lane_id].right_id == new_lane_id:
+            adjustment = self.lanes[new_lane_id].left_join - self.lanes[prev_lane_id].right_join
+
+        # Else if new lane is on the left and prev lane is on the right and the adjoin, then
+        elif self.lanes[new_lane_id].right_id == prev_lane_id  and  self.lanes[prev_lane_id].left_id == new_lane_id:
+            adjustment = self.lanes[new_lane_id].right_join - self.lanes[prev_lane_id].left_join
+
+        return adjustment
 
 
 ######################################################################################################
@@ -494,7 +598,7 @@ class Lane:
                         ):
         """Returns the distance from current_loc to nearest joining lane on the specified side."""
 
-        pass #TODO
+        pass #TODO - do we need this?
 
 
     def get_dist_to_separation(self,
@@ -505,4 +609,49 @@ class Lane:
             Note that the separating lane may no yet be adjoining at current_locc.
         """
 
-        pass #TODO
+        pass #TODO - do we need this?
+
+######################################################################################################
+######################################################################################################
+
+class Vehicle:
+    """Represents a single vehicle on the Roadway."""
+
+    def __init__(self,
+                    step_size   : float,    #duration of a time step, s
+                    max_jerk    : float     #max allowed jerk, m/s^3
+                ):
+
+        self.time_step_size = step_size
+        self.max_jerk = max_jerk
+
+        self.lane_id = -1
+        self.dist_downtrack = 0.0
+        self.lane_change_status = "none"
+        self.speed = 0.0
+
+
+    def advance_vehicle(self,
+                        new_accel_cmd   : float,    #newest fwd accel command, m/s^2
+                        prev_accel_cmd  : float,    #fwd accel command from prev time step, m/s^2
+                        prev_speed      : float,    #speed in prev time step, m/s
+                        prev_distance   : float     #downtrack distance in prev time step, relative to current lane, m
+                       ):
+        """Advances a vehicle's forward motion for one time step according to the vehicle dynamics model.
+            Note that this does not consider lateral motion, which needs to be handled elsewhere.
+
+            Returns: tuple of (new speed (m/s), new downtrack distance (m))
+        """
+
+        # Determine new jerk, accel, speed & downtrack distance of the ego vehicle
+        new_jerk = (new_accel_cmd - prev_accel_cmd) / self.time_step_size
+        if new_jerk < -self.max_jerk:
+            new_jerk = -self.max_jerk
+        elif new_jerk > self.max_jerk:
+            new_jerk = self.max_jerk
+
+        new_accel = prev_accel_cmd + self.time_step_size*new_jerk
+        new_speed = prev_speed + self.time_step_size*new_accel
+        new_x = prev_distance + self.time_step_size*(new_speed + 0.5*self.time_step_size*new_accel)
+
+        return (new_speed, new_x)
