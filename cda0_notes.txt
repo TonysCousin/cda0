@@ -13,5 +13,19 @@ Notes on the cda0 project
   roadway itself (analogous to an Atari agent viewing screen pixels rather than tracking a number of alien ships).
 
 10/5/22:
+* Time 20:45 - 22:40 = 1:55
+
+10/6/22:
 * Time
-  20:45 - 22:40
+  10:33 - 12:39 = 2:06
+  21:53 - 23:03 = 1:10
+
+10/7/22:
+* Time
+  21:24 - 22:42 = 1:18
+  23:01 - 00:30 = 1:29
+
+10/8/22:
+* Time
+  17:04 - 18:25 = 1:21
+  19:03 - 19:27 = 0:24

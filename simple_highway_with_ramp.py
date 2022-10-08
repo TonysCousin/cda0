@@ -143,7 +143,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         print("///// Environment is using time step size of {:.2f} sec".format(self.time_step_size))
 
         # Define the vehicles used in this scenario - the ego vehicle (where the AI agent lives) is index 0
-        self.vehicles = [Vehicle(self.time_step_size, SimpleHighwayRamp.MAX_JERK)] * 4
+        self.vehicles = []
+        for i in range(4):
+            v = Vehicle(self.time_step_size, SimpleHighwayRamp.MAX_JERK)
+            self.vehicles.append(v)
 
         #
         #..........Define the essential attributes required of any Env object: observation space and action space
@@ -279,14 +282,16 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # Initialize a new set of observations
         self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE)
+        ego_lane_id = 2
         ego_x = self.prng.random() * 200.0   #starting downtrack distance, m
         ego_speed = self.prng.random() * 15.0 + 5.0 #starting speed between 5 and 20 m/s
         ego_rem, la, lb, l_rem, ra, rb, r_rem = self.roadway.get_current_lane_geom(0, ego_x)
         #future (all 3 vehicles): n1_rem, _, _, _, _, _, _ = self._get_current_lane_geom(n1_lane, n1_x)
-        self.vehicles[0].lane_id = 2
+        self.vehicles[0].lane_id = ego_lane_id
         self.vehicles[0].dist_downtrack = ego_x
         self.vehicles[0].speed = ego_speed
 
+        self.obs[self.EGO_LANE_ID]          = ego_lane_id
         self.obs[self.EGO_X]                = ego_x
         self.obs[self.EGO_SPEED]            = ego_speed
         self.obs[self.EGO_LANE_REM]         = ego_rem
@@ -309,8 +314,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.vehicles[3].lane_id = 1
         self.vehicles[3].dist_downtrack = 0.0 #at beginning of lane
         self.vehicles[3].speed = 0.0
-        print("     in reset: vehicles = ")
-        print(self.vehicles)
+        print("      in reset: vehicles = ")
+        for i, v in enumerate(self.vehicles):
+            v.print(i)
 
         self.obs[self.N1_LANE_ID]           = self.vehicles[1].lane_id
         self.obs[self.N1_X]                 = self.vehicles[1].dist_downtrack
@@ -325,12 +331,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.N3_SPEED]             = self.vehicles[3].speed
         self.obs[self.N3_LANE_REM]          = self.roadway.get_total_lane_length(self.vehicles[3].lane_id) - self.vehicles[3].dist_downtrack
 
-        print("///// End of reset(). Returning obs = ")
-        print(self.obs)
+        print("///// End of reset().")
         return self.obs
 
 
-    def step(self, action):
+    def step(self,
+                action  : list      #list of floats; 0 = accel cmd, m/s^2, 1 = lane chg cmd (-1 left, 0 none, +1 right)
+            ):
         """Executes a single time step of the environment.  Determines how the input actions will alter the
             simulated world and returns the resulting observations to the agent.
 
@@ -341,9 +348,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         print("///// Entering step(): action = ", action)
         print("      vehicles array contains:")
         for i, v in enumerate(self.vehicles):
-            print("      [{}] lane_id = {}, status = {:5s}, dist = {:7.2f}, speed = {:5.2f}".format(i, v.lane_id, v.lane_change_status, v.dist_downtrack, v.speed))
-        assert action[0] in [-SimpleHighwayRamp.MAX_ACCEL, SimpleHighwayRamp.MAX_ACCEL], "Input accel cmd invalid: {:.2f}".format(action[0])
-        assert action[1] in [-1.0, 1.0], "Input lane change cmd is invalid: {:.2f}".format(action[1])
+            v.print(i)
+        assert -SimpleHighwayRamp.MAX_ACCEL <= action[0] <= SimpleHighwayRamp.MAX_ACCEL, "Input accel cmd invalid: {:.2f}".format(action[0])
+        assert -1.0 <= action[1] <= 1.0, "Input lane change cmd is invalid: {:.2f}".format(action[1])
 
         #
         #..........Calculate new state for the ego vehicle and determine if episode is complete
@@ -354,15 +361,17 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Move all of the neighbor vehicles downtrack (ASSUMES all vehicles are represented contiguously in the obs vector).
         # This doesn't account for possible lane changes, which are handled seperately in the next section.
         for i, v in enumerate(self.vehicles):
-            obs_idx = self.EGO_LANE_ID + 4*(i - 1)
-            lane_id = self.obs[obs_idx]
+            obs_idx = self.EGO_LANE_ID + 4*i
+            lane_id = int(self.obs[obs_idx])
+            print("      Advancing vehicle {} with obs_idx = {}, lane_id = {}".format(i, obs_idx, lane_id))
             new_accel_cmd = 0.0 #non-ego vehicles are constant speed for now
             prev_accel_cmd = 0.0
             if i == 0:
                 new_accel_cmd = action[0]
                 prev_accel_cmd = self.obs[self.EGO_ACCEL_CMD_CUR]
             new_speed, new_x = v.advance_vehicle(new_accel_cmd, prev_accel_cmd,
-                                                    self.obs[obs_idx + 2], self.obs[obs_ids + 1])
+                                                    self.obs[obs_idx + 2], self.obs[obs_idx + 1])
+            print("      Vehicle {} advanced with new_accel_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}".format(i, new_accel_cmd, new_speed, new_x))
             new_rem, _, _, _, _, _, _ = self.roadway.get_current_lane_geom(lane_id, new_x)
             self.obs[obs_idx + 1] = new_x
             self.obs[obs_idx + 2] = new_speed
@@ -371,12 +380,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         new_ego_speed = self.obs[self.EGO_SPEED]
         new_ego_x = self.obs[self.EGO_X]
         new_ego_rem = self.obs[self.EGO_LANE_REM]
+        print("///// step: done advancing vehicle longitudinal motion.")
 
         # Determine if we are beginning or continuing a lane change maneuver.
         # Accept a lane change command that lasts for several time steps or only one time step.  Once the first
         # command is received (when currently not in a lane change), then start the maneuver and ignore future
         # lane change commands until the underway maneuver is complete, which takes several time steps.
         # It's legal, but not desirable, to command opposite lane change directions in consecutive time steps.
+        # TODO future: replace instance variables lane_change_underway and lane_id with those in vehicle[0]
         if action[1] < -0.5  or  action[1] > 0.5  or  self.lane_change_underway != "none":
             if self.lane_change_underway == "none": #count should always be 0 in this case, so initiate a new count
                 if action[1] < -0.5:
@@ -388,7 +399,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 self.lane_change_count += 1
 
         # Check that an adjoining lane is available in the direction commanded until maneuver is complete
-        new_ego_lane = self.obs[self.EGO_LANE_ID]
+        new_ego_lane = int(self.obs[self.EGO_LANE_ID])
         tgt_lane = new_ego_lane
         if self.lane_change_count > 0:
 
@@ -424,10 +435,15 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             self.lane_change_underway = "none"
             self.lane_change_count = 0
 
+        self.vehicles[0].lane_id = new_ego_lane
+        self.vehicles[0].lane_change_status = self.lane_change_underway
+        print("      step: done updating lane change. underway = {}, new_ego_lane = {}, tgt_lane = {}, count = {}"
+                .format(self.lane_change_underway, new_ego_lane, tgt_lane, self.lane_change_count))
+
         # Update the obs vector with the new state info
         self.obs[self.EGO_ACCEL_CMD_PREV2] = self.obs[self.EGO_ACCEL_CMD_PREV1]
         self.obs[self.EGO_ACCEL_CMD_PREV1] = self.obs[self.EGO_ACCEL_CMD_CUR]
-        self.obs[self.EGO_ACCEL_CMD_CUR] = new_accel
+        self.obs[self.EGO_ACCEL_CMD_CUR] = action[0]
         self.obs[self.EGO_LANE_CMD_PREV2] = self.obs[self.EGO_LANE_CMD_PREV1]
         self.obs[self.EGO_LANE_CMD_PREV1] = self.obs[self.EGO_LANE_CMD_CUR]
         self.obs[self.EGO_LANE_CMD_CUR] = action[1]
@@ -452,6 +468,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         print("///// step complete. Returning obs = ")
         print(      self.obs)
         print("      reward = ", reward, ", done = ", done)
+        print("      final vehicles array =")
+        for i, v in enumerate(self.vehicles):
+            v.print(i)
         return self.obs, reward, done, {}
 
 
@@ -473,11 +492,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         crash = False
 
         # Loop through all vehicles to get vehicle A
-        for i in range(self.vehicles.len() - 1):
+        for i in range(len(self.vehicles) - 1):
             va = self.vehicles[i]
 
             # Loop through the remaining vehicles to get vehicle B
-            for j in range(i + 1, self.vehicle.len()):
+            for j in range(i + 1, len(self.vehicles)):
                 vb = self.vehicles[j]
 
                 # If A and B are in the same lane, then
@@ -577,7 +596,7 @@ class Roadway:
         if left_id >= 0:
             la = self.lanes[lane_id].left_join - dist_from_beg
             lb = self.lanes[lane_id].left_sep - dist_from_beg
-            l_rem = self.lanes[left_id].length - dist_from_beg + self.adjust_downtrack_dist(lane_id, left_id)
+            l_rem = self.lanes[left_id].length - dist_from_beg - self.adjust_downtrack_dist(lane_id, left_id)
         ra = 0.0
         rb = inf
         r_rem = inf
@@ -585,9 +604,9 @@ class Roadway:
         if right_id >= 0:
             ra = self.lanes[lane_id].right_join - dist_from_beg
             rb = self.lanes[lane_id].right_sep - dist_from_beg
-            r_rem = self.lanes[right_id].length - dist_from_beg + self.adjust_downtrack_dist(lane_id, right_id)
+            r_rem = self.lanes[right_id].length - dist_from_beg - self.adjust_downtrack_dist(lane_id, right_id)
 
-        print("///// get_current_lane_geom complete. Retunirng rem = ", rem_this_lane)
+        print("///// get_current_lane_geom complete. Returning rem = ", rem_this_lane)
         print("      la = {:.2f}, lb = {:.2f}, l_rem = {:.2f}".format(la, lb, l_rem))
         print("      ra = {:.2f}, rb = {:.2f}, r_rem = {:.2f}".format(ra, rb, r_rem))
         return rem_this_lane, la, lb, l_rem, ra, rb, r_rem
@@ -769,4 +788,16 @@ class Vehicle:
         new_speed = prev_speed + self.time_step_size*new_accel
         new_x = prev_distance + self.time_step_size*(new_speed + 0.5*self.time_step_size*new_accel)
 
+        self.dist_downtrack = new_x
+        self.speed = new_speed
+
         return (new_speed, new_x)
+
+
+    def print(self,
+                tag     : object = None     #tag to identify the vehicle
+             ):
+        """Prints the attributes of this vehicle object."""
+
+        print("       [{}]: lane_id = {:2d}, dist = {:.2f}, status = {:5s}, speed = {:.2f}" \
+                .format(tag, self.lane_id, self.dist_downtrack, self.lane_change_status, self.speed))
