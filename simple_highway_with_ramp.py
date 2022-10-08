@@ -445,15 +445,56 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             Return: (bool) has there been a collision?
         """
 
-        # Loop through all vehicles
+        crash = False
 
-        return False #TODO bogus!!!
+        # Loop through all vehicles to get vehicle A
+        for i in range(self.vehicles.len() - 1):
+            va = self.vehicles[i]
+
+            # Loop through the remaining vehicles to get vehicle B
+            for j in range(i + 1, self.vehicle.len()):
+                vb = self.vehicles[j]
+
+                # If A and B are in the same lane, then
+                if va.lane_id == vb.lane_id:
+
+                    # If they are within one car length of each other, it's a crash
+                    if abs(va.dist_downtrack - vb.dist_downtrack) <= SimpleHighwayRamp.VEHICLE_LENGTH:
+                        crash = True
+
+                # Else if they are in adjacent lanes, then
+                elif abs(va.lane_id - vb.lane_id) == 1:
+
+                    # If either vehicle is changing lanes at the moment, then
+                    if va.lane_change_status != "none"  or  vb.lane_change_status != "none":
+
+                        # If the lane changer's target lane belongs to the other vehicle, then
+                        va_tgt = self.roadway.get_target_lane(va.lane_id, va.lane_change_status, va.dist_downtrack)
+                        vb_tgt = self.roadway.get_target_lane(vb.lane_id, vb.lane_change_status, vb.dist_downtrack)
+                        if va_tgt == vb.lane_id  or  vb_tgt = va.lane_id:
+
+                            # Get adjusted downtrack distance of each vehcile relative to a common lane
+                            vb_dist_in_lane_a = vb.dist_downtrack + self.roadway.adjust_downtrack_dist(vb.lane_id, va.lane_id)
+
+                            # If the two are within a vehicle length of each other, then it's a crash
+                            if abs(va.dist_downtrack - vb_dist_in_lane_a) <= SimpleHighwayRamp.VEHICLE_LENGTH:
+                                crash = True
+
+        return crash
 
 
     def _get_reward(self,
                     done    : bool = False  #is this the final step in the episode?
                    ):
         """Returns the reward for the current time step (float)."""
+
+
+
+
+
+
+
+        
 
         return 0.0    #TODO bogus
 
@@ -542,6 +583,36 @@ class Roadway:
             adjustment = self.lanes[new_lane_id].right_join - self.lanes[prev_lane_id].left_join
 
         return adjustment
+
+
+    def get_target_lane(self,
+                        lane        : int,  #ID of the given lane
+                        direction   : str,  #either "left" or "right"
+                        distance    : float #distance downtrack in the given lane, m
+                       ):
+        """Returns the lane ID of the adjacent lane on the indicated side of the given lane, or -1 if there is none
+            currently adjoining.
+        """
+
+        assert 0 <= lane < len(self.lanes), "get_adjoining_lane_id input lane ID {} invalid.".format(lane)
+        if direction != "left"  and  direction != "right":
+            return -1
+
+        # Find the adjacent lane ID, then if one exists ensure that current location is between the join & separation points.
+        this_lane = self.lanes[lane]
+        if direction == "left":
+            tgt = this_lane.left_id
+            if tgt >= 0:
+                if distance < this_lane.left_join  or  distance > this_lane.left_sep:
+                    tgt = -1
+
+        else: #right
+            tgt = this_lane.right_id
+            if tgt >= 0:
+                if distance < this_lane.right_join  or  distance > this_lane.right_sep:
+                    tgt = -1
+
+        return tgt
 
 
 ######################################################################################################
