@@ -121,6 +121,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
     #TODO: make this dependent upon time step size:
     HALF_LANE_CHANGE_STEPS  = 3.0 / 0.5 // 2    #num steps to get half way across the lane (equally straddling both)
     TOTAL_LANE_CHANGE_STEPS = 2 * HALF_LANE_CHANGE_STEPS
+    MAX_STEPS_SINCE_LC      = 60    #largest num time steps we will track since previous lane change
 
 
     def __init__(self, config: EnvContext, seed=None, render_mode=None):
@@ -185,26 +186,25 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.EGO_ACCEL_CMD_PREV1= 17 #agent's next most recent accel_cmd (1 time step old), m/s^2
         self.EGO_ACCEL_CMD_PREV2= 18 #agent's next most recent accel_cmd (2 time steps old), m/s^2
         self.EGO_LANE_CMD_CUR   = 19 #agent's most recent lane_change_cmd
-        self.EGO_LANE_CMD_PREV1 = 20 #agent's next most recent lane_change_cmd (1 time step old)
-        self.EGO_LANE_CMD_PREV2 = 21 #agent's next most recent lane_change_cmd (2 time steps old)
-        self.ADJ_LN_LEFT_ID     = 22 #index of the lane that is/will be adjacent to the left of ego lane (-1 if none)
-        self.ADJ_LN_LEFT_CONN_A = 23 #dist from agent to where adjacent lane first joins ego lane, m
-        self.ADJ_LN_LEFT_CONN_B = 24 #dist from agent to where adjacent lane separates from ego lane, m
-        self.ADJ_LN_LEFT_REM    = 25 #dist from agent to end of adjacent lane, m
-        self.ADJ_LN_RIGHT_ID    = 26 #index of the lane that is/will be adjacent to the right of ego lane (-1 if none)
-        self.ADJ_LN_RIGHT_CONN_A= 27 #dist from agent to where adjacent lane first joins ego lane, m
-        self.ADJ_LN_RIGHT_CONN_B= 28 #dist from agent to where adjacent lane separates from ego lane, m
-        self.ADJ_LN_RIGHT_REM   = 29 #dist from agent to end of adjacent lane, m
+        self.STEPS_SINCE_LN_CHG = 20 #num time steps since the previous lane change was initiated
+        self.ADJ_LN_LEFT_ID     = 21 #index of the lane that is/will be adjacent to the left of ego lane (-1 if none)
+        self.ADJ_LN_LEFT_CONN_A = 22 #dist from agent to where adjacent lane first joins ego lane, m
+        self.ADJ_LN_LEFT_CONN_B = 23 #dist from agent to where adjacent lane separates from ego lane, m
+        self.ADJ_LN_LEFT_REM    = 24 #dist from agent to end of adjacent lane, m
+        self.ADJ_LN_RIGHT_ID    = 25 #index of the lane that is/will be adjacent to the right of ego lane (-1 if none)
+        self.ADJ_LN_RIGHT_CONN_A= 26 #dist from agent to where adjacent lane first joins ego lane, m
+        self.ADJ_LN_RIGHT_CONN_B= 27 #dist from agent to where adjacent lane separates from ego lane, m
+        self.ADJ_LN_RIGHT_REM   = 28 #dist from agent to end of adjacent lane, m
         #Note:  lane IDs are always non-negative; if adj_ln_*_id is -1 then the other respective values on that side
         #       are meaningless, as there is no lane.
         #TODO future: replace this kludgy vehicle-specific observations with general obs on lane occupancy
 
 
-        lower_obs = np.zeros((30)) #most values are 0, so only the others are explicitly described here
+        lower_obs = np.zeros((29)) #most values are 0, so only the others are explicitly described here
         lower_obs[16] = lower_obs[17] = lower_obs[18] = -SimpleHighwayRamp.MAX_ACCEL #historical ego acceleration cmds
-        lower_obs[19] = lower_obs[20] = lower_obs[21] = -1.0 #historical ego lane cmds
+        lower_obs[19] = -1.0 #ego lane cmd
 
-        upper_obs = np.ones(30)
+        upper_obs = np.ones(29)
         upper_obs[self.EGO_LANE_ID]         = 6.0
         upper_obs[self.EGO_X]               = 2000.0
         upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
@@ -225,8 +225,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         upper_obs[self.EGO_ACCEL_CMD_PREV1] = SimpleHighwayRamp.MAX_ACCEL
         upper_obs[self.EGO_ACCEL_CMD_PREV2] = SimpleHighwayRamp.MAX_ACCEL
         upper_obs[self.EGO_LANE_CMD_CUR]    = 1.0
-        upper_obs[self.EGO_LANE_CMD_PREV1]  = 1.0
-        upper_obs[self.EGO_LANE_CMD_PREV2]  = 1.0
+        upper_obs[self.STEPS_SINCE_LN_CHG]  = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
         upper_obs[self.ADJ_LN_LEFT_ID]      = 6.0
         upper_obs[self.ADJ_LN_LEFT_CONN_A]  = 3000.0
         upper_obs[self.ADJ_LN_LEFT_CONN_B]  = 3000.0
@@ -356,7 +355,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Other persistent data
         self.lane_change_underway = "none"
         self.lane_change_count = 0
-        self.steps_since_reset = 0
+        self.steps_since_reset = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
 
         if self.debug > 1:
             print("///// End of reset().")
@@ -427,6 +426,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 else:
                     self.lane_change_underway = "right"
                 self.lane_change_count = 1
+                self.obs[self.STEPS_SINCE_LN_CHG] = 0
                 if self.debug > 0:
                     print("      *** New lane change maneuver initiated. action[1] = {:.2f}, status = {}".format(action[1], self.lane_change_underway))
             else: #once a lane change is underway, contiinue until complete, regardless of new commands
@@ -470,6 +470,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         if done:
             ran_off_road = True
+        if self.obs[self.STEPS_SINCE_LN_CHG] < SimpleHighwayRamp.MAX_STEPS_SINCE_LC:
+            self.obs[self.STEPS_SINCE_LN_CHG] += 1
 
         # If lane change is complete, then reset its state and counter
         if self.lane_change_count >= SimpleHighwayRamp.TOTAL_LANE_CHANGE_STEPS:
@@ -479,15 +481,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.vehicles[0].lane_id = new_ego_lane
         self.vehicles[0].lane_change_status = self.lane_change_underway
         if self.debug > 0:
-            print("      step: done updating lane change. underway = {}, new_ego_lane = {}, tgt_lane = {}, count = {}, done = {}"
-                    .format(self.lane_change_underway, new_ego_lane, tgt_lane, self.lane_change_count, done))
+            print("      step: done lane change. underway = {}, new_ego_lane = {}, tgt_lane = {}, count = {}, done = {}, steps since = {}"
+                    .format(self.lane_change_underway, new_ego_lane, tgt_lane, self.lane_change_count, done, self.obs[self.STEPS_SINCE_LN_CHG]))
 
         # Update the obs vector with the new state info
         self.obs[self.EGO_ACCEL_CMD_PREV2] = self.obs[self.EGO_ACCEL_CMD_PREV1]
         self.obs[self.EGO_ACCEL_CMD_PREV1] = self.obs[self.EGO_ACCEL_CMD_CUR]
         self.obs[self.EGO_ACCEL_CMD_CUR] = action[0]
-        self.obs[self.EGO_LANE_CMD_PREV2] = self.obs[self.EGO_LANE_CMD_PREV1]
-        self.obs[self.EGO_LANE_CMD_PREV1] = self.obs[self.EGO_LANE_CMD_CUR]
         self.obs[self.EGO_LANE_CMD_CUR] = action[1]
         self.obs[self.EGO_LANE_ID] = new_ego_lane
         self.obs[self.EGO_LANE_REM] = new_ego_rem
@@ -621,9 +621,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             jerk2 = (self.obs[self.EGO_ACCEL_CMD_PREV1] - self.obs[self.EGO_ACCEL_CMD_PREV2]) / self.time_step_size
             reward -= 0.05 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK
 
-            # If a lane change was initiated, apply a small penalty
+            # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
-                reward -= 0.01
+                reward -= 0.1 * (SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
 
         reward = min(max(reward, -1.0), 1.0)
         if self.debug > 0:
