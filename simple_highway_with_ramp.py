@@ -290,6 +290,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.vehicles[0].lane_id = ego_lane_id
         self.vehicles[0].dist_downtrack = ego_x
         self.vehicles[0].speed = ego_speed
+        self.vehicles[0].lane_change_status = "none"
 
         self.obs[self.EGO_LANE_ID]          = ego_lane_id
         self.obs[self.EGO_X]                = ego_x
@@ -308,12 +309,15 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.vehicles[1].lane_id = 1
         self.vehicles[1].dist_downtrack = 4.0 * SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
         self.vehicles[1].speed = 0.0
+        self.vehicles[1].lane_change_status = "none"
         self.vehicles[2].lane_id = 1
         self.vehicles[2].dist_downtrack = 2.0 * SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
         self.vehicles[2].speed = 0.0
+        self.vehicles[2].lane_change_status = "none"
         self.vehicles[3].lane_id = 1
         self.vehicles[3].dist_downtrack = 0.0 #at beginning of lane
         self.vehicles[3].speed = 0.0
+        self.vehicles[3].lane_change_status = "none"
         print("      in reset: vehicles = ")
         for i, v in enumerate(self.vehicles):
             v.print(i)
@@ -330,6 +334,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.N3_X]                 = self.vehicles[3].dist_downtrack
         self.obs[self.N3_SPEED]             = self.vehicles[3].speed
         self.obs[self.N3_LANE_REM]          = self.roadway.get_total_lane_length(self.vehicles[3].lane_id) - self.vehicles[3].dist_downtrack
+
+        # Other persistent data
+        self.lane_change_underway = "none"
+        self.lane_change_count = 0
 
         print("///// End of reset().")
         return self.obs
@@ -362,15 +370,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # This doesn't account for possible lane changes, which are handled seperately in the next section.
         for i, v in enumerate(self.vehicles):
             obs_idx = self.EGO_LANE_ID + 4*i
-            lane_id = int(self.obs[obs_idx])
+            lane_id = v.lane_id
             print("      Advancing vehicle {} with obs_idx = {}, lane_id = {}".format(i, obs_idx, lane_id))
             new_accel_cmd = 0.0 #non-ego vehicles are constant speed for now
             prev_accel_cmd = 0.0
             if i == 0:
                 new_accel_cmd = action[0]
                 prev_accel_cmd = self.obs[self.EGO_ACCEL_CMD_CUR]
-            new_speed, new_x = v.advance_vehicle(new_accel_cmd, prev_accel_cmd,
-                                                    self.obs[obs_idx + 2], self.obs[obs_idx + 1])
+            new_speed, new_x = v.advance_vehicle(new_accel_cmd, prev_accel_cmd)
             print("      Vehicle {} advanced with new_accel_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}".format(i, new_accel_cmd, new_speed, new_x))
             new_rem, _, _, _, _, _, _ = self.roadway.get_current_lane_geom(lane_id, new_x)
             self.obs[obs_idx + 1] = new_x
@@ -395,6 +402,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 else:
                     self.lane_change_underway = "right"
                 self.lane_change_count = 1
+                print("      *** New lane change maneuver initiated. action[1] = {:.2f}, status = {}".format(action[1], self.lane_change_underway))
             else: #once a lane change is underway, contiinue until complete, regardless of new commands
                 self.lane_change_count += 1
 
@@ -406,19 +414,20 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             # If we are still in the original lane then
             if self.lane_change_count <= SimpleHighwayRamp.HALF_LANE_CHANGE_STEPS:
                 # Ensure that there is a lane to change into and get its ID
-                tgt_lane = self.roadway.get_target_lane(self.obs[self.EGO_LANE_ID], self.lane_change_underway, new_ego_x)
+                tgt_lane = self.roadway.get_target_lane(int(self.obs[self.EGO_LANE_ID]), self.lane_change_underway, new_ego_x)
                 if tgt_lane < 0:
                     done = True #ran off the road
+                    print("      DONE!  illegal lane change commanded.")
 
                 # Else, we are still going; if we are exactly half-way then change the current lane ID & downtrack dist
                 elif self.lane_change_count == SimpleHighwayRamp.HALF_LANE_CHANGE_STEPS:
                     new_ego_lane = tgt_lane
-                    adjustment = self.roadway.adjust_downtrack_dist(self.obs[self.EGO_LANE_ID], tgt_lane)
+                    adjustment = self.roadway.adjust_downtrack_dist(int(self.obs[self.EGO_LANE_ID]), tgt_lane)
                     new_ego_x += adjustment
                     # Apply adjustment to historical distance also (affects vehicle dynamics calcs)
                     self.obs[self.EGO_X] += adjustment
                     # Get updated metrics of ego vehicle relative to the new lane geometry
-                    new_ego_rem, la, lb, l_rem, ra, rb, r_rem = self.roadway.get_current_lane_geom(self.obs[self.EGO_LANE_ID], new_ego_x)
+                    new_ego_rem, la, lb, l_rem, ra, rb, r_rem = self.roadway.get_current_lane_geom(int(self.obs[self.EGO_LANE_ID]), new_ego_x)
 
             # Else, we have already crossed the dividing line and are now mostly in the target lane
             else:
@@ -429,6 +438,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 prev_lane = self.roadway.get_target_lane(tgt_lane, coming_from, new_ego_x)
                 if prev_lane < 0: #the lane we're coming from ended before the lane change maneuver completed
                     done = True #ran off the road
+                    print("      DONE!  original lane ended before lane change completed.")
 
         # If lane change is complete, then reset its state and counter
         if self.lane_change_count >= SimpleHighwayRamp.TOTAL_LANE_CHANGE_STEPS:
@@ -437,8 +447,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         self.vehicles[0].lane_id = new_ego_lane
         self.vehicles[0].lane_change_status = self.lane_change_underway
-        print("      step: done updating lane change. underway = {}, new_ego_lane = {}, tgt_lane = {}, count = {}"
-                .format(self.lane_change_underway, new_ego_lane, tgt_lane, self.lane_change_count))
+        print("      step: done updating lane change. underway = {}, new_ego_lane = {}, tgt_lane = {}, count = {}, done = {}"
+                .format(self.lane_change_underway, new_ego_lane, tgt_lane, self.lane_change_count, done))
 
         # Update the obs vector with the new state info
         self.obs[self.EGO_ACCEL_CMD_PREV2] = self.obs[self.EGO_ACCEL_CMD_PREV1]
@@ -454,7 +464,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # Check that none of the vehicles have crashed into each other, accounting for a lane change in progress
         # taking up both lanes
-        done |= self._check_for_collisions()
+        if not done:
+            done = self._check_for_collisions()
 
         # Determine the reward resulting from this time step's action
         reward = self._get_reward(done)
@@ -504,7 +515,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
                     # If they are within one car length of each other, it's a crash
                     if abs(va.dist_downtrack - vb.dist_downtrack) <= SimpleHighwayRamp.VEHICLE_LENGTH:
+                        print("      CRASH in same lane between vehicles {} and {} near {:.2f} m in lane {}"
+                                .format(i, j, va.dist_downtrack, va.lane_id))
                         crash = True
+                        break
 
                 # Else if they are in adjacent lanes, then
                 elif abs(va.lane_id - vb.lane_id) == 1:
@@ -522,7 +536,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
                             # If the two are within a vehicle length of each other, then it's a crash
                             if abs(va.dist_downtrack - vb_dist_in_lane_a) <= SimpleHighwayRamp.VEHICLE_LENGTH:
+                                print("      CRASH in adjacent lanes between vehicles {} and {} near {:.2f} m in lane {}"
+                                        .format(i, j, vb_dist_in_lane_a, va.lane_id))
                                 crash = True
+                                break
 
         print("///// _check_for_collisions complete. Returning ", crash)
         return crash
@@ -767,9 +784,7 @@ class Vehicle:
 
     def advance_vehicle(self,
                         new_accel_cmd   : float,    #newest fwd accel command, m/s^2
-                        prev_accel_cmd  : float,    #fwd accel command from prev time step, m/s^2
-                        prev_speed      : float,    #speed in prev time step, m/s
-                        prev_distance   : float     #downtrack distance in prev time step, relative to current lane, m
+                        prev_accel_cmd  : float     #fwd accel command from prev time step, m/s^2
                        ):
         """Advances a vehicle's forward motion for one time step according to the vehicle dynamics model.
             Note that this does not consider lateral motion, which needs to be handled elsewhere.
@@ -785,8 +800,8 @@ class Vehicle:
             new_jerk = self.max_jerk
 
         new_accel = prev_accel_cmd + self.time_step_size*new_jerk
-        new_speed = prev_speed + self.time_step_size*new_accel
-        new_x = prev_distance + self.time_step_size*(new_speed + 0.5*self.time_step_size*new_accel)
+        new_speed = self.speed + self.time_step_size*new_accel
+        new_x = self.dist_downtrack + self.time_step_size*(new_speed + 0.5*self.time_step_size*new_accel)
 
         self.dist_downtrack = new_x
         self.speed = new_speed

@@ -41,3 +41,36 @@ try:
     env.step(action)
 except Exception as e:
     print("Caught exception: ", e)
+
+# Case 6 - v0 makes illegal lane change
+print("\n+++++ Begin case 6")
+action = [0.0, -0.51]
+try:
+    env.step(action)
+except Exception as e:
+    print("Caught exception: ", e)
+
+# Case 7 - collision between v0 and v1 in adjacent lanes
+print("\n+++++ Begin case 7")
+action = [0.0, -1.0]
+env.vehicles[0].dist_downtrack = 481.0
+env.vehicles[0].speed = 23.4
+env.vehicles[1].dist_downtrack = 802.0
+env.vehicles[1].speed = 22.0
+try:
+    env.step(action)
+except Exception as e:
+    print("Caught exception: ", e)
+
+# Case 8 - collision between v2 and v1 in same lane
+print("\n+++++ Begin case 8")
+env.reset()
+action = [0.0, 0.0]
+env.vehicles[1].dist_downtrack = 55.0
+env.vehicles[1].speed = 22.0
+env.vehicles[2].dist_downtrack = 49.0
+env.vehicles[2].speed = 24.4
+try:
+    env.step(action)
+except Exception as e:
+    print("Caught exception: ", e)
