@@ -240,6 +240,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Other persistent data
         self.lane_change_underway = "none" #possible values: "left", "right", "none"
         self.lane_change_count = 0 #num consecutive time steps since a lane change was begun
+        self.steps_since_reset = 0 #length of the current episode in time steps
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
         #self.render_mode = render_mode
@@ -338,6 +339,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Other persistent data
         self.lane_change_underway = "none"
         self.lane_change_count = 0
+        self.steps_since_reset = 0
 
         print("///// End of reset().")
         return self.obs
@@ -359,6 +361,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             v.print(i)
         assert -SimpleHighwayRamp.MAX_ACCEL <= action[0] <= SimpleHighwayRamp.MAX_ACCEL, "Input accel cmd invalid: {:.2f}".format(action[0])
         assert -1.0 <= action[1] <= 1.0, "Input lane change cmd is invalid: {:.2f}".format(action[1])
+
+        self.steps_since_reset += 1
 
         #
         #..........Calculate new state for the ego vehicle and determine if episode is complete
@@ -395,6 +399,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # lane change commands until the underway maneuver is complete, which takes several time steps.
         # It's legal, but not desirable, to command opposite lane change directions in consecutive time steps.
         # TODO future: replace instance variables lane_change_underway and lane_id with those in vehicle[0]
+        ran_off_road = False
         if action[1] < -0.5  or  action[1] > 0.5  or  self.lane_change_underway != "none":
             if self.lane_change_underway == "none": #count should always be 0 in this case, so initiate a new count
                 if action[1] < -0.5:
@@ -440,6 +445,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                     done = True #ran off the road
                     print("      DONE!  original lane ended before lane change completed.")
 
+        if done:
+            ran_off_road = True
+
         # If lane change is complete, then reset its state and counter
         if self.lane_change_count >= SimpleHighwayRamp.TOTAL_LANE_CHANGE_STEPS:
             self.lane_change_underway = "none"
@@ -464,11 +472,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # Check that none of the vehicles have crashed into each other, accounting for a lane change in progress
         # taking up both lanes
+        crash = False
         if not done:
-            done = self._check_for_collisions()
+            crash = self._check_for_collisions()
+            done = crash
 
         # Determine the reward resulting from this time step's action
-        reward = self._get_reward(done)
+        reward = self._get_reward(done, crash, ran_off_road)
 
         # According to gym docs, return tuple should have 5 elements:
         #   obs
@@ -546,19 +556,49 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
 
     def _get_reward(self,
-                    done    : bool = False  #is this the final step in the episode?
+                    done    : bool,         #is this the final step in the episode?
+                    crash   : bool,         #did one or more of the vehicles crash into each other?
+                    off_road: bool          #did the ego vehicle run off the road?
                    ):
-        """Returns the reward for the current time step (float)."""
+        """Returns the reward for the current time step (float).  The reward should be in [-1, 1] for any situation."""
 
-        print("///// Entering _get_reward:  NOT YET IMPLEMENTED!!!")
+        print("///// Entering _get_reward. done = {}, crash = {}, off_road = {}".format(done, crash, off_road))
+        reward = 0.0
 
+        # If the episode is done then
+        if done:
 
+            # If there was a single- or multi-car crash then
+            if crash  or  off_road:
 
+                # Subtract a crash penalty
+                reward = -1.0
 
+            # Else (episode ended successfully)
+            else:
 
+                # Add amount inversely proportional to the length of the episode.
+                reward = max(1.0 - 0.001 * self.steps_since_reset, 0.0)
 
+        # Else, episode still underway
+        else:
 
-        return 0.0    #TODO bogus
+            # Add a small incentive for not crashing
+            reward += 0.002
+
+            # If ego vehicle acceleration is jerky, then apply a penalty
+            jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
+            jerk2 = (self.obs[self.EGO_ACCEL_CMD_PREV1] - self.obs[self.EGO_ACCEL_CMD_PREV2]) / self.time_step_size
+            reward -= 0.05 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK
+
+            # If a lane change was initiated, apply a small penalty
+            if self.lane_change_count == 1:
+                reward -= 0.01
+
+        reward = min(max(reward, -1.0), 1.0)
+        print("///// reward returning {:.3f}".format(reward))
+
+        return reward
 
 ######################################################################################################
 ######################################################################################################
