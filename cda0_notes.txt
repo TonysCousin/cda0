@@ -29,3 +29,7 @@ Notes on the cda0 project
 * Time
   17:04 - 18:25 = 1:21
   19:03 - 19:27 = 0:24
+
+10/9/22:
+* Completed unit testing of all env logic except reward.
+* Time 19:54 - 22:53, int 13 = 2:46
