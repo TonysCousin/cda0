@@ -1,8 +1,9 @@
 """Unit tester for the SimpleHighwayRamp environment model."""
 
 from simple_highway_with_ramp import SimpleHighwayRamp
+from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 
-config = {"debug": 1}
+config = {"debug": 2}
 
 # Case 1 - reset the env
 print("\n+++++ Begin case 1")
@@ -72,5 +73,18 @@ env.vehicles[2].dist_downtrack = 49.0
 env.vehicles[2].speed = 24.4
 try:
     env.step(action)
+except Exception as e:
+    print("Caught exception: ", e)
+
+# Case 9 - exercise the env wrapper
+print("\n+++++ Begin case 9")
+env = SimpleHighwayRampWrapper(config)
+env.reset()
+action = [0.976, 0.98] #from a hypothetical NN
+try:
+    env.step(action)
+    print("+++++ step 1 complete.")
+    env.step(action)
+    print("+++++ step 2 complete.")
 except Exception as e:
     print("Caught exception: ", e)

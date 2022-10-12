@@ -132,7 +132,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             debug:          level of debug printing (0=none (default), 1=moderate, 2=full details)
         """
 
-        super().__init__(config)
+        super().__init__()
 
         # Store the arguments
         #self.seed = seed #Ray 2.0.0 chokes on the seed() method if this is defined (it checks for this attribute also)
@@ -204,11 +204,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         #TODO future: replace this kludgy vehicle-specific observations with general obs on lane occupancy
 
 
-        lower_obs = np.zeros((SimpleHighwayRamp.OBS_size)) #most values are 0, so only the others are explicitly described here
+        lower_obs = np.zeros((SimpleHighwayRamp.OBS_SIZE)) #most values are 0, so only the others are explicitly described here
         lower_obs[16] = lower_obs[17] = lower_obs[18] = -SimpleHighwayRamp.MAX_ACCEL #historical ego acceleration cmds
         lower_obs[19] = -1.0 #ego lane cmd
 
-        upper_obs = np.ones(SimpleHighwayRamp.OBS_size)
+        upper_obs = np.ones(SimpleHighwayRamp.OBS_SIZE)
         upper_obs[self.EGO_LANE_ID]         = 6.0
         upper_obs[self.EGO_X]               = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
@@ -305,7 +305,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         ego_lane_id = 2
         ego_x = self.prng.random() * 200.0   #starting downtrack distance, m
         ego_speed = self.prng.random() * 15.0 + 5.0 #starting speed between 5 and 20 m/s
-        ego_rem, la, lb, l_rem, ra, rb, r_rem = self.roadway.get_current_lane_geom(0, ego_x)
+        ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(0, ego_x)
         #future (all 3 vehicles): n1_rem, _, _, _, _, _, _ = self._get_current_lane_geom(n1_lane, n1_x)
         self.vehicles[0].lane_id = ego_lane_id
         self.vehicles[0].dist_downtrack = ego_x
@@ -316,11 +316,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.EGO_X]                = ego_x
         self.obs[self.EGO_SPEED]            = ego_speed
         self.obs[self.EGO_LANE_REM]         = ego_rem
-        self.obs[self.ADJ_LN_LEFT_ID]       = 1 #fixed starting condition for this roadway scenario
+        self.obs[self.ADJ_LN_LEFT_ID]       = lid
         self.obs[self.ADJ_LN_LEFT_CONN_A]   = la
         self.obs[self.ADJ_LN_LEFT_CONN_B]   = lb
         self.obs[self.ADJ_LN_LEFT_REM]      = l_rem
-        self.obs[self.ADJ_LN_RIGHT_ID]      = -1
+        self.obs[self.ADJ_LN_RIGHT_ID]      = rid
         self.obs[self.ADJ_LN_RIGHT_CONN_A]  = ra
         self.obs[self.ADJ_LN_RIGHT_CONN_B]  = rb
         self.obs[self.ADJ_LN_RIGHT_REM]     = r_rem
@@ -407,7 +407,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             new_speed, new_x = v.advance_vehicle(new_accel_cmd, prev_accel_cmd)
             if self.debug > 1:
                 print("      Vehicle {} advanced with new_accel_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}".format(i, new_accel_cmd, new_speed, new_x))
-            new_rem, _, _, _, _, _, _ = self.roadway.get_current_lane_geom(lane_id, new_x)
+            new_rem, _, _, _, _, _, _, _, _ = self.roadway.get_current_lane_geom(lane_id, new_x)
             self.obs[obs_idx + 1] = new_x
             self.obs[obs_idx + 2] = new_speed
             self.obs[obs_idx + 3] = new_rem
@@ -455,10 +455,6 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                     new_ego_lane = tgt_lane
                     adjustment = self.roadway.adjust_downtrack_dist(int(self.obs[self.EGO_LANE_ID]), tgt_lane)
                     new_ego_x += adjustment
-                    # Apply adjustment to historical distance also (affects vehicle dynamics calcs)
-                    self.obs[self.EGO_X] += adjustment
-                    # Get updated metrics of ego vehicle relative to the new lane geometry
-                    new_ego_rem, la, lb, l_rem, ra, rb, r_rem = self.roadway.get_current_lane_geom(int(self.obs[self.EGO_LANE_ID]), new_ego_x)
 
             # Else, we have already crossed the dividing line and are now mostly in the target lane
             else:
@@ -472,12 +468,18 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                     if self.debug > 1:
                         print("      DONE!  original lane ended before lane change completed.")
 
+        # Get updated metrics of ego vehicle relative to the new lane geometry
+        new_ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(new_ego_lane, new_ego_x)
+
+        # If episode is done at this point it is because vehicle ran off road, not because of crash  with another vehicle
         if done:
             ran_off_road = True
+
+        # Update counter for time in between lane changes
         if self.obs[self.STEPS_SINCE_LN_CHG] < SimpleHighwayRamp.MAX_STEPS_SINCE_LC:
             self.obs[self.STEPS_SINCE_LN_CHG] += 1
 
-        # If lane change is complete, then reset its state and counter
+        # If current lane change is complete, then reset its state and counter
         if self.lane_change_count >= SimpleHighwayRamp.TOTAL_LANE_CHANGE_STEPS:
             self.lane_change_underway = "none"
             self.lane_change_count = 0
@@ -497,6 +499,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.EGO_LANE_REM] = new_ego_rem
         self.obs[self.EGO_SPEED] = new_ego_speed
         self.obs[self.EGO_X] = new_ego_x
+        self.obs[self.ADJ_LN_LEFT_ID] = lid
+        self.obs[self.ADJ_LN_LEFT_CONN_A] = la
+        self.obs[self.ADJ_LN_LEFT_CONN_B] = lb
+        self.obs[self.ADJ_LN_LEFT_REM] = l_rem
+        self.obs[self.ADJ_LN_RIGHT_ID] = rid
+        self.obs[self.ADJ_LN_RIGHT_CONN_A] = ra
+        self.obs[self.ADJ_LN_RIGHT_CONN_B] = rb
+        self.obs[self.ADJ_LN_RIGHT_REM] = r_rem
 
         # Check that none of the vehicles have crashed into each other, accounting for a lane change in progress
         # taking up both lanes
@@ -672,8 +682,9 @@ class Roadway:
                                 dist_from_beg   : float = 0.0   #distance of ego vehicle from the beginning of the indicated lane, m
                              ):
         """Determines all of the variable roadway geometry relative to the given vehicle location.
-            Returns a tuple of (remaining dist in this lane, dist to left adjoin point A, dist to left adjoin point B,
-                                remaining dist in left ajoining lane, dist to right adjoin point A, dist to right adjoin point B,
+            Returns a tuple of (remaining dist in this lane, ID of left neighbor ln (or -1 if none), dist to left adjoin point A,
+                                dist to left adjoin point B, remaining dist in left ajoining lane, ID of right neighbor lane (or -1
+                                if none), dist to right adjoin point A, dist to right adjoin point B,
                                 remaining dist in right adjoining lane). If either adjoining lane doesn't exist, its return values
                                 will be 0, inf, inf.  All distances are in m.
         """
@@ -700,9 +711,9 @@ class Roadway:
 
         if self.debug > 0:
             print("///// get_current_lane_geom complete. Returning rem = ", rem_this_lane)
-            print("      la = {:.2f}, lb = {:.2f}, l_rem = {:.2f}".format(la, lb, l_rem))
-            print("      ra = {:.2f}, rb = {:.2f}, r_rem = {:.2f}".format(ra, rb, r_rem))
-        return rem_this_lane, la, lb, l_rem, ra, rb, r_rem
+            print("      lid = {}, la = {:.2f}, lb = {:.2f}, l_rem = {:.2f}".format(left_id, la, lb, l_rem))
+            print("      rid = {}, ra = {:.2f}, rb = {:.2f}, r_rem = {:.2f}".format(right_id, ra, rb, r_rem))
+        return rem_this_lane, left_id, la, lb, l_rem, right_id, ra, rb, r_rem
 
 
     def adjust_downtrack_dist(self,

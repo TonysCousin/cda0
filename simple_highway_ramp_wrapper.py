@@ -1,9 +1,9 @@
-from msilib.schema import _Validation_records
-from tkinter import Scale
 import numpy as np
+from typing import Tuple
 import gym
+from ray.rllib.env.env_context import EnvContext
 
-from projects.cda0.simple_highway_with_ramp import SimpleHighwayRamp
+from simple_highway_with_ramp import SimpleHighwayRamp
 from simple_highway_with_ramp import SimpleHighwayRamp
 
 class SimpleHighwayRampWrapper(SimpleHighwayRamp):
@@ -12,10 +12,18 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
     """
 
     def __init__(self,
-                    config      : gym.EnvContext
+                    config      : EnvContext
                 ):
 
         super().__init__(config)
+
+        self.debug = 0
+        try:
+            db = config["debug"]
+        except KeyError as e:
+            db = None
+        if db is not None  and  db != ""  and  0 <= int(db) <= 2:
+            self.debug = int(db)
 
 
     def reset(self,
@@ -25,21 +33,21 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
 
         """Invokes the environment's reset method, then scales the resulting observations to be usable by a NN."""
 
-        obs = super.reset(seed, options)
+        obs = super().reset(seed, options)
         return self._scale_obs(obs)
 
 
     def step(self,
                 action  :   list            #list of actions output from an NN
-            ) -> tuple[np.array, list, list, dict]: #returns scaled obs, rewards, dones and infos, where obs are scaled for NN consumption
+            ) -> Tuple[np.array, list, list, dict]: #returns scaled obs, rewards, dones and infos, where obs are scaled for NN consumption
 
         """Unscales the input actions from NN compliance to the 'raw' scale expected by the environment, then
             passes these actions to the environment, and scales the resulting observations from an environment step,
-            such that it will be usable by a NN.  The rewards, dones and info structures are not modfied.
+            such that it will be usable as input to a NN.  The rewards, dones and info structures are not modfied.
         """
 
         a = self._unscale_actions(action)
-        raw_obs, r, d, i = super.step(a)
+        raw_obs, r, d, i = super().step(a)
         o = self._scale_obs(raw_obs)
 
         return o, r, d, i
@@ -68,7 +76,6 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
 
         scaled = [None]*SimpleHighwayRamp.OBS_SIZE
 
-        scaled[self.EGO_LANE_ID] = obs[self.EGO_LANE_ID]
         # An NN can't do anything with lane IDs directly.  The best we can tell it (in this version) is that something
         # is happening in the agent's own lane, or in the lane immediately to its left or in the lane immediately to its
         # right.  Therefore, these translations are specific to the roadway geometry hard-coded in this version.
@@ -76,43 +83,51 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         # EGO_LANE_ID not used - EGO* represents the agent vehicle
         scaled[self.EGO_X]              = obs[self.EGO_X]               / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
         scaled[self.EGO_SPEED]          = obs[self.EGO_SPEED]           / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
-        scaled[self.EGO_LANE_REM]       = obs[self.EGO_LANE_REM]        / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
+        scaled[self.EGO_LANE_REM]       = min(obs[self.EGO_LANE_REM]    / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
         scaled[self.N1_LANE_ID]         = -1 #in lane 1 is one lane to the left of the agent
         scaled[self.N1_X]               = obs[self.N1_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
         scaled[self.N1_SPEED]           = obs[self.N1_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
-        scaled[self.N1_LANE_REM]        = obs[self.N1_LANE_REM]         / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
+        scaled[self.N1_LANE_REM]        = min(obs[self.N1_LANE_REM]     / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
         scaled[self.N2_LANE_ID]         = -1 #in lane 1 is one lane to the left of the agent
-        scaled[self.N2_X]               = obs[self.N1_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
-        scaled[self.N2_SPEED]           = obs[self.N1_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
-        scaled[self.N2_LANE_REM]        = obs[self.N1_LANE_REM]         / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
+        scaled[self.N2_X]               = obs[self.N2_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
+        scaled[self.N2_SPEED]           = obs[self.N2_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
+        scaled[self.N2_LANE_REM]        = min(obs[self.N2_LANE_REM]     / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
         scaled[self.N3_LANE_ID]         = -1 #in lane 1 is one lane to the left of the agent
-        scaled[self.N3_X]               = obs[self.N1_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
-        scaled[self.N3_SPEED]           = obs[self.N1_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
-        scaled[self.N3_LANE_REM]        = obs[self.N1_LANE_REM]         / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
+        scaled[self.N3_X]               = obs[self.N3_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
+        scaled[self.N3_SPEED]           = obs[self.N3_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
+        scaled[self.N3_LANE_REM]        = min(obs[self.N3_LANE_REM]     / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
         scaled[self.EGO_ACCEL_CMD_CUR]  = obs[self.EGO_ACCEL_CMD_CUR]   / SimpleHighwayRamp.MAX_ACCEL           #range [-1, 1]
         scaled[self.EGO_ACCEL_CMD_PREV1]= obs[self.EGO_ACCEL_CMD_PREV1] / SimpleHighwayRamp.MAX_ACCEL           #range [-1, 1]
         scaled[self.EGO_ACCEL_CMD_PREV2]= obs[self.EGO_ACCEL_CMD_PREV2] / SimpleHighwayRamp.MAX_ACCEL           #range [-1, 1]
         scaled[self.EGO_LANE_CMD_CUR]   = obs[self.EGO_LANE_CMD_CUR] #range [-1, 1]
         scaled[self.STEPS_SINCE_LN_CHG] = obs[self.STEPS_SINCE_LN_CHG]  / SimpleHighwayRamp.MAX_STEPS_SINCE_LC  #range [0, 1]
-        # ADJ_LN_LEFT_ID not used - we will always use -1 to refer to the agent's left lane, and +1 to represent its right lane
-        scaled[self.ADJ_LN_LEFT_CONN_A] = obs[self.ADJ_LN_LEFT_CONN_A]  / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
-        scaled[self.ADJ_LN_LEFT_CONN_B] = obs[self.ADJ_LN_LEFT_CONN_B]  / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
-        scaled[self.ADJ_LN_LEFT_REM]    = obs[self.ADJ_LN_LEFT_REM]     / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
-        # ADJ_LN_RIGHT_ID not used - we will always use -1 to refer to the agent's left lane, and +1 to represent its right lane
-        scaled[self.ADJ_LN_RIGHT_CONN_A]= obs[self.ADJ_LN_RIGHT_CONN_A] / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
-        scaled[self.ADJ_LN_RIGHT_CONN_B]= obs[self.ADJ_LN_RIGHT_CONN_B] / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
-        scaled[self.ADJ_LN_RIGHT_REM]   = obs[self.ADJ_LN_RIGHT_REM]    / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
+        # ADJ_LN_LEFT_ID is replaced with a boolean (0=false, 1=true) to indicate whether a left neighbor lane exists
+        scaled[self.ADJ_LN_LEFT_ID] = 1 if obs[self.ADJ_LN_LEFT_ID] >= 0 else 0
+        scaled[self.ADJ_LN_LEFT_CONN_A] = min(max(obs[self.ADJ_LN_LEFT_CONN_A] / SimpleHighwayRamp.SCENARIO_LENGTH,
+                                                    -1.0), 1.1) #range [-1, 1.1]
+        scaled[self.ADJ_LN_LEFT_CONN_B] = min(obs[self.ADJ_LN_LEFT_CONN_B] / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
+        scaled[self.ADJ_LN_LEFT_REM]    = min(obs[self.ADJ_LN_LEFT_REM] / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
+        # ADJ_LN_RIGHT_ID is replaced with a boolean (0=false, 1=true) to indicate whether a right neighbor lane exists
+        scaled[self.ADJ_LN_RIGHT_ID] = 1 if obs[self.ADJ_LN_RIGHT_ID] >= 0 else 0
+        scaled[self.ADJ_LN_RIGHT_CONN_A]= min(max(obs[self.ADJ_LN_RIGHT_CONN_A] / SimpleHighwayRamp.SCENARIO_LENGTH,
+                                                    -1.0), 1.1) #range [-1, 1.1]
+        scaled[self.ADJ_LN_RIGHT_CONN_B]= min(obs[self.ADJ_LN_RIGHT_CONN_B] / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
+        scaled[self.ADJ_LN_RIGHT_REM]   = min(obs[self.ADJ_LN_RIGHT_REM] / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
 
         # Remove any unused list elements
         for i in range(SimpleHighwayRamp.OBS_SIZE - 1, -1, -1):
             if scaled[i] is None:
-                scaled.remove(i)
-                print("Removed scaled[{}]".format(i))
-        print("Final length of scaled = {}".format(len(scaled)))
+                scaled.pop(i)
+                if self.debug > 1:
+                    print("Removed scaled[{}]".format(i))
+        if self.debug > 1:
+            print("Final length of scaled = {}".format(len(scaled)))
 
 
         # Return the obs as an ndarray
-        vec = np.array([scaled])
-        print("_scale_obs returning ", vec, ", size = ", vec.shape)
+        vec = np.array(scaled)
+        if self.debug > 1:
+            print("_scale_obs returning vec size = ", vec.shape)
+            print(vec)
 
         return vec
