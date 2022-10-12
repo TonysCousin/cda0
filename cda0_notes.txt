@@ -32,4 +32,13 @@ Notes on the cda0 project
 
 10/9/22:
 * Completed unit testing of all env logic except reward.
+* Built initial reward logic.
 * Time 19:54 - 22:53, int 13 = 2:46
+
+10/10/22:
+* time 10:48 - 11:15 = 0:27
+
+10/11/22:
+* Time
+  21:08 - 23:15 = 2:07
+  23:44 - 00:15 = 0:31

@@ -113,15 +113,17 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
     metadata = {"render_modes": None}
     #metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    OBS_SIZE                = 30
-    VEHICLE_LENGTH          = 5.0   #m
-    MAX_SPEED               = 35.0  #m/s
-    MAX_ACCEL               = 3.0   #m/s^2
-    MAX_JERK                = 4.0   #m/s^3
+    OBS_SIZE                = 29
+    VEHICLE_LENGTH          = 5.0       #m
+    MAX_SPEED               = 35.0      #m/s
+    MAX_ACCEL               = 3.0       #m/s^2
+    MAX_JERK                = 4.0       #m/s^3
+    SCENARIO_LENGTH         = 2000.0    #total length of the roadway, m
+    SCENARIO_BUFFER_LENGTH  = 1000.0    #length of buffer added to the end of continuing lanes, m
     #TODO: make this dependent upon time step size:
     HALF_LANE_CHANGE_STEPS  = 3.0 / 0.5 // 2    #num steps to get half way across the lane (equally straddling both)
     TOTAL_LANE_CHANGE_STEPS = 2 * HALF_LANE_CHANGE_STEPS
-    MAX_STEPS_SINCE_LC      = 60    #largest num time steps we will track since previous lane change
+    MAX_STEPS_SINCE_LC      = 60        #largest num time steps we will track since previous lane change
 
 
     def __init__(self, config: EnvContext, seed=None, render_mode=None):
@@ -129,6 +131,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             time_step_size: duration of a time step, s (default = 0.5)
             debug:          level of debug printing (0=none (default), 1=moderate, 2=full details)
         """
+
+        super().__init__(config)
 
         # Store the arguments
         #self.seed = seed #Ray 2.0.0 chokes on the seed() method if this is defined (it checks for this attribute also)
@@ -200,40 +204,40 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         #TODO future: replace this kludgy vehicle-specific observations with general obs on lane occupancy
 
 
-        lower_obs = np.zeros((29)) #most values are 0, so only the others are explicitly described here
+        lower_obs = np.zeros((SimpleHighwayRamp.OBS_size)) #most values are 0, so only the others are explicitly described here
         lower_obs[16] = lower_obs[17] = lower_obs[18] = -SimpleHighwayRamp.MAX_ACCEL #historical ego acceleration cmds
         lower_obs[19] = -1.0 #ego lane cmd
 
-        upper_obs = np.ones(29)
+        upper_obs = np.ones(SimpleHighwayRamp.OBS_size)
         upper_obs[self.EGO_LANE_ID]         = 6.0
-        upper_obs[self.EGO_X]               = 2000.0
+        upper_obs[self.EGO_X]               = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.EGO_LANE_REM]        = 3000.0
+        upper_obs[self.EGO_LANE_REM]        = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         upper_obs[self.N1_LANE_ID]          = 6.0
-        upper_obs[self.N1_X]                = 2000.0
+        upper_obs[self.N1_X]                = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.N1_SPEED]            = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.N1_LANE_REM]         = 3000.0
+        upper_obs[self.N1_LANE_REM]         = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         upper_obs[self.N2_LANE_ID]          = 6.0
-        upper_obs[self.N2_X]                = 2000.0
+        upper_obs[self.N2_X]                = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.N2_SPEED]            = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.N2_LANE_REM]         = 3000.0
+        upper_obs[self.N2_LANE_REM]         = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         upper_obs[self.N3_LANE_ID]          = 6.0
-        upper_obs[self.N3_X]                = 2000.0
+        upper_obs[self.N3_X]                = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.N3_SPEED]            = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.N3_LANE_REM]         = 3000.0
+        upper_obs[self.N3_LANE_REM]         = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         upper_obs[self.EGO_ACCEL_CMD_CUR]   = SimpleHighwayRamp.MAX_ACCEL
         upper_obs[self.EGO_ACCEL_CMD_PREV1] = SimpleHighwayRamp.MAX_ACCEL
         upper_obs[self.EGO_ACCEL_CMD_PREV2] = SimpleHighwayRamp.MAX_ACCEL
         upper_obs[self.EGO_LANE_CMD_CUR]    = 1.0
         upper_obs[self.STEPS_SINCE_LN_CHG]  = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
         upper_obs[self.ADJ_LN_LEFT_ID]      = 6.0
-        upper_obs[self.ADJ_LN_LEFT_CONN_A]  = 3000.0
-        upper_obs[self.ADJ_LN_LEFT_CONN_B]  = 3000.0
-        upper_obs[self.ADJ_LN_LEFT_REM]     = 3000.0
+        upper_obs[self.ADJ_LN_LEFT_CONN_A]  = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+        upper_obs[self.ADJ_LN_LEFT_CONN_B]  = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+        upper_obs[self.ADJ_LN_LEFT_REM]     = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         upper_obs[self.ADJ_LN_RIGHT_ID]     = 6.0
-        upper_obs[self.ADJ_LN_RIGHT_CONN_A] = 3000.0
-        upper_obs[self.ADJ_LN_RIGHT_CONN_B] = 3000.0
-        upper_obs[self.ADJ_LN_RIGHT_REM]    = 3000.0
+        upper_obs[self.ADJ_LN_RIGHT_CONN_A] = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+        upper_obs[self.ADJ_LN_RIGHT_CONN_B] = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+        upper_obs[self.ADJ_LN_RIGHT_REM]    = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
 
         self.observation_space = Box(low=lower_obs, high=upper_obs, dtype=np.float32)
         if self.debug == 2:
@@ -640,11 +644,6 @@ class Roadway:
         scenario being used by this version of the code.
     """
 
-    SCENARIO_LENGTH = 2000.0    #length of the longest possible drive in an episode, m
-    ONGOING_PAD     = 1000.0    #length of pad added to the end of "indefinite" lanes, m
-                                # allows cars approaching end of episode to behave as if they will
-                                # continue driving indefinitely farther
-
     def __init__(self,
                  debug      : int   #debug printing level
                 ):
@@ -655,11 +654,11 @@ class Roadway:
         self.lanes = [] #list of all the lanes in the scenario; list index is lane ID
 
         # The roadway being modeled looks roughly like the diagram at the top of this code file.
-        lane = Lane(0, Roadway.SCENARIO_LENGTH + Roadway.ONGOING_PAD,
+        lane = Lane(0, SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH,
                     right_id = 1, right_join = 0.0, right_sep = inf)
         self.lanes.append(lane)
 
-        lane = Lane(1, Roadway.SCENARIO_LENGTH + Roadway.ONGOING_PAD,
+        lane = Lane(1, SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH,
                     left_id = 0, left_join = 0.0, left_sep = inf,
                     right_id = 2, right_join = 800.0, right_sep = 1320.0)
         self.lanes.append(lane)
