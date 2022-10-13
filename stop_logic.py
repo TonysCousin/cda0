@@ -40,8 +40,13 @@ class StopLogic(Stopper):
         #   "rewards" (deque) - the most recent N mean rewards
         self.trials = {}
 
-    """Will be called after each iteration to decide if learning should be stopped for this trial."""
-    def __call__(self, trial_id, result):
+
+    def __call__(self,
+                    trial_id    : str,  #ID of the trial being considered for stopping
+                    result      : dict  #collection of results of the trial so far
+                ) -> bool:              #return: should the trial be terminated?
+
+        """ Will be called after each iteration to decide if learning should be stopped for this trial."""
 
         #print("\n///// StopLogic - result = ")
         #for item in result:
@@ -49,9 +54,10 @@ class StopLogic(Stopper):
         #print("///// - end of result\n")
         total_iters = result["iterations_since_restore"]
         threshold = self.required_min_iters
-        if result["episode_reward_max"] > 10.0:
+        if result["episode_reward_max"] > 10.0: #TODO: make this a config var or input arg
             threshold *= 1.2
 
+        # If this trial is already underway and being tracked, then
         if trial_id in self.trials:
             rew = -100.0
             if not math.isnan(result["episode_reward_mean"]):
@@ -88,6 +94,7 @@ class StopLogic(Stopper):
                     print("\n///// Stopping trial due to failure\n")
                     return True
 
+        # Else, it is a brand new trial
         else:
             init = deque(maxlen=self.most_recent)
             init.append(result["episode_reward_mean"])

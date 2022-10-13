@@ -25,6 +25,8 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         if db is not None  and  db != ""  and  0 <= int(db) <= 2:
             self.debug = int(db)
 
+        #TODO: do we need to redefine the obs & action spaces here, with properly scaled lower & upper limits?
+
 
     def reset(self,
                 seed    :   int = None,     #seed value for the PRNG
@@ -61,9 +63,10 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
 
         """Converts a list of action values from scaled, NN compliance to the scale expected by the parent environment."""
 
+        al = SimpleHighwayRamp.MAX_ACCEL
         unscaled = [None]*2
-        unscaled[0] = actions[0] * SimpleHighwayRamp.MAX_ACCEL  #accel command
-        unscaled[1] = actions[1]
+        unscaled[0] = min(max(actions[0] * al, -al), al)    #accel command
+        unscaled[1] = min(max(actions[1], -1.0), 1.0)       #lane change command
 
         return unscaled
 
@@ -80,7 +83,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         # is happening in the agent's own lane, or in the lane immediately to its left or in the lane immediately to its
         # right.  Therefore, these translations are specific to the roadway geometry hard-coded in this version.
 
-        # EGO_LANE_ID not used - EGO* represents the agent vehicle
+        scaled[self.EGO_LANE_ID]        = 0 #Unused, but kept to maintain obs space shape
         scaled[self.EGO_X]              = obs[self.EGO_X]               / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
         scaled[self.EGO_SPEED]          = obs[self.EGO_SPEED]           / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
         scaled[self.EGO_LANE_REM]       = min(obs[self.EGO_LANE_REM]    / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
@@ -114,18 +117,8 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         scaled[self.ADJ_LN_RIGHT_CONN_B]= min(obs[self.ADJ_LN_RIGHT_CONN_B] / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
         scaled[self.ADJ_LN_RIGHT_REM]   = min(obs[self.ADJ_LN_RIGHT_REM] / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
 
-        # Remove any unused list elements
-        for i in range(SimpleHighwayRamp.OBS_SIZE - 1, -1, -1):
-            if scaled[i] is None:
-                scaled.pop(i)
-                if self.debug > 1:
-                    print("Removed scaled[{}]".format(i))
-        if self.debug > 1:
-            print("Final length of scaled = {}".format(len(scaled)))
-
-
         # Return the obs as an ndarray
-        vec = np.array(scaled)
+        vec = np.array(scaled, dtype=np.float32)
         if self.debug > 1:
             print("_scale_obs returning vec size = ", vec.shape)
             print(vec)

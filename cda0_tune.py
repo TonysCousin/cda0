@@ -5,7 +5,7 @@ import ray.rllib.algorithms.a2c as a2c
 #import ray.rllib.algorithms.sac as sac
 
 from stop_logic import StopLogic
-from projects.cda0.simple_highway_with_ramp import SimpleHighwayRamp
+from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 
 ray.init()
 
@@ -18,7 +18,7 @@ env_config = {  "time_step_size":   0.5,
                 "debug":            0
              }
 
-params["env"]                               = SimpleHighwayRamp
+params["env"]                               = SimpleHighwayRampWrapper
 params["env_config"]                        = env_config
 params["framework"]                         = "torch"
 params["num_gpus"]                          = 0 #for the local worker
@@ -48,16 +48,16 @@ tune_config = tune.TuneConfig(
                 mode        = "max",
                 num_samples = 1 #number of HP trials
               )
-stopper = StopLogic(max_timesteps       = 50000,
-                    max_iterations      = 80,
-                    min_iterations      = 30,
-                    avg_over_latest     = 8,
+stopper = StopLogic(max_timesteps       = 200,
+                    max_iterations      = 1,
+                    min_iterations      = 0,
+                    avg_over_latest     = 5,
                     success_threshold   = 0.8,
                     failure_threshold   = 0.0,
                     compl_std_dev       = 0.01
                    )
 run_config = air.RunConfig(
-                name        = "John-Tune-experiment",
+                name        = "cda0",
                 local_dir   = "~/ray_results",
                 stop        = stopper,
                 sync_config = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir

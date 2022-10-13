@@ -204,9 +204,16 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         #TODO future: replace this kludgy vehicle-specific observations with general obs on lane occupancy
 
 
-        lower_obs = np.zeros((SimpleHighwayRamp.OBS_SIZE)) #most values are 0, so only the others are explicitly described here
-        lower_obs[16] = lower_obs[17] = lower_obs[18] = -SimpleHighwayRamp.MAX_ACCEL #historical ego acceleration cmds
-        lower_obs[19] = -1.0 #ego lane cmd
+        lower_obs = np.zeros((SimpleHighwayRamp.OBS_SIZE)) #most values are 0, so only the others are explicitly set below
+        lower_obs[self.EGO_ACCEL_CMD_CUR]   = -SimpleHighwayRamp.MAX_ACCEL
+        lower_obs[self.EGO_ACCEL_CMD_PREV1] = -SimpleHighwayRamp.MAX_ACCEL
+        lower_obs[self.EGO_ACCEL_CMD_PREV2] = -SimpleHighwayRamp.MAX_ACCEL
+        lower_obs[self.EGO_LANE_CMD_CUR]    = -1.0
+        lower_obs[self.N1_LANE_ID]          = -1.0
+        lower_obs[self.N2_LANE_ID]          = -1.0
+        lower_obs[self.N3_LANE_ID]          = -1.0
+        lower_obs[self.ADJ_LN_LEFT_CONN_A]  = -SimpleHighwayRamp.SCENARIO_LENGTH
+        lower_obs[self.ADJ_LN_RIGHT_CONN_A] = -SimpleHighwayRamp.SCENARIO_LENGTH
 
         upper_obs = np.ones(SimpleHighwayRamp.OBS_SIZE)
         upper_obs[self.EGO_LANE_ID]         = 6.0
