@@ -44,7 +44,11 @@ Notes on the cda0 project
   23:44 - 00:15 = 0:31
 
 10/12/22:
+* Fixed all unit test and run-time errors. Ready to begin training.
 * Time
   08:14 - 09:40 = 1:26
   14:12 - 14:57 = 0:45
   15:27 - 15:56 = 0:29
+
+10/13/22:
+* Time 22:08 - 

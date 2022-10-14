@@ -1,7 +1,7 @@
 import ray
 from ray import air, tune
-#import ray.rllib.algorithms.ppo as ppo
-import ray.rllib.algorithms.a2c as a2c
+import ray.rllib.algorithms.ppo as ppo
+#import ray.rllib.algorithms.a2c as a2c
 #import ray.rllib.algorithms.sac as sac
 
 from stop_logic import StopLogic
@@ -10,8 +10,8 @@ from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 ray.init()
 
 # Define which learning algorithm we will use
-algo = "A2C"
-params = {} #a2c.DEFAULT_CONFIG.copy()
+algo = "PPO"
+params = ppo.DEFAULT_CONFIG.copy() #a2c requires empty dict
 
 # Define the custom environment for Ray
 env_config = {  "time_step_size":   0.5,
@@ -24,16 +24,17 @@ params["framework"]                         = "torch"
 params["num_gpus"]                          = 0 #for the local worker
 params["num_cpus_per_worker"]               = 1 #also applies to the local worker and evaluation workers
 params["num_gpus_per_worker"]               = 0.15 #this has to allow for evaluation workers also
-params["num_workers"]                       = 1 #num remote workers (remember that there is a local worker also)
-params["num_envs_per_worker"]               = 1
+params["num_workers"]                       = 4 #num remote workers (remember that there is a local worker also)
+params["num_envs_per_worker"]               = 4
 params["rollout_fragment_length"]           = 200 #timesteps
 params["gamma"]                             = 0.99
-params["lr"]                                = tune.loguniform(0.0001, 0.003)
-params["train_batch_size"]                  = tune.choice([1000, 2000, 4000])
+params["lr"]                                = tune.loguniform(0.00001, 0.003)
+params["sgd_minibatch_size"]                = 64
+params["train_batch_size"]                  = tune.choice([64, 128, 256, 512, 1024, 2048])
 params["evaluation_interval"]               = 6
 params["evaluation_duration"]               = 6
 params["evaluation_duration_unit"]          = "episodes"
-params["evaluation_parallel_to_training"]   = False #True requires evaluation_num_workers > 0
+params["evaluation_parallel_to_training"]   = True #True requires evaluation_num_workers > 0
 params["evaluation_num_workers"]            = 1
 params["log_level"]                         = "WARN"
 params["seed"]                              = tune.lograndint(1, 1048576)
@@ -46,18 +47,18 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric      = "episode_reward_mean",
                 mode        = "max",
-                num_samples = 1 #number of HP trials
+                num_samples = 10 #number of HP trials
               )
 stopper = StopLogic(max_timesteps       = 200,
-                    max_iterations      = 1,
-                    min_iterations      = 0,
+                    max_iterations      = 1000,
+                    min_iterations      = 100,
                     avg_over_latest     = 5,
-                    success_threshold   = 0.8,
+                    success_threshold   = 0.5,
                     failure_threshold   = 0.0,
                     compl_std_dev       = 0.01
                    )
 run_config = air.RunConfig(
-                name        = "cda0",
+                name        = "cda0-lane0",
                 local_dir   = "~/ray_results",
                 stop        = stopper,
                 sync_config = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir

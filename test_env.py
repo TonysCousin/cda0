@@ -3,7 +3,7 @@
 from simple_highway_with_ramp import SimpleHighwayRamp
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 
-config = {"debug": 2}
+config = {"debug": 0}
 
 # Case 1 - reset the env
 print("\n+++++ Begin case 1")
