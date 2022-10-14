@@ -15,7 +15,8 @@ params = ppo.DEFAULT_CONFIG.copy() #a2c requires empty dict
 
 # Define the custom environment for Ray
 env_config = {  "time_step_size":   0.5,
-                "debug":            0
+                "debug":            0,
+                "init_ego_lane":    0 #left-most lane, which is just straight
              }
 
 params["env"]                               = SimpleHighwayRampWrapper

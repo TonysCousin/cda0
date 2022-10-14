@@ -1,4 +1,3 @@
-from cmath import inf
 from distutils.log import debug
 import gym
 from gym.spaces import Discrete, Box
@@ -239,7 +238,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         lower_obs[self.N1_LANE_ID]          = -1.0
         lower_obs[self.N2_LANE_ID]          = -1.0
         lower_obs[self.N3_LANE_ID]          = -1.0
+        lower_obs[self.ADJ_LN_LEFT_ID]      = -1.0
         lower_obs[self.ADJ_LN_LEFT_CONN_A]  = -SimpleHighwayRamp.SCENARIO_LENGTH
+        lower_obs[self.ADJ_LN_RIGHT_ID]     = -1.0
         lower_obs[self.ADJ_LN_RIGHT_CONN_A] = -SimpleHighwayRamp.SCENARIO_LENGTH
 
         upper_obs = np.ones(SimpleHighwayRamp.OBS_SIZE)
@@ -516,6 +517,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Get updated metrics of ego vehicle relative to the new lane geometry
         new_ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(new_ego_lane, new_ego_x)
 
+        # If remaining lane distance has gone away, then vehicle has run straight off the end of the lane, so episode is done
+        if new_ego_rem <= 0.0:
+            new_ego_rem = 0.0 #clip it so that obs space isn't violated
+            if not done:
+                done = True
+                ran_off_road = True #don't turn this on if we had a successful episode
+
         # Update counter for time in between lane changes
         if self.obs[self.STEPS_SINCE_LN_CHG] < SimpleHighwayRamp.MAX_STEPS_SINCE_LC:
             self.obs[self.STEPS_SINCE_LN_CHG] += 1
@@ -558,6 +566,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # Determine the reward resulting from this time step's action
         reward = self._get_reward(done, crash, ran_off_road)
+
+        try:
+            self._verify_obs_limits()
+        except AssertionError as e:
+            print("///// Full obs vector content:")
+            for j in range(SimpleHighwayRamp.OBS_SIZE):
+                print("      {:2d}: {}".format(j, self.obs[j]))
 
         # According to gym docs, return tuple should have 5 elements:
         #   obs
@@ -686,6 +701,17 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         return reward
 
+
+    def _verify_obs_limits(self):
+        """Checks that each element of the observation vector is within the limits of the observation space."""
+
+        lo = self.observation_space.low
+        hi = self.observation_space.high
+
+        for i in range(SimpleHighwayRamp.OBS_SIZE):
+            assert lo[i] <= self.obs[i] <= hi[i], "\n///// obs[{}] value ({}) is outside bounds {} and {}".format(i, self.obs[i], lo[i], hi[i])
+
+
 ######################################################################################################
 ######################################################################################################
 
@@ -705,12 +731,13 @@ class Roadway:
         self.lanes = [] #list of all the lanes in the scenario; list index is lane ID
 
         # The roadway being modeled looks roughly like the diagram at the top of this code file.
-        lane = Lane(0, SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH,
-                    right_id = 1, right_join = 0.0, right_sep = inf)
+        really_long = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+        lane = Lane(0, really_long,
+                    right_id = 1, right_join = 0.0, right_sep = really_long)
         self.lanes.append(lane)
 
-        lane = Lane(1, SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH,
-                    left_id = 0, left_join = 0.0, left_sep = inf,
+        lane = Lane(1, really_long,
+                    left_id = 0, left_join = 0.0, left_sep = really_long,
                     right_id = 2, right_join = 800.0, right_sep = 1320.0)
         self.lanes.append(lane)
 
@@ -734,16 +761,16 @@ class Roadway:
             print("///// Entering Roadway.get_current_lane_geom for lane_id = ", lane_id, ", dist = ", dist_from_beg)
         rem_this_lane = self.lanes[lane_id].length - dist_from_beg
         la = 0.0
-        lb = inf
-        l_rem = inf
+        lb = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+        l_rem = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         left_id = self.lanes[lane_id].left_id
         if left_id >= 0:
             la = self.lanes[lane_id].left_join - dist_from_beg
             lb = self.lanes[lane_id].left_sep - dist_from_beg
             l_rem = self.lanes[left_id].length - dist_from_beg - self.adjust_downtrack_dist(lane_id, left_id)
         ra = 0.0
-        rb = inf
-        r_rem = inf
+        rb = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+        r_rem = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         right_id = self.lanes[lane_id].right_id
         if right_id >= 0:
             ra = self.lanes[lane_id].right_join - dist_from_beg
@@ -843,10 +870,12 @@ class Lane:
                     length      : float,                #total length of this lane, m (includes buffer)
                     left_id     : int       = -1,       #ID of an adjoining lane to its left, or -1 for none
                     left_join   : float     = 0.0,      #dist downtrack where left lane first joins, m
-                    left_sep    : float     = inf,      #dist downtrack where left lane separates from this one, m
+                    left_sep    : float     = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH,
+                                                        #dist downtrack where left lane separates from this one, m
                     right_id    : int       = -1,       #ID of an ajoining lane to its right, or -1 for none
                     right_join  : float     = 0.0,      #dist downtrack where right lane first joins, m
-                    right_sep   : float     = inf       #dist downtrack where right lane separates from this one, m
+                    right_sep   : float     = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+                                                        #dist downtrack where right lane separates from this one, m
                 ):
 
         self.my_id = my_id
@@ -863,14 +892,12 @@ class Lane:
             assert left_id != my_id, "Lane {} left adjoining lane has same ID".format(my_id)
             assert left_join >= 0.0  and  left_join < length, "Lane {} left_join value invalid.".format(my_id)
             assert left_sep > left_join, "Lane {} left_sep {} not larger than left_join {}".format(my_id, left_sep, left_join)
-            if left_sep < inf:
-                assert left_sep <= length, "Lane {} left sep {} is larger than this lane's length.".format(my_id, left_sep)
+            assert left_sep <= length, "Lane {} left sep {} is larger than this lane's length.".format(my_id, left_sep)
         if right_id >= 0:
             assert right_id != my_id, "Lane {} right adjoining lane has same ID".format(my_id)
             assert right_join >= 0.0  and  right_join < length, "Lane {} right_join value invalid.".format(my_id)
             assert right_sep > right_join, "Lane {} right_sep {} not larger than right_join {}".format(my_id, right_sep, right_join)
-            if right_sep < inf:
-                assert right_sep <= length, "Lane {} right sep {} is larger than this lane's length.".format(my_id, right_sep)
+            assert right_sep <= length, "Lane {} right sep {} is larger than this lane's length.".format(my_id, right_sep)
         if left_id >= 0  and  right_id >= 0:
             assert left_id != right_id, "Lane {}: both left and right adjoining lanes share ID {}".format(my_id, left_id)
 

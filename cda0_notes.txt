@@ -51,4 +51,5 @@ Notes on the cda0 project
   15:27 - 15:56 = 0:29
 
 10/13/22:
-* Time 22:08 - 
+* Still having occasional problems with observation_space violations
+* Time 22:08 - 01:00 = 2:52
