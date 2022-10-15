@@ -52,8 +52,8 @@ tune_config = tune.TuneConfig(
               )
 stopper = StopLogic(max_timesteps       = 200,
                     max_iterations      = 1000,
-                    min_iterations      = 100,
-                    avg_over_latest     = 5,
+                    min_iterations      = 150,
+                    avg_over_latest     = 20,
                     success_threshold   = 0.5,
                     failure_threshold   = 0.0,
                     compl_std_dev       = 0.01

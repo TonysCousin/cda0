@@ -14,7 +14,7 @@ class StopLogic(Stopper):
                  max_timesteps      : int   = None,
                  max_iterations     : int   = None,
                  min_iterations     : int   = 0,        #num iterations that must be completed before considering a stop
-                 avg_over_latest    : int   = 10,
+                 avg_over_latest    : int   = 10,       #num most recent iterations over which statistics will be calculated
                  success_threshold  : float = 1.0,      #reward above which we can call it a win
                  failure_threshold  : float = -1.0,     #reward below which we can early terminate (after min required iters)
                  compl_std_dev      : float = 0.01      #std deviation of reward below which we can terminate (success or failure)
@@ -37,8 +37,12 @@ class StopLogic(Stopper):
         # Each entry will have key = trial_id and value = dict containing the following:
         #   "stop" (bool) - should this trial be stopped?
         #   "num_entries" (int) - num meaningful entries in the deque
-        #   "rewards" (deque) - the most recent N mean rewards
+        #   "mean_rewards" (deque) - the most recent N mean rewards
+        #   "max_rewards" (deque) - the most recent N max rewards
         self.trials = {}
+
+        # Other internal variables
+        self.threshold_latch = False
 
 
     def __call__(self,
@@ -54,51 +58,83 @@ class StopLogic(Stopper):
         #print("///// - end of result\n")
         total_iters = result["iterations_since_restore"]
         threshold = self.required_min_iters
-        if result["episode_reward_max"] > 10.0: #TODO: make this a config var or input arg
+        if result["episode_reward_max"] > -0.4  or  self.threshold_latch: #TODO: make this a config var or input arg
             threshold *= 1.2
+            self.threshold_latch = True
 
         # If this trial is already underway and being tracked, then
         if trial_id in self.trials:
-            rew = -100.0
-            if not math.isnan(result["episode_reward_mean"]):
-                rew = result["episode_reward_mean"]
-            self.trials[trial_id]["rewards"].append(rew)
-            #print("///// Appending reward ", rew)
 
+            # Capture the values of max and mean rewards for this iteration
+            mean_rew = -100.0
+            if not math.isnan(result["episode_reward_mean"]):
+                mean_rew = result["episode_reward_mean"]
+            self.trials[trial_id]["mean_rewards"].append(mean_rew)
+            max_rew = -100.0
+            if not math.isnan(result["episode_reward_max"]):
+                max_rew = result["episode_reward_max"]
+            self.trials[trial_id]["max_rewards"].append(max_rew)
+            #print("///// Appending reward ", mean_rew, max_rew)
+
+            # If the deque of N most recent rewards is not yet full then increment its count
             if self.trials[trial_id]["num_entries"] < self.most_recent:
                 self.trials[trial_id]["num_entries"] += 1
                 #print("\n///// StopLogic: trial {} has completed {} iterations.".format(trial_id, self.trials[trial_id]["num_entries"]))
 
+            # Else if the deque is full and we have seen more iterations than the min threshold then
             elif total_iters > threshold:
 
+                # Stop if max iterations reached
                 if self.max_iterations is not None  and  total_iters >= self.max_iterations:
                     print("\n///// Stopping trial - reached max iterations.")
                     return True
 
+                # Stop if max timesteps reached
                 if self.max_timesteps is not None  and  result["timesteps_since_restore"] >= self.max_timesteps:
                     print("\n///// Stopping trial - reached max timesteps.")
                     print("")
                     return True
 
-                std = stdev(self.trials[trial_id]["rewards"])
-                if std <= self.completion_std_threshold:
+                # Stop if mean and max rewards haven't significantly changed in recent history
+                std_of_mean = stdev(self.trials[trial_id]["mean_rewards"])
+                std_of_max  = stdev(self.trials[trial_id]["max_rewards"])
+                if std_of_mean <= self.completion_std_threshold  and  std_of_max <= self.completion_std_threshold:
                     print("\n///// Stopping trial due to no further change")
                     return True
 
-                avg = mean(list(self.trials[trial_id]["rewards"]))
+                # Stop if avg of mean rewards over recent history is above the succcess threshold
+                avg = mean(list(self.trials[trial_id]["mean_rewards"]))
                 #print("\n///// StopLogic: trial {} has recent avg reward = {:.2f}".format(trial_id, avg))
-                if avg > self.success_avg_threshold: #success!
+                if avg > self.success_avg_threshold:
                     print("\n///// Stopping trial due to success!\n")
                     return True
-                elif avg < self.failure_avg_threshold: #failure
-                    print("\n///// Stopping trial due to failure\n")
-                    return True
+
+                # Else if the avg mean reward over recent history is below the success threshold then
+                elif avg < self.failure_avg_threshold:
+
+                    # If the max reward is not climbing significantly, then stop as a failure
+                    dq = self.trials[trial_id]["max_rewards"]
+                    dq_size = self.most_recent
+                    improving = False
+                    if dq_size < 4:
+                        if dq[-1] > dq[0]:
+                            improving = True
+                    else:
+                        begin = 0.333333 * (dq[0] + dq[1] + dq[2])
+                        end   = 0.333333 * (dq[-3] + dq[-2] + dq[-1])
+                        if end > begin:
+                            improving = True
+                    if not improving:
+                        print("\n///// Stopping trial due to failure\n")
+                        return True
 
         # Else, it is a brand new trial
         else:
-            init = deque(maxlen=self.most_recent)
-            init.append(result["episode_reward_mean"])
-            self.trials[trial_id] = {"stop": False, "num_entries": 1, "rewards": init}
+            mean_rew = deque(maxlen = self.most_recent)
+            mean_rew.append(result["episode_reward_mean"])
+            max_rew = deque(maxlen = self.most_recent)
+            max_rew.append(result["episode_reward_max"])
+            self.trials[trial_id] = {"stop": False, "num_entries": 1, "mean_rewards": mean_rew, "max_rewards": max_rew}
             #print("\n///// Creating new trial entry: ", self.trials)
 
         return False

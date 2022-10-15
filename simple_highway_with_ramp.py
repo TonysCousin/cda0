@@ -240,8 +240,12 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         lower_obs[self.N3_LANE_ID]          = -1.0
         lower_obs[self.ADJ_LN_LEFT_ID]      = -1.0
         lower_obs[self.ADJ_LN_LEFT_CONN_A]  = -SimpleHighwayRamp.SCENARIO_LENGTH
+        lower_obs[self.ADJ_LN_LEFT_CONN_B]  = -SimpleHighwayRamp.SCENARIO_LENGTH
+        lower_obs[self.ADJ_LN_LEFT_REM]     = -SimpleHighwayRamp.SCENARIO_LENGTH
         lower_obs[self.ADJ_LN_RIGHT_ID]     = -1.0
         lower_obs[self.ADJ_LN_RIGHT_CONN_A] = -SimpleHighwayRamp.SCENARIO_LENGTH
+        lower_obs[self.ADJ_LN_RIGHT_CONN_B] = -SimpleHighwayRamp.SCENARIO_LENGTH
+        lower_obs[self.ADJ_LN_RIGHT_REM]    = -SimpleHighwayRamp.SCENARIO_LENGTH
 
         upper_obs = np.ones(SimpleHighwayRamp.OBS_SIZE)
         upper_obs[self.EGO_LANE_ID]         = 6.0
@@ -293,6 +297,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.lane_change_underway = "none" #possible values: "left", "right", "none"
         self.lane_change_count = 0 #num consecutive time steps since a lane change was begun
         self.steps_since_reset = 0 #length of the current episode in time steps
+        self.stopped_count = 0 #num consecutive time steps in an episode where vehicle speed is zero
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
         #self.render_mode = render_mode
@@ -400,6 +405,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.lane_change_underway = "none"
         self.lane_change_count = 0
         self.steps_since_reset = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
+        self.stopped_count = 0
 
         if self.debug > 1:
             print("///// End of reset().")
@@ -458,6 +464,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # If the ego vehicle has run off the end of the scenario, consider the episode successfully complete
         if new_ego_x >= SimpleHighwayRamp.SCENARIO_LENGTH:
+            new_ego_x = SimpleHighwayRamp.SCENARIO_LENGTH #clip it so it doesn't violate obs bounds
             done = True
 
         # Determine if we are beginning or continuing a lane change maneuver.
@@ -517,6 +524,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Get updated metrics of ego vehicle relative to the new lane geometry
         new_ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(new_ego_lane, new_ego_x)
 
+        #TODO debugging only
+        if rb < 0.0  or  r_rem < 0.0:
+            print("\n///// DETECTED FAULTY GEOM. new_ego_rem = {:.2f}, lid = {}, la = {:.2f}, lb = {:.2f}, l_rem = {:.2f}"
+                    .format(new_ego_rem, lid, la, lb, l_rem))
+            print("          rid = {}, ra = {:.2f}, rb = {:.2f}, r_rem = {:.2f}, new_ego_lane = {}, new_ego_x = {:.2f}"
+                    .format(rid, ra, rb, r_rem, new_ego_lane, new_ego_x))
+
         # If remaining lane distance has gone away, then vehicle has run straight off the end of the lane, so episode is done
         if new_ego_rem <= 0.0:
             new_ego_rem = 0.0 #clip it so that obs space isn't violated
@@ -564,15 +578,21 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             crash = self._check_for_collisions()
             done = crash
 
-        # Determine the reward resulting from this time step's action
-        reward = self._get_reward(done, crash, ran_off_road)
+        # If vehicle has been stopped for several time steps, then declare the episode done as a failure
+        stopped_vehicle = False
+        if self.vehicles[0].speed < 0.01:
+            self.stopped_count += 1
+            if self.stopped_count > 5:
+                done = True
+                stopped_vehicle = True
+        else:
+            self.stopped_count = 0
 
-        try:
-            self._verify_obs_limits()
-        except AssertionError as e:
-            print("///// Full obs vector content:")
-            for j in range(SimpleHighwayRamp.OBS_SIZE):
-                print("      {:2d}: {}".format(j, self.obs[j]))
+        # Determine the reward resulting from this time step's action
+        reward = self._get_reward(done, crash, ran_off_road, stopped_vehicle)
+
+        # Verify that the obs are within design limits
+        self._verify_obs_limits()
 
         # According to gym docs, return tuple should have 5 elements:
         #   obs
@@ -657,7 +677,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
     def _get_reward(self,
                     done    : bool,         #is this the final step in the episode?
                     crash   : bool,         #did one or more of the vehicles crash into each other?
-                    off_road: bool          #did the ego vehicle run off the road?
+                    off_road: bool,         #did the ego vehicle run off the road?
+                    stopped : bool          #has the vehicle come to a standstill?
                    ):
         """Returns the reward for the current time step (float).  The reward should be in [-1, 1] for any situation."""
 
@@ -668,11 +689,17 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # If the episode is done then
         if done:
 
-            # If there was a single- or multi-car crash then
+            # If there was a single- or multi-car crash or then
             if crash  or  off_road:
 
                 # Subtract a crash penalty
                 reward = -1.0
+
+            # Else if the vehicle just stopped in the middle of the road then
+            elif stopped:
+
+                # Subtract a penalty for no movement
+                reward -= 0.5
 
             # Else (episode ended successfully)
             else:
@@ -708,8 +735,16 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         lo = self.observation_space.low
         hi = self.observation_space.high
 
-        for i in range(SimpleHighwayRamp.OBS_SIZE):
-            assert lo[i] <= self.obs[i] <= hi[i], "\n///// obs[{}] value ({}) is outside bounds {} and {}".format(i, self.obs[i], lo[i], hi[i])
+        try:
+            for i in range(SimpleHighwayRamp.OBS_SIZE):
+                assert lo[i] <= self.obs[i] <= hi[i], "\n///// obs[{}] value ({}) is outside bounds {} and {}".format(i, self.obs[i], lo[i], hi[i])
+
+        except AssertionError as e:
+            print(e)
+            print("///// Full obs vector content:")
+            for j in range(SimpleHighwayRamp.OBS_SIZE):
+                print("      {:2d}: {}".format(j, self.obs[j]))
+
 
 
 ######################################################################################################
@@ -962,7 +997,7 @@ class Vehicle:
 
         new_accel = min(max(prev_accel_cmd + self.time_step_size*new_jerk, -SimpleHighwayRamp.MAX_ACCEL), SimpleHighwayRamp.MAX_ACCEL)
         new_speed = min(max(self.speed + self.time_step_size*new_accel, 0.0), SimpleHighwayRamp.MAX_SPEED) #vehicle won't start moving backwards
-        new_x = self.dist_downtrack + self.time_step_size*(new_speed + 0.5*self.time_step_size*new_accel)
+        new_x = max(self.dist_downtrack + self.time_step_size*(new_speed + 0.5*self.time_step_size*new_accel), 0.0)
 
         self.dist_downtrack = new_x
         self.speed = new_speed
