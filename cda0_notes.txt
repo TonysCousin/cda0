@@ -31,9 +31,9 @@ Notes on the cda0 project
   19:03 - 19:27 = 0:24
 
 10/9/22:
+* Time 19:54 - 22:53, int 13 = 2:46
 * Completed unit testing of all env logic except reward.
 * Built initial reward logic.
-* Time 19:54 - 22:53, int 13 = 2:46
 
 10/10/22:
 * time 10:48 - 11:15 = 0:27
@@ -44,20 +44,26 @@ Notes on the cda0 project
   23:44 - 00:15 = 0:31
 
 10/12/22:
-* Fixed all unit test and run-time errors. Ready to begin training.
 * Time
   08:14 - 09:40 = 1:26
   14:12 - 14:57 = 0:45
   15:27 - 15:56 = 0:29
+* Fixed all unit test and run-time errors. Ready to begin training.
 
 10/13/22:
-* Still having occasional problems with observation_space violations
 * Time 22:08 - 01:00 = 2:52
+* Still having occasional problems with observation_space violations
 
 10/14/22:
-* Created conda env "cda0" as a copy of rllib2 to make sure any project-specific changes aren't applied to the base env.
 * Time 23:08 - 01:59 = 2:51
+* Created conda env "cda0" as a copy of rllib2 to make sure any project-specific changes aren't applied to the base env.
 
 10/15/22:
-* SUCCESS! got several trials to drive lane 0 beginning to end, forcing no steering.
-* time 11:59 - 12:34 = 0:35
+* Time
+  11:59 - 12:34 = 0:35
+  22:44 - 
+* SUCCESS - first taste! got several trials to drive lane 0 beginning to end, forcing no steering.
+  Best tuning trial was 35915_00003; saving checkpoint 181.
+* Ran new training job (7559b), with results under the cda0-l0-free dir, that starts agent in lane 0 but allows it to change
+  lanes.  Most successful trial was 75599b_00005; using checkpoint 126.  PPO lr = 2.8e-5, batch = 512.
+* Need an inference program to run these successful models and capture their trajectories for viewing.

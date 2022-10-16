@@ -28,7 +28,7 @@ class StopLogic(Stopper):
                 self.max_iterations = 1.2*min_iterations
 
         self.max_timesteps = max_timesteps
-        self.required_min_iters = min_iterations
+        self.required_min_iters = min_iterations #num required before declaring failure
         self.most_recent = avg_over_latest #num recent trials to consider when deciding to stop
         self.success_avg_threshold = success_threshold
         self.failure_avg_threshold = failure_threshold
@@ -57,9 +57,8 @@ class StopLogic(Stopper):
         #    print("{}: {}".format(item, result[item]))
         #print("///// - end of result\n")
         total_iters = result["iterations_since_restore"]
-        threshold = self.required_min_iters
         if result["episode_reward_max"] > -0.4  or  self.threshold_latch: #TODO: make this a config var or input arg
-            threshold *= 1.2
+            self.required_min_iters *= 1.2
             self.threshold_latch = True
 
         # If this trial is already underway and being tracked, then
@@ -81,52 +80,54 @@ class StopLogic(Stopper):
                 self.trials[trial_id]["num_entries"] += 1
                 #print("\n///// StopLogic: trial {} has completed {} iterations.".format(trial_id, self.trials[trial_id]["num_entries"]))
 
-            # Else if the deque is full and we have seen more iterations than the min threshold then
-            elif total_iters > threshold:
-
-                # Stop if max iterations reached
-                if self.max_iterations is not None  and  total_iters >= self.max_iterations:
-                    print("\n///// Stopping trial - reached max iterations.")
-                    return True
-
-                # Stop if max timesteps reached
-                if self.max_timesteps is not None  and  result["timesteps_since_restore"] >= self.max_timesteps:
-                    print("\n///// Stopping trial - reached max timesteps.")
-                    print("")
-                    return True
-
-                # Stop if mean and max rewards haven't significantly changed in recent history
-                std_of_mean = stdev(self.trials[trial_id]["mean_rewards"])
-                std_of_max  = stdev(self.trials[trial_id]["max_rewards"])
-                if std_of_mean <= self.completion_std_threshold  and  std_of_max <= self.completion_std_threshold:
-                    print("\n///// Stopping trial due to no further change")
-                    return True
-
-                # Stop if avg of mean rewards over recent history is above the succcess threshold
+            # Else the deque is full so we can start analyzing stop criteria
+            else:
+                # Stop if avg of mean rewards over recent history is above the succcess threshold and its standard deviation is small
                 avg = mean(list(self.trials[trial_id]["mean_rewards"]))
+                std_of_mean = stdev(self.trials[trial_id]["mean_rewards"])
                 #print("\n///// StopLogic: trial {} has recent avg reward = {:.2f}".format(trial_id, avg))
-                if avg > self.success_avg_threshold:
+                if avg >= self.success_avg_threshold  and  std_of_mean <= self.completion_std_threshold:
                     print("\n///// Stopping trial due to success!\n")
                     return True
 
-                # Else if the avg mean reward over recent history is below the success threshold then
-                elif avg < self.failure_avg_threshold:
+                # If we have seen more iterations than the min required for failure then
+                if total_iters > self.required_min_iters:
 
-                    # If the max reward is not climbing significantly, then stop as a failure
-                    dq = self.trials[trial_id]["max_rewards"]
-                    dq_size = self.most_recent
-                    improving = False
-                    if dq_size < 4:
-                        if dq[-1] > dq[0]:
-                            improving = True
-                    else:
-                        begin = 0.333333 * (dq[0] + dq[1] + dq[2])
-                        end   = 0.333333 * (dq[-3] + dq[-2] + dq[-1])
-                        if end > begin:
-                            improving = True
-                    if not improving:
-                        print("\n///// Stopping trial due to failure\n")
+                    # Stop if max iterations reached
+                    if self.max_iterations is not None  and  total_iters >= self.max_iterations:
+                        print("\n///// Stopping trial - reached max iterations.")
                         return True
+
+                    # Stop if max timesteps reached
+                    if self.max_timesteps is not None  and  result["timesteps_since_restore"] >= self.max_timesteps:
+                        print("\n///// Stopping trial - reached max timesteps.")
+                        print("")
+                        return True
+
+                    # Stop if mean and max rewards haven't significantly changed in recent history
+                    std_of_max  = stdev(self.trials[trial_id]["max_rewards"])
+                    if std_of_mean <= self.completion_std_threshold  and  std_of_max <= self.completion_std_threshold:
+                        print("\n///// Stopping trial due to no further change")
+                        return True
+
+                    # If the avg mean reward over recent history is below the success threshold then
+                    if avg < self.failure_avg_threshold:
+
+                        # If the max reward is not climbing significantly, then stop as a failure
+                        dq = self.trials[trial_id]["max_rewards"]
+                        dq_size = self.most_recent
+                        improving = False
+                        if dq_size < 4:
+                            if dq[-1] > dq[0]:
+                                improving = True
+                        else:
+                            begin = 0.333333 * (dq[0] + dq[1] + dq[2])
+                            end   = 0.333333 * (dq[-3] + dq[-2] + dq[-1])
+                            if end > begin:
+                                improving = True
+                        if not improving:
+                            print("\n///// Stopping trial due to failure\n")
+                            return True
 
         # Else, it is a brand new trial
         else:

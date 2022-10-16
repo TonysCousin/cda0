@@ -22,11 +22,11 @@ env_config = {  "time_step_size":   0.5,
 params["env"]                               = SimpleHighwayRampWrapper
 params["env_config"]                        = env_config
 params["framework"]                         = "torch"
-params["num_gpus"]                          = 0 #for the local worker
+params["num_gpus"]                          = 1 #for the local worker
 params["num_cpus_per_worker"]               = 1 #also applies to the local worker and evaluation workers
-params["num_gpus_per_worker"]               = 0.15 #this has to allow for evaluation workers also
-params["num_workers"]                       = 1 #num remote workers (remember that there is a local worker also)
-params["num_envs_per_worker"]               = 1
+params["num_gpus_per_worker"]               = 0 #this has to allow for evaluation workers also
+params["num_workers"]                       = 14 #num remote workers (remember that there is a local worker also)
+params["num_envs_per_worker"]               = 4
 params["rollout_fragment_length"]           = 200 #timesteps
 params["gamma"]                             = 0.99
 params["lr"]                                = tune.loguniform(0.00001, 0.003)
@@ -48,18 +48,18 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric      = "episode_reward_mean",
                 mode        = "max",
-                num_samples = 10 #number of HP trials
+                num_samples = 8 #number of HP trials
               )
 stopper = StopLogic(max_timesteps       = 200,
                     max_iterations      = 1000,
                     min_iterations      = 150,
                     avg_over_latest     = 20,
-                    success_threshold   = 0.5,
+                    success_threshold   = 1.9,
                     failure_threshold   = 0.0,
-                    compl_std_dev       = 0.01
+                    compl_std_dev       = 0.05
                    )
 run_config = air.RunConfig(
-                name        = "cda0-lane0",
+                name        = "cda0-l0-free",
                 local_dir   = "~/ray_results",
                 stop        = stopper,
                 sync_config = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir

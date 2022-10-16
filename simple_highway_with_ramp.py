@@ -430,13 +430,6 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         assert -SimpleHighwayRamp.MAX_ACCEL <= action[0] <= SimpleHighwayRamp.MAX_ACCEL, "Input accel cmd invalid: {:.2f}".format(action[0])
         assert -1.0 <= action[1] <= 1.0, "Input lane change cmd is invalid: {:.2f}".format(action[1])
 
-
-
-        #TODO: for initial phase, I am forcing the vehicle to stay in same lane
-        action[1] = 0.0
-
-
-
         self.steps_since_reset += 1
 
         #
@@ -533,17 +526,6 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Get updated metrics of ego vehicle relative to the new lane geometry
         new_ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(new_ego_lane, new_ego_x)
 
-        #TODO debugging only
-        if rb < 0.0  or  r_rem < 0.0:
-            print("\n///// DETECTED FAULTY GEOM. new_ego_rem = {:.2f}, lid = {}, la = {:.2f}, lb = {:.2f}, l_rem = {:.2f}"
-                    .format(new_ego_rem, lid, la, lb, l_rem))
-            print("          rid = {}, ra = {:.2f}, rb = {:.2f}, r_rem = {:.2f}, new_ego_lane = {}, new_ego_x = {:.2f}"
-                    .format(rid, ra, rb, r_rem, new_ego_lane, new_ego_x))
-        if new_ego_lane != 0  or  self.obs[self.EGO_LANE_ID] != 0:
-            print("\n///// Ego lane ID is wrong. new_ego_lane = {}, tgt_lane = {}, obs[EGO_LANE_ID] = {}, ran_off_road = {}"
-                    .format(new_ego_lane, tgt_lane, self.obs[self.EGO_LANE_ID], ran_off_road))
-            print("      cmd = {:.2f}, underway = {}, count = {}".format(action[1], self.lane_change_underway, self.lane_change_count))
-
         # If remaining lane distance has gone away, then vehicle has run straight off the end of the lane, so episode is done
         if new_ego_rem <= 0.0:
             new_ego_rem = 0.0 #clip it so that obs space isn't violated
@@ -600,6 +582,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 stopped_vehicle = True
         else:
             self.stopped_count = 0
+
+        #TODO debugging only
+        """
+        if new_ego_lane != 0  or  self.obs[self.EGO_LANE_ID] != 0:
+            print("///// Ego lane ID is not 0. new_ego_lane = {}, tgt_lane = {}, obs[EGO_LANE_ID] = {}, ran_off_road = {}"
+                    .format(new_ego_lane, tgt_lane, self.obs[self.EGO_LANE_ID], ran_off_road))
+            print("      cmd = {:.2f}, underway = {}, count = {}".format(action[1], self.lane_change_underway, self.lane_change_count))
+        """
 
         # Determine the reward resulting from this time step's action
         reward = self._get_reward(done, crash, ran_off_road, stopped_vehicle)
