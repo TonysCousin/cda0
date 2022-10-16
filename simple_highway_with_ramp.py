@@ -430,6 +430,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         assert -SimpleHighwayRamp.MAX_ACCEL <= action[0] <= SimpleHighwayRamp.MAX_ACCEL, "Input accel cmd invalid: {:.2f}".format(action[0])
         assert -1.0 <= action[1] <= 1.0, "Input lane change cmd is invalid: {:.2f}".format(action[1])
 
+
+
+        #TODO: for initial phase, I am forcing the vehicle to stay in same lane
+        action[1] = 0.0
+
+
+
         self.steps_since_reset += 1
 
         #
@@ -452,7 +459,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 prev_accel_cmd = self.obs[self.EGO_ACCEL_CMD_CUR]
             new_speed, new_x = v.advance_vehicle(new_accel_cmd, prev_accel_cmd)
             if self.debug > 1:
-                print("      Vehicle {} advanced with new_accel_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}".format(i, new_accel_cmd, new_speed, new_x))
+                print("      Vehicle {} advanced with new_accel_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}"
+                        .format(i, new_accel_cmd, new_speed, new_x))
             new_rem, _, _, _, _, _, _, _, _ = self.roadway.get_current_lane_geom(lane_id, new_x)
             self.obs[obs_idx + 1] = new_x
             self.obs[obs_idx + 2] = new_speed
@@ -483,7 +491,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 self.lane_change_count = 1
                 self.obs[self.STEPS_SINCE_LN_CHG] = 0
                 if self.debug > 0:
-                    print("      *** New lane change maneuver initiated. action[1] = {:.2f}, status = {}".format(action[1], self.lane_change_underway))
+                    print("      *** New lane change maneuver initiated. action[1] = {:.2f}, status = {}".
+                            format(action[1], self.lane_change_underway))
             else: #once a lane change is underway, contiinue until complete, regardless of new commands
                 self.lane_change_count += 1
 
@@ -530,6 +539,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                     .format(new_ego_rem, lid, la, lb, l_rem))
             print("          rid = {}, ra = {:.2f}, rb = {:.2f}, r_rem = {:.2f}, new_ego_lane = {}, new_ego_x = {:.2f}"
                     .format(rid, ra, rb, r_rem, new_ego_lane, new_ego_x))
+        if new_ego_lane != 0  or  self.obs[self.EGO_LANE_ID] != 0:
+            print("\n///// Ego lane ID is wrong. new_ego_lane = {}, tgt_lane = {}, obs[EGO_LANE_ID] = {}, ran_off_road = {}"
+                    .format(new_ego_lane, tgt_lane, self.obs[self.EGO_LANE_ID], ran_off_road))
+            print("      cmd = {:.2f}, underway = {}, count = {}".format(action[1], self.lane_change_underway, self.lane_change_count))
 
         # If remaining lane distance has gone away, then vehicle has run straight off the end of the lane, so episode is done
         if new_ego_rem <= 0.0:
@@ -737,7 +750,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         try:
             for i in range(SimpleHighwayRamp.OBS_SIZE):
-                assert lo[i] <= self.obs[i] <= hi[i], "\n///// obs[{}] value ({}) is outside bounds {} and {}".format(i, self.obs[i], lo[i], hi[i])
+                assert lo[i] <= self.obs[i] <= hi[i], "\n///// obs[{}] value ({}) is outside bounds {} and {}" \
+                                                        .format(i, self.obs[i], lo[i], hi[i])
 
         except AssertionError as e:
             print(e)

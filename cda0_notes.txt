@@ -56,5 +56,8 @@ Notes on the cda0 project
 
 10/14/22:
 * Created conda env "cda0" as a copy of rllib2 to make sure any project-specific changes aren't applied to the base env.
-* Unresolved error: ego vehicle suddenly changes lane from 0 to 1.
 * Time 23:08 - 01:59 = 2:51
+
+10/15/22:
+* SUCCESS! got several trials to drive lane 0 beginning to end, forcing no steering.
+* time 11:59 - 12:34 = 0:35
