@@ -70,7 +70,16 @@ Notes on the cda0 project
 
 10/16/22:
 * Time 21:05 - 23:09, int 20 = 1:44
-* New tuning job (19380) under cda0-l01-free dir. This one randomly initializes episodes with the ego vehicle in either lane
-  0 or 1, but not 2.  The neighbor vehicles still do not move.
+* New tuning job (17669) under cda0-l01-free dir. This one randomly initializes episodes with the ego vehicle in either lane
+  0 or 1, but not 2.  The neighbor vehicles still do not move. Two solutions got pretty close (00003 and 00002), but none
+  scored higher than low 1.8s for the mean reward.
 * Installed pygame (with pip) into the conda env "cda0" to experiment with making a graphical display of the simulation.
   Played with an example program enough to quickly understand how to do some basic graphics needed for my sim.
+
+10/17/22:
+* Time
+  14:16 - 14:48 = 0:32
+  17:10 - 
+* Fixed a problem in the env wrapper that was locking the ego lane to 0; also changed reward shape some, so all previous
+  training needs to be thrown away.
+* Training again on random lane start (0 or 1 only) with no neighbor vehicles moving.

@@ -182,8 +182,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         except KeyError as e:
             pass
 
-        if self.debug > 0:
-            print("\n///// SimpleHighwayRamp init: config = ", config)
+        print("\n///// SimpleHighwayRamp init: config = ", config)
 
         # Define the vehicles used in this scenario - the ego vehicle (where the AI agent lives) is index 0
         self.vehicles = []
@@ -346,7 +345,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         #starting downtrack distance, m
         ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
         if ego_lane_id == 1:
-            ego_x = min(ego_x, 50.0) #need to start in front of the neighbor vehicles if in this lane
+            ego_x = max(ego_x, 5.0*SimpleHighwayRamp.VEHICLE_LENGTH) #need to start in front of the neighbor vehicles if in this lane
         #starting speed between 5 and 30 m/s
         ego_speed = self.prng.random() * 25.0 + 5.0 if self.init_ego_speed is None  else self.init_ego_speed
         if self.debug > 0:
@@ -439,6 +438,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         #
 
         done = False
+        return_info = {"reason": "Unknown"}
 
         # Move all of the neighbor vehicles downtrack (ASSUMES all vehicles are represented contiguously in the obs vector).
         # This doesn't account for possible lane changes, which are handled seperately in the next section.
@@ -469,6 +469,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         if new_ego_x >= SimpleHighwayRamp.SCENARIO_LENGTH:
             new_ego_x = SimpleHighwayRamp.SCENARIO_LENGTH #clip it so it doesn't violate obs bounds
             done = True
+            return_info["reason"] = "Success; end of scenario"
 
         # Determine if we are beginning or continuing a lane change maneuver.
         # Accept a lane change command that lasts for several time steps or only one time step.  Once the first
@@ -503,6 +504,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 if tgt_lane < 0:
                     done = True
                     ran_off_road = True
+                    return_info["reason"] = "Ran off road; illegal lane change"
                     if self.debug > 1:
                         print("      DONE!  illegal lane change commanded.")
 
@@ -522,6 +524,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 if prev_lane < 0: #the lane we're coming from ended before the lane change maneuver completed
                     done = True
                     ran_off_road = True
+                    return_info["reason"] = "Ran off road; lane change got underway too late"
                     if self.debug > 1:
                         print("      DONE!  original lane ended before lane change completed.")
 
@@ -534,6 +537,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             if not done:
                 done = True
                 ran_off_road = True #don't turn this on if we had a successful episode
+                return_info["reason"] = "Ran off road; in terminating lane"
 
         # Update counter for time in between lane changes
         if self.obs[self.STEPS_SINCE_LN_CHG] < SimpleHighwayRamp.MAX_STEPS_SINCE_LC:
@@ -574,6 +578,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         if not done:
             crash = self._check_for_collisions()
             done = crash
+            if done:
+                return_info["reason"] = "Crashed into neighbor vehicle"
 
         # If vehicle has been stopped for several time steps, then declare the episode done as a failure
         stopped_vehicle = False
@@ -582,16 +588,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             if self.stopped_count > 5:
                 done = True
                 stopped_vehicle = True
+                return_info["reason"] = "Vehicle chose to stop moving"
         else:
             self.stopped_count = 0
-
-        #TODO debugging only
-        """
-        if new_ego_lane != 0  or  self.obs[self.EGO_LANE_ID] != 0:
-            print("///// Ego lane ID is not 0. new_ego_lane = {}, tgt_lane = {}, obs[EGO_LANE_ID] = {}, ran_off_road = {}"
-                    .format(new_ego_lane, tgt_lane, self.obs[self.EGO_LANE_ID], ran_off_road))
-            print("      cmd = {:.2f}, underway = {}, count = {}".format(action[1], self.lane_change_underway, self.lane_change_count))
-        """
 
         # Determine the reward resulting from this time step's action
         reward = self._get_reward(done, crash, ran_off_road, stopped_vehicle)
@@ -612,7 +611,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             print("      final vehicles array =")
             for i, v in enumerate(self.vehicles):
                 v.print(i)
-        return self.obs, reward, done, {}
+            print("      reason = {}".format(return_info["reason"]))
+        return self.obs, reward, done, return_info
 
 
     def close(self):
@@ -716,20 +716,32 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         else:
 
             # Add a small incentive for not crashing
-            reward += 0.01
+            reward += 0.02
 
-            # If ego vehicle acceleration is jerky, then apply a penalty
+            # If ego vehicle acceleration is jerky, then apply a penalty (worst case -0.03)
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
             jerk2 = (self.obs[self.EGO_ACCEL_CMD_PREV1] - self.obs[self.EGO_ACCEL_CMD_PREV2]) / self.time_step_size
             reward -= 0.01 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK
 
+            # Penalty for accel command that would take agent beyond a speed limit (worst case -0.01)
+            if (self.obs[self.EGO_SPEED] < 0.1  and  self.obs[self.EGO_ACCEL_CMD_CUR] < 0.0)  or \
+               (self.obs[self.EGO_SPEED] > 0.99*SimpleHighwayRamp.MAX_SPEED  and \
+                self.obs[self.EGO_ACCEL_CMD_CUR] > 0.0):
+                reward -= 0.01
+
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
-                reward -= 0.01 * (SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
+                reward -= 0.03 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
+
+            # Penalty for lane change command not near one of the quantized action values (worst case -0.01)
+            lcc = self.obs[self.EGO_LANE_CMD_CUR]
+            term = abs(lcc) - 0.5
+            reward -= 0.01*(1.0 - 4.0*term*term)
 
         reward = min(max(reward, -1.0), 1.0)
         if self.debug > 0:
-            print("///// reward returning {:.3f} due to crash = {}, off_road = {}".format(reward, crash, off_road))
+            print("///// reward returning {:.3f} due to crash = {}, off_road = {}, stopped = {}"
+                    .format(reward, crash, off_road, stopped))
 
         return reward
 

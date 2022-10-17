@@ -83,19 +83,29 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         # is happening in the agent's own lane, or in the lane immediately to its left or in the lane immediately to its
         # right.  Therefore, these translations are specific to the roadway geometry hard-coded in this version.
 
-        scaled[self.EGO_LANE_ID]        = 0 #Unused, but kept to maintain obs space shape
+        # Determine relative lane indexes for the neighbor vehicles (-1 is left of agent, 0 is same as agent, +1 is right of
+        # agent; neighbors are always in lane 1)
+        ego_lane_id = obs[self.EGO_LANE_ID]
+        if ego_lane_id == 0:
+            neighbor_lane = 1
+        elif ego_lane_id == 1:
+            neighbor_lane = 0
+        else:
+            neighbor_lane = -1
+
+        scaled[self.EGO_LANE_ID]        = ego_lane_id
         scaled[self.EGO_X]              = obs[self.EGO_X]               / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
         scaled[self.EGO_SPEED]          = obs[self.EGO_SPEED]           / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
         scaled[self.EGO_LANE_REM]       = min(obs[self.EGO_LANE_REM]    / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
-        scaled[self.N1_LANE_ID]         = -1 #in lane 1 is one lane to the left of the agent
+        scaled[self.N1_LANE_ID]         = neighbor_lane
         scaled[self.N1_X]               = obs[self.N1_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
         scaled[self.N1_SPEED]           = obs[self.N1_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
         scaled[self.N1_LANE_REM]        = min(obs[self.N1_LANE_REM]     / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
-        scaled[self.N2_LANE_ID]         = -1 #in lane 1 is one lane to the left of the agent
+        scaled[self.N2_LANE_ID]         = neighbor_lane
         scaled[self.N2_X]               = obs[self.N2_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
         scaled[self.N2_SPEED]           = obs[self.N2_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
         scaled[self.N2_LANE_REM]        = min(obs[self.N2_LANE_REM]     / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
-        scaled[self.N3_LANE_ID]         = -1 #in lane 1 is one lane to the left of the agent
+        scaled[self.N3_LANE_ID]         = neighbor_lane
         scaled[self.N3_X]               = obs[self.N3_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
         scaled[self.N3_SPEED]           = obs[self.N3_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
         scaled[self.N3_LANE_REM]        = min(obs[self.N3_LANE_REM]     / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
