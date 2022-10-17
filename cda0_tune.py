@@ -16,7 +16,7 @@ params = ppo.DEFAULT_CONFIG.copy() #a2c requires empty dict
 # Define the custom environment for Ray
 env_config = {  "time_step_size":   0.5,
                 "debug":            0,
-                "init_ego_lane":    0 #left-most lane, which is just straight
+                #"init_ego_lane":    0 #left-most lane, which is just straight
              }
 
 params["env"]                               = SimpleHighwayRampWrapper
@@ -56,10 +56,10 @@ stopper = StopLogic(max_timesteps       = 200,
                     avg_over_latest     = 20,
                     success_threshold   = 1.9,
                     failure_threshold   = 0.0,
-                    compl_std_dev       = 0.05
+                    compl_std_dev       = 0.02
                    )
 run_config = air.RunConfig(
-                name        = "cda0-l0-free",
+                name        = "cda0-l01-free",
                 local_dir   = "~/ray_results",
                 stop        = stopper,
                 sync_config = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir

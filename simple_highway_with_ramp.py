@@ -342,11 +342,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # Initialize a new set of observations
         self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE)
-        ego_lane_id = 2 if self.init_ego_lane is None  else  self.init_ego_lane
+        ego_lane_id = int(self.prng.random()*2) if self.init_ego_lane is None  else  self.init_ego_lane
         #starting downtrack distance, m
         ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
-        #starting speed between 5 and 20 m/s
-        ego_speed = self.prng.random() * 15.0 + 5.0 if self.init_ego_speed is None  else self.init_ego_speed
+        if ego_lane_id == 1:
+            ego_x = min(ego_x, 50.0) #need to start in front of the neighbor vehicles if in this lane
+        #starting speed between 5 and 30 m/s
+        ego_speed = self.prng.random() * 25.0 + 5.0 if self.init_ego_speed is None  else self.init_ego_speed
         if self.debug > 0:
             print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
 

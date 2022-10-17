@@ -33,6 +33,10 @@ class StopLogic(Stopper):
         self.success_avg_threshold = success_threshold
         self.failure_avg_threshold = failure_threshold
         self.completion_std_threshold = compl_std_dev
+        print("\n///// StopLogic initialized with max_timesteps = {}, max_iterations = {}, min_iterations = {}"
+                .format(self.max_timesteps, self.max_iterations, self.required_min_iters))
+        print("      most_recent = {}, success_avg_thresh = {:.2f}, failure_avg_thresh = {:.2f}, compl_std_thresh ={:.3f}"
+                .format(self.most_recent, self.success_avg_threshold, self.failure_avg_threshold, self.completion_std_threshold))
 
         # Each entry will have key = trial_id and value = dict containing the following:
         #   "stop" (bool) - should this trial be stopped?
@@ -57,7 +61,7 @@ class StopLogic(Stopper):
         #    print("{}: {}".format(item, result[item]))
         #print("///// - end of result\n")
         total_iters = result["iterations_since_restore"]
-        if result["episode_reward_max"] > -0.4  or  self.threshold_latch: #TODO: make this a config var or input arg
+        if result["episode_reward_max"] > -0.4  and   not self.threshold_latch: #TODO: make this a config var or input arg
             self.required_min_iters *= 1.2
             self.threshold_latch = True
 
@@ -85,7 +89,7 @@ class StopLogic(Stopper):
                 # Stop if avg of mean rewards over recent history is above the succcess threshold and its standard deviation is small
                 avg = mean(list(self.trials[trial_id]["mean_rewards"]))
                 std_of_mean = stdev(self.trials[trial_id]["mean_rewards"])
-                #print("\n///// StopLogic: trial {} has recent avg reward = {:.2f}".format(trial_id, avg))
+                print("///// StopLogic: iter #{}, avg reward = {:.2f}, std of mean = {:.3f}".format(total_iters, avg, std_of_mean))
                 if avg >= self.success_avg_threshold  and  std_of_mean <= self.completion_std_threshold:
                     print("\n///// Stopping trial due to success!\n")
                     return True

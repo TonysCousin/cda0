@@ -61,9 +61,16 @@ Notes on the cda0 project
 10/15/22:
 * Time
   11:59 - 12:34 = 0:35
-  22:44 - 
+  22:44 - 00:20 = 1:36
 * SUCCESS - first taste! got several trials to drive lane 0 beginning to end, forcing no steering.
   Best tuning trial was 35915_00003; saving checkpoint 181.
 * Ran new training job (7559b), with results under the cda0-l0-free dir, that starts agent in lane 0 but allows it to change
   lanes.  Most successful trial was 75599b_00005; using checkpoint 126.  PPO lr = 2.8e-5, batch = 512.
-* Need an inference program to run these successful models and capture their trajectories for viewing.
+* TODO: Need an inference program to run these successful models and capture their trajectories for viewing.
+
+10/16/22:
+* Time 21:05 - 23:09, int 20 = 1:44
+* New tuning job (19380) under cda0-l01-free dir. This one randomly initializes episodes with the ego vehicle in either lane
+  0 or 1, but not 2.  The neighbor vehicles still do not move.
+* Installed pygame (with pip) into the conda env "cda0" to experiment with making a graphical display of the simulation.
+  Played with an example program enough to quickly understand how to do some basic graphics needed for my sim.
