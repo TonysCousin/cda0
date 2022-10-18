@@ -79,7 +79,17 @@ Notes on the cda0 project
 10/17/22:
 * Time
   14:16 - 14:48 = 0:32
-  17:10 - 
+  17:10 - 18:36 = 1:26
+  22:32 - 23:21 = 0:49
 * Fixed a problem in the env wrapper that was locking the ego lane to 0; also changed reward shape some, so all previous
   training needs to be thrown away.
-* Training again on random lane start (0 or 1 only) with no neighbor vehicles moving.
+* Training again on random lane start (0 or 1 only) with no neighbor vehicles moving; trial ID = c2d96.
+	* Trial 0003 ran for a long time, but reward gradually increased the whole time, maxing out above 4!  Not sure how
+	  this is possible. LR = 0.00013, batch = 512.  It has learned to shy away from speeds near the max, since it gets
+	  punished for large accels there; also shy of speeds near zero, for same reason, but this is less of a fear.
+	  Result is that accel oscillates between +3 and -3 m/s^2, with speeds going between 4% and 75% of max range.
+	  So avg speed of the vehicle is really small, and it collects more reward points for staying on track.
+	* Trial 0007 was the only other one that succeeded, with a max reward around 1.9. LR = 0.000161, batch = 256.
+* Increased penalty for jerk; decreased existential time step reward; made a more differentiable shape for penalty where
+  accel is threatening to take vehicle past either high or low speed limit, in order to minimize accel oscillations.
+* Training again on random lane start (0 or 1); trial ID = f328b.

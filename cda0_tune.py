@@ -48,13 +48,13 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric      = "episode_reward_mean",
                 mode        = "max",
-                num_samples = 8 #number of HP trials
+                num_samples = 9 #number of HP trials
               )
 stopper = StopLogic(max_timesteps       = 200,
                     max_iterations      = 1000,
-                    min_iterations      = 150,
+                    min_iterations      = 100,
                     avg_over_latest     = 20,
-                    success_threshold   = 1.85,
+                    success_threshold   = 1.7,
                     failure_threshold   = 0.0,
                     compl_std_dev       = 0.02
                    )

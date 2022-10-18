@@ -182,7 +182,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         except KeyError as e:
             pass
 
-        print("\n///// SimpleHighwayRamp init: config = ", config)
+        if self.debug > 0:
+            print("\n///// SimpleHighwayRamp init: config = ", config)
 
         # Define the vehicles used in this scenario - the ego vehicle (where the AI agent lives) is index 0
         self.vehicles = []
@@ -716,18 +717,22 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         else:
 
             # Add a small incentive for not crashing
-            reward += 0.02
+            reward += 0.01
 
-            # If ego vehicle acceleration is jerky, then apply a penalty (worst case -0.03)
+            # If ego vehicle acceleration is jerky, then apply a penalty (worst case -0.12)
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
             jerk2 = (self.obs[self.EGO_ACCEL_CMD_PREV1] - self.obs[self.EGO_ACCEL_CMD_PREV2]) / self.time_step_size
-            reward -= 0.01 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK
+            reward -= 0.04 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK
 
-            # Penalty for accel command that would take agent beyond a speed limit (worst case -0.01)
-            if (self.obs[self.EGO_SPEED] < 0.1  and  self.obs[self.EGO_ACCEL_CMD_CUR] < 0.0)  or \
-               (self.obs[self.EGO_SPEED] > 0.99*SimpleHighwayRamp.MAX_SPEED  and \
-                self.obs[self.EGO_ACCEL_CMD_CUR] > 0.0):
-                reward -= 0.01
+            # Penalty for accel command that would take agent drastically beyond a speed limit (worst case -0.03)
+            speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.MAX_SPEED
+            penalty = 0.0
+            if speed < 0.05:
+                penalty = (-20.0 * speed + 1.0) * max(-self.obs[self.EGO_ACCEL_CMD_CUR], 0.0)
+            elif speed > 0.95:
+                penalty = (20.0 * speed - 19.0) * max(self.obs[self.EGO_ACCEL_CMD_CUR], 0.0)
+            reward -= 0.01 * penalty
+            #print("      speed/accel penalty = {:.4f}".format(penalty))
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
