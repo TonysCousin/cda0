@@ -92,4 +92,9 @@ Notes on the cda0 project
 	* Trial 0007 was the only other one that succeeded, with a max reward around 1.9. LR = 0.000161, batch = 256.
 * Increased penalty for jerk; decreased existential time step reward; made a more differentiable shape for penalty where
   accel is threatening to take vehicle past either high or low speed limit, in order to minimize accel oscillations.
-* Training again on random lane start (0 or 1); trial ID = f328b.
+* Training again on random lane start (0 or 1); trial ID = 47fd7. None of the 18 trials converged.
+
+10/18/22:
+* Time 21:40 - 
+* Removed reward penalties for both the acceleration limits and trying to keep steering command near {-1, 0, 1}.
+  Ran tune (ID 10baa). Died in middle due to computer crash.

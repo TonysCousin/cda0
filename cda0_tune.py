@@ -40,6 +40,12 @@ params["evaluation_num_workers"]            = 1
 params["log_level"]                         = "WARN"
 params["seed"]                              = tune.lograndint(1, 1048576)
 # Add dict here for lots of model HPs
+model_config = params["model"]
+model_config["fcnet_hiddens"]               = tune.choice([ [300, 128, 64],
+                                                            [256, 256]
+                                                          ])
+model_config["fcnet_activation"]            = tune.choice(["relu", "tanh"])
+params["model"] = model_config
 
 print("\n///// {} training params are:\n".format(algo))
 for item in params:
@@ -48,12 +54,12 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric      = "episode_reward_mean",
                 mode        = "max",
-                num_samples = 9 #number of HP trials
+                num_samples = 20 #number of HP trials
               )
 stopper = StopLogic(max_timesteps       = 200,
                     max_iterations      = 1000,
                     min_iterations      = 100,
-                    avg_over_latest     = 20,
+                    avg_over_latest     = 18,
                     success_threshold   = 1.7,
                     failure_threshold   = 0.0,
                     compl_std_dev       = 0.02

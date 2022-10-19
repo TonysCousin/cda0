@@ -1,7 +1,10 @@
 import sys
+import time
 import numpy as np
 import ray
 import ray.rllib.algorithms.ppo as ppo
+import pygame
+from pygame.locals import *
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 
 """This program runs the selected policy checkpoint for one episode and captures key state variables throughout."""
@@ -47,6 +50,10 @@ def main(argv):
     algo.restore(checkpoint)
     print("///// Checkpoint {} successfully loaded.".format(checkpoint))
 
+    # Set up the graphic display
+    graphics = Graphics()
+    graphics.setup()
+
     # Run the agent through a complete episode
     episode_reward = 0
     done = False
@@ -55,10 +62,57 @@ def main(argv):
         action = algo.compute_single_action(obs)
         obs, reward, done, info = env.step(action)
         episode_reward += reward
+
+        # Display current status
+        graphics.update(action, obs)
         print("///// step: action = {}, lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:.3f}".format(action, obs[0], obs[2], obs[1], reward))
+
         if done:
             print("///// Episode complete: {}. Total reward = {:.2f}".format(info["reason"], episode_reward))
 
+
+class Graphics:
+
+    # set up the colors
+    BLACK = (0, 0, 0)
+    WHITE = (255, 255, 255)
+    RED = (255, 0, 0)
+    GREEN = (0, 255, 0)
+    BLUE = (0, 0, 255)
+
+    # Other graphics constants
+    WINDOW_SIZE_X = 1000
+    WINDOW_SIZE_Y = 800
+
+
+    def setup(self):
+        # set up pygame
+        pygame.init()
+
+        # set up the window
+        self.windowSurface = pygame.display.set_mode((Graphics.WINDOW_SIZE_X, Graphics.WINDOW_SIZE_Y), 0, 32)
+        pygame.display.set_caption('cda0')
+
+        # set up fonts
+        self.basicFont = pygame.font.SysFont(None, 16)
+
+        # draw the background onto the surface
+        self.windowSurface.fill(Graphics.BLACK)
+
+        # Loop through the lanes
+
+            # Loop through each segment of the lane
+
+                # Draw the left & right lines for the segment
+
+
+
+
+    def update(self,
+               action  : list,
+               obs     : list
+              ):
+        pass
 
 
 

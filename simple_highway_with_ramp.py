@@ -725,6 +725,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             reward -= 0.04 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK
 
             # Penalty for accel command that would take agent drastically beyond a speed limit (worst case -0.03)
+            """
             speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.MAX_SPEED
             penalty = 0.0
             if speed < 0.05:
@@ -733,15 +734,18 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 penalty = (20.0 * speed - 19.0) * max(self.obs[self.EGO_ACCEL_CMD_CUR], 0.0)
             reward -= 0.01 * penalty
             #print("      speed/accel penalty = {:.4f}".format(penalty))
+            """
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
                 reward -= 0.03 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
 
             # Penalty for lane change command not near one of the quantized action values (worst case -0.01)
+            """
             lcc = self.obs[self.EGO_LANE_CMD_CUR]
             term = abs(lcc) - 0.5
             reward -= 0.01*(1.0 - 4.0*term*term)
+            """
 
         reward = min(max(reward, -1.0), 1.0)
         if self.debug > 0:
