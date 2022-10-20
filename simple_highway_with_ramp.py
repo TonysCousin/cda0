@@ -371,6 +371,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.ADJ_LN_RIGHT_CONN_A]  = ra
         self.obs[self.ADJ_LN_RIGHT_CONN_B]  = rb
         self.obs[self.ADJ_LN_RIGHT_REM]     = r_rem
+        self.obs[self.STEPS_SINCE_LN_CHG]   = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
 
         #neighbor vehicles don't move for initial phase - since these are constant speed, they stay out of the way
         self.vehicles[1].lane_id = 1
@@ -486,10 +487,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 else:
                     self.lane_change_underway = "right"
                 self.lane_change_count = 1
-                self.obs[self.STEPS_SINCE_LN_CHG] = 0
                 if self.debug > 0:
-                    print("      *** New lane change maneuver initiated. action[1] = {:.2f}, status = {}".
-                            format(action[1], self.lane_change_underway))
+                    print("      *** New lane change maneuver initiated. action[1] = {:.2f}, status = {}"
+                            .format(action[1], self.lane_change_underway))
             else: #once a lane change is underway, contiinue until complete, regardless of new commands
                 self.lane_change_count += 1
 
@@ -548,6 +548,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         if self.lane_change_count >= SimpleHighwayRamp.TOTAL_LANE_CHANGE_STEPS:
             self.lane_change_underway = "none"
             self.lane_change_count = 0
+            self.obs[self.STEPS_SINCE_LN_CHG] = SimpleHighwayRamp.TOTAL_LANE_CHANGE_STEPS
 
         self.vehicles[0].lane_id = new_ego_lane
         self.vehicles[0].lane_change_status = self.lane_change_underway
@@ -594,7 +595,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             self.stopped_count = 0
 
         # Determine the reward resulting from this time step's action
-        reward = self._get_reward(done, crash, ran_off_road, stopped_vehicle)
+        reward, expl = self._get_reward(done, crash, ran_off_road, stopped_vehicle)
+        return_info["reward_detail"] = expl
 
         # Verify that the obs are within design limits
         self._verify_obs_limits()
@@ -691,6 +693,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         if self.debug > 1:
             print("///// Entering _get_reward. done = {}, crash = {}, off_road = {}".format(done, crash, off_road))
         reward = 0.0
+        explanation = ""
 
         # If the episode is done then
         if done:
@@ -700,18 +703,21 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
                 # Subtract a crash penalty
                 reward = -1.0
+                explanation = "Crash or ran off road. "
 
             # Else if the vehicle just stopped in the middle of the road then
             elif stopped:
 
                 # Subtract a penalty for no movement
                 reward -= 0.5
+                explanation = "Vehicle stopped. "
 
             # Else (episode ended successfully)
             else:
 
                 # Add amount inversely proportional to the length of the episode.
                 reward = max(1.0 - 0.001 * self.steps_since_reset, 0.0)
+                explanation = "Successful episode! "
 
         # Else, episode still underway
         else:
@@ -722,7 +728,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case -0.12)
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
             jerk2 = (self.obs[self.EGO_ACCEL_CMD_PREV1] - self.obs[self.EGO_ACCEL_CMD_PREV2]) / self.time_step_size
-            reward -= 0.04 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK
+            #reward -= 0.04 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK
+            penalty = 0.01 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK #TODO this is from 10/16
+            reward -= penalty
+            if penalty > 0.0001:
+                explanation += "Jerk penalty of {:.4f}. ".format(penalty)
 
             # Penalty for accel command that would take agent drastically beyond a speed limit (worst case -0.03)
             """
@@ -738,21 +748,25 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
-                reward -= 0.03 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
+                #reward -= 0.03 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
+                penalty = 0.1 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG]) #TODO this is from 10/16
+                reward -= penalty
+                explanation += "Lane change penalty {:.4f}. ".format(penalty)
 
             # Penalty for lane change command not near one of the quantized action values (worst case -0.01)
-            """
             lcc = self.obs[self.EGO_LANE_CMD_CUR]
             term = abs(lcc) - 0.5
-            reward -= 0.01*(1.0 - 4.0*term*term)
-            """
+            penalty = 0.01*(1.0 - 4.0*term*term)
+            reward -= penalty
+            if penalty > 0.0001:
+                explanation += "Ln chg cmd penalty of {:.4f}. ".format(penalty)
 
         reward = min(max(reward, -1.0), 1.0)
         if self.debug > 0:
             print("///// reward returning {:.3f} due to crash = {}, off_road = {}, stopped = {}"
                     .format(reward, crash, off_road, stopped))
 
-        return reward
+        return reward, explanation
 
 
     def _verify_obs_limits(self):

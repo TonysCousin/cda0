@@ -29,7 +29,7 @@ params["num_workers"]                       = 14 #num remote workers (remember t
 params["num_envs_per_worker"]               = 4
 params["rollout_fragment_length"]           = 200 #timesteps
 params["gamma"]                             = 0.99
-params["lr"]                                = tune.loguniform(0.00001, 0.003)
+params["lr"]                                = tune.loguniform(3e-6, 3e-4)
 params["sgd_minibatch_size"]                = 64
 params["train_batch_size"]                  = tune.choice([64, 128, 256, 512, 1024, 2048])
 params["evaluation_interval"]               = 6
@@ -41,9 +41,12 @@ params["log_level"]                         = "WARN"
 params["seed"]                              = tune.lograndint(1, 1048576)
 # Add dict here for lots of model HPs
 model_config = params["model"]
+model_config["fcnet_hiddens"]               = [300, 128, 64]
+"""
 model_config["fcnet_hiddens"]               = tune.choice([ [300, 128, 64],
                                                             [256, 256]
                                                           ])
+"""
 model_config["fcnet_activation"]            = tune.choice(["relu", "tanh"])
 params["model"] = model_config
 
@@ -57,10 +60,10 @@ tune_config = tune.TuneConfig(
                 num_samples = 20 #number of HP trials
               )
 stopper = StopLogic(max_timesteps       = 200,
-                    max_iterations      = 1000,
+                    max_iterations      = 500,
                     min_iterations      = 100,
                     avg_over_latest     = 18,
-                    success_threshold   = 1.7,
+                    success_threshold   = 1.8,
                     failure_threshold   = 0.0,
                     compl_std_dev       = 0.02
                    )

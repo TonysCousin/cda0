@@ -28,13 +28,19 @@ def main(argv):
     ray.init()
 
     # Set up the environment
+    config = ppo.DEFAULT_CONFIG.copy()
+
     env_config = {  "time_step_size":   0.5,
                     "debug":            0,
                     "init_ego_lane":    start_lane
                 }
 
-    config = ppo.DEFAULT_CONFIG.copy()
+    model_config = config["model"]
+    model_config["fcnet_hiddens"]               = [300, 128, 64]
+    #model_config["fcnet_hiddens"]               = [256, 256]
+
     config["env_config"] = env_config
+    config["model"] = model_config
     config["framework"] = "torch"
     config["num_gpus"] = 0
     config["num_workers"] = 1
@@ -52,7 +58,6 @@ def main(argv):
 
     # Set up the graphic display
     graphics = Graphics()
-    graphics.setup()
 
     # Run the agent through a complete episode
     episode_reward = 0
@@ -65,9 +70,11 @@ def main(argv):
 
         # Display current status
         graphics.update(action, obs)
-        print("///// step: action = {}, lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:.3f}".format(action, obs[0], obs[2], obs[1], reward))
+        print("///// step: action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:6.3f} {}"
+                .format(action[0], action[1], obs[0], obs[2], obs[1], reward, info["reward_detail"]))
 
         if done:
+            graphics.close()
             print("///// Episode complete: {}. Total reward = {:.2f}".format(info["reason"], episode_reward))
 
 
@@ -85,7 +92,7 @@ class Graphics:
     WINDOW_SIZE_Y = 800
 
 
-    def setup(self):
+    def __init__(self):
         # set up pygame
         pygame.init()
 
@@ -105,6 +112,7 @@ class Graphics:
 
                 # Draw the left & right lines for the segment
 
+        time.sleep(5) #BOGUS - just to see initial frame
 
 
 
@@ -115,7 +123,8 @@ class Graphics:
         pass
 
 
-
+    def close(self):
+        pygame.quit()
 
 
 

@@ -95,6 +95,37 @@ Notes on the cda0 project
 * Training again on random lane start (0 or 1); trial ID = 47fd7. None of the 18 trials converged.
 
 10/18/22:
-* Time 21:40 - 
+* Time 21:40 - 11:00 = 1:20
 * Removed reward penalties for both the acceleration limits and trying to keep steering command near {-1, 0, 1}.
   Ran tune (ID 10baa). Died in middle due to computer crash.
+* Compared code to that used on 10/16 (commit cf6f) to find why suddenly nothing is learning to drive straight.
+  Only found two seemingly minor diffs in the reward structure (given that the new penalties are commented out).
+  I changed those back to the way they were on 10/16 and ran a new tuning run (b24d4).
+
+----- time logged to Process Dashboard to here -----
+
+10/19/22:
+* Time
+  17:46 - 18:25 = 0:39
+  21:54 - 23:03 = 1:10
+* Last night's run produced 3 winners (out of 20 trials). This is with the "old" reward structure, so just a baseline to 
+  prove it can be trained.
+	* Trial 14 had mean reward = 1.87; LR = 5.54e-5, activation = relu, network = [300, 128, 64], batch = 2048. Solved
+	  in 121 iters. Its min reward was slightly < 0, however, so not idea.
+	* Trial 16 had mean reward = 1.88 with similar min; LR = 3.42e-5, activation = relu, network = [300, 128, 64], batch = 512.
+	* Trial 19 had mean reward = 1.89 with similar min; LR = 2.11e-5, activation = relu, network = [256, 256], batch = 512.
+	  Use checkpoint 163.
+	* Reviewing these results, I realized the reward was broken for lane change penalty, so fixed it.
+* Another run (f7b05) applied these changes.  Found several successful trials.
+	* Trial 19 had mean reward = 2.02 with similar min; LR = 1.36e-5, activation = tanh, network = [300, 128, 64], batch = 256.
+	  Use checkpoint 154. 
+	* Trial 18 had mean reward = 1.89 with min ~1.3; LR = 2.44e-5, activation = tanh, network = [300, 128, 64], batch = 1024.
+	* Trial 15 had mean reward = 1.83 with an unimpressive min; LR = 5.60e-5, activation = relu, network = [256, 256], batch = 512.
+	  Use checkpoint 126.
+	* Trial 4 had mean reward = 1.86 with min ~1.3; LR = 3.39e-5, activation = relu, network = [300, 128, 64], batch = 2048.
+	  Use checkpoint 97.
+
+10/20/22:
+* Time
+  01:12 - 
+* Added the LCC penalt back into the reward method.  Made tuning run 211ad, all with a 3-layer network.
