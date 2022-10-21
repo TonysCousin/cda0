@@ -118,6 +118,7 @@ class StopLogic(Stopper):
                     if avg < self.failure_avg_threshold:
 
                         # If the max reward is not climbing significantly, then stop as a failure
+                        #TODO: however, if the max reward is near or above the success threshold, then wait a bit longer
                         dq = self.trials[trial_id]["max_rewards"]
                         dq_size = self.most_recent
                         improving = False

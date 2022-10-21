@@ -25,7 +25,9 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         if db is not None  and  db != ""  and  0 <= int(db) <= 2:
             self.debug = int(db)
 
-        #TODO: do we need to redefine the obs & action spaces here, with properly scaled lower & upper limits?
+        # Redefine the action space here, with properly scaled lower & upper limits (inherited from base class)
+        self.action_space.low[0] /= SimpleHighwayRamp.MAX_ACCEL
+        self.action_space.high[0] /= SimpleHighwayRamp.MAX_ACCEL
 
 
     def reset(self,
@@ -65,7 +67,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
 
         al = SimpleHighwayRamp.MAX_ACCEL
         unscaled = [None]*2
-        unscaled[0] = min(max(actions[0] * al, -al), al)    #accel command
+        unscaled[0] = min(max(actions[0] * al, -al), al)    #accel command, m/s^2
         unscaled[1] = min(max(actions[1], -1.0), 1.0)       #lane change command
 
         return unscaled

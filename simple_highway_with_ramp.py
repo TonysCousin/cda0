@@ -114,9 +114,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
     OBS_SIZE                = 29
     VEHICLE_LENGTH          = 5.0       #m
-    MAX_SPEED               = 35.0      #m/s
-    MAX_ACCEL               = 3.0       #m/s^2
-    MAX_JERK                = 4.0       #m/s^3
+    MAX_SPEED               = 45.0      #vehicle's max achievable speed, m/s
+    MAX_ACCEL               = 3.0       #vehicle's max achievable acceleration (fwd or backward), m/s^2
+    MAX_JERK                = 4.0       #max desirable jerk for occupant comfort, m/s^3
+    ROAD_SPEED_LIMIT        = 29.1      #Roadway's legal speed limit, m/s (29.1 m/s = 65 mph)
     SCENARIO_LENGTH         = 2000.0    #total length of the roadway, m
     SCENARIO_BUFFER_LENGTH  = 1000.0    #length of buffer added to the end of continuing lanes, m
     #TODO: make this dependent upon time step size:
@@ -169,7 +170,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.init_ego_speed = None
         try:
             es = config["init_ego_speed"]
-            if 0 <= es <= SimpleHighwayRamp.MAX_SPEED:
+            if 0 <= es <= SimpleHighwayRamp.ROAD_SPEED_LIMIT:
                 self.init_ego_speed = es
         except KeyError as e:
             pass
@@ -716,35 +717,29 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             else:
 
                 # Add amount inversely proportional to the length of the episode.
-                reward = max(1.0 - 0.001 * self.steps_since_reset, 0.0)
+                reward = max(1.1 - 0.0015 * self.steps_since_reset, 0.0)
                 explanation = "Successful episode! "
 
         # Else, episode still underway
         else:
 
             # Add a small incentive for not crashing
-            reward += 0.01
+            reward += 0.002
 
-            # If ego vehicle acceleration is jerky, then apply a penalty (worst case -0.12)
+            # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.0075)
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
-            jerk2 = (self.obs[self.EGO_ACCEL_CMD_PREV1] - self.obs[self.EGO_ACCEL_CMD_PREV2]) / self.time_step_size
-            #reward -= 0.04 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK
-            penalty = 0.01 * max(abs(jerk1), abs(jerk2)) / SimpleHighwayRamp.MAX_JERK #TODO this is from 10/16
+            penalty = 0.005 * abs(jerk1) / SimpleHighwayRamp.MAX_JERK
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Jerk penalty of {:.4f}. ".format(penalty)
 
-            # Penalty for accel command that would take agent drastically beyond a speed limit (worst case -0.03)
-            """
-            speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.MAX_SPEED
+            # Penalty for speed exceeding the upper speed limit (penalty = 0.5 at 1.2*speed limit)
+            norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT
             penalty = 0.0
-            if speed < 0.05:
-                penalty = (-20.0 * speed + 1.0) * max(-self.obs[self.EGO_ACCEL_CMD_CUR], 0.0)
-            elif speed > 0.95:
-                penalty = (20.0 * speed - 19.0) * max(self.obs[self.EGO_ACCEL_CMD_CUR], 0.0)
-            reward -= 0.01 * penalty
-            #print("      speed/accel penalty = {:.4f}".format(penalty))
-            """
+            if norm_speed > 1.0:
+                penalty = 2.5 * norm_speed - 2.5
+                explanation += "Speed penalty of {:.4f}".format(penalty)
+                reward -= penalty
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
@@ -756,12 +751,12 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             # Penalty for lane change command not near one of the quantized action values (worst case -0.01)
             lcc = self.obs[self.EGO_LANE_CMD_CUR]
             term = abs(lcc) - 0.5
-            penalty = 0.01*(1.0 - 4.0*term*term)
+            penalty = 0.004*(1.0 - 4.0*term*term)
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Ln chg cmd penalty of {:.4f}. ".format(penalty)
 
-        reward = min(max(reward, -1.0), 1.0)
+        reward = min(max(reward, -2.0), 2.0)
         if self.debug > 0:
             print("///// reward returning {:.3f} due to crash = {}, off_road = {}, stopped = {}"
                     .format(reward, crash, off_road, stopped))

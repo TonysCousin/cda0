@@ -55,28 +55,28 @@ for item in params:
     print("{}:  {}".format(item, params[item]))
 
 tune_config = tune.TuneConfig(
-                metric      = "episode_reward_mean",
-                mode        = "max",
-                num_samples = 20 #number of HP trials
+                metric                      = "episode_reward_mean",
+                mode                        = "max",
+                num_samples                 = 15 #number of HP trials
               )
-stopper = StopLogic(max_timesteps       = 200,
-                    max_iterations      = 500,
-                    min_iterations      = 100,
-                    avg_over_latest     = 18,
-                    success_threshold   = 1.8,
-                    failure_threshold   = 0.0,
-                    compl_std_dev       = 0.02
+stopper = StopLogic(max_timesteps           = 200,
+                    max_iterations          = 500,
+                    min_iterations          = 100,
+                    avg_over_latest         = 18,
+                    success_threshold       = 1.9,
+                    failure_threshold       = 0.0,
+                    compl_std_dev           = 0.02
                    )
 run_config = air.RunConfig(
-                name        = "cda0-l01-free",
-                local_dir   = "~/ray_results",
-                stop        = stopper,
-                sync_config = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
-                checkpoint_config   = air.CheckpointConfig(
-                                        checkpoint_frequency        = 100,
-                                        checkpoint_score_attribute  = "episode_reward_mean",
-                                        num_to_keep                 = 2,
-                                        checkpoint_at_end           = True
+                name                        = "cda0-l01-free",
+                local_dir                   = "~/ray_results",
+                stop                        = stopper,
+                sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
+                checkpoint_config           = air.CheckpointConfig(
+                                                checkpoint_frequency        = 100,
+                                                checkpoint_score_attribute  = "episode_reward_mean",
+                                                num_to_keep                 = 3,
+                                                checkpoint_at_end           = True
                 )
              )
 

@@ -127,5 +127,30 @@ Notes on the cda0 project
 
 10/20/22:
 * Time
-  01:12 - 
-* Added the LCC penalt back into the reward method.  Made tuning run 211ad, all with a 3-layer network.
+  01:12 - 01:33 = 0:21
+  17:15 - 18:31 = 1:16
+  19:54 - 
+* Added the LCC penalty back into the reward method.  Made tuning run 211ad, all with a 3-layer network.
+	* Trial 6 mean reward = 2.01, LR = 1.04e-4, activation = tanh, batch = 1024
+	* Trial 11 mean reward = 1.75, LR = 1.99e-4, activation = tanh, batch = 1024
+	* Trial 14 mean reward = 1.75, LR = 1.37e-5, activation = tanh, batch = 128; min reward above +1.5
+	* Trial 18 mean reward = 1.76, LR = 1.67e-5, activation = tanh, batch = 128, min reward above +1.6
+* Run 211ad showed
+	* LC cmd penalty worked really well at keeping the LC command very close to zero
+	* Accel was also really close to zero on trial 6, but averaged slightly positive so that speed rose throughout, but it never
+	  reached the speed limit.  Trial 6 got only 0.796 completion reward, but gathered lots of time step rewards throughout.
+	* Trial 11 had big accel, but its total reward was ~1.8 vs 2.2 for trial 6. So avg time step reward of ~0.09 is too high.
+	* There is a strong desire to drive in lane 0, whether the initial lane is 0 or 1; LC occurs immediately if needed.
+	* Max completion reward is only ~0.83 for the fastest possible travel time.  Needs to be increased.
+* Added scaling of the action_space in the wrapper class to keep the NN output accel limited to [-1, 1] (it was in [-3, 3]).
+  Modified the reward shape a bit to better emphasize completing the course as fast as possible.
+* New tuning run (b5410) to finalize work on lane change issues.
+
+10/21/22:
+* Time 16:52 - , int 23
+* One run from yesterday (b4510) succeeded, which was trial 1. Mean reward = 2.11, LR = 4.99e-5, activation = tanh, batch = 1024.
+  Actions were well behaved, as desired, but accels were all small and tended to slow the car down to get more time step rewards.
+	* Changed reward limits from [-1, 1] to [-2, 2], since the completion reward was being greatly clipped.
+	* Reduced jerk penalty mult from 0.01 to 0.005.
+	* Reduced time step reward from 0.005 to 0.002 (it was contributing >0.5 to the total episode reward)
+	* Added penalty for exceeding speed limit (and increased obs space upper limit for speed substantially to allow an excess).

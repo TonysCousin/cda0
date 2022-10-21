@@ -63,15 +63,17 @@ def main(argv):
     episode_reward = 0
     done = False
     obs = env.reset()
+    step = 0
     while not done:
+        step += 1
         action = algo.compute_single_action(obs)
-        obs, reward, done, info = env.step(action)
+        obs, reward, done, info = env.step(np.ndarray.tolist(action))
         episode_reward += reward
 
         # Display current status
         graphics.update(action, obs)
-        print("///// step: action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:6.3f} {}"
-                .format(action[0], action[1], obs[0], obs[2], obs[1], reward, info["reward_detail"]))
+        print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:7.4f} {}"
+                .format(step, action[0], action[1], obs[0], obs[2], obs[1], reward, info["reward_detail"]))
 
         if done:
             graphics.close()
@@ -112,7 +114,6 @@ class Graphics:
 
                 # Draw the left & right lines for the segment
 
-        time.sleep(5) #BOGUS - just to see initial frame
 
 
 
