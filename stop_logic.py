@@ -117,22 +117,24 @@ class StopLogic(Stopper):
                     # If the avg mean reward over recent history is below the success threshold then
                     if avg < self.failure_avg_threshold:
 
-                        # If the max reward is not climbing significantly, then stop as a failure
-                        #TODO: however, if the max reward is near or above the success threshold, then wait a bit longer
+                        # If the max reward is well below success threshold and not climbing significantly, then stop as a failure
                         dq = self.trials[trial_id]["max_rewards"]
-                        dq_size = self.most_recent
-                        improving = False
-                        if dq_size < 4:
-                            if dq[-1] > dq[0]:
-                                improving = True
-                        else:
-                            begin = 0.333333 * (dq[0] + dq[1] + dq[2])
-                            end   = 0.333333 * (dq[-3] + dq[-2] + dq[-1])
-                            if end > begin:
-                                improving = True
-                        if not improving:
-                            print("\n///// Stopping trial due to failure\n")
-                            return True
+                        dq_size = len(dq)
+                        if mean(dq) < 0.8 * self.success_avg_threshold:
+                            begin = 0.0
+                            end = 0.0
+                            if dq_size < 4:
+                                begin = dq[0]
+                                end = dq[-1]
+                            elif dq_size < 21:
+                                begin = 0.333333 * mean(dq[:3])
+                                end   = 0.333333 * mean(dq[-3:])
+                            else:
+                                begin = 0.1 * mean(dq[:10])
+                                end   = 0.1 * mean(dq[-10:])
+                            if end <= begin:
+                                print("\n///// Stopping trial - no improvement in {} iters.\n".format(self.most_recent))
+                                return True
 
         # Else, it is a brand new trial
         else:
@@ -141,7 +143,6 @@ class StopLogic(Stopper):
             max_rew = deque(maxlen = self.most_recent)
             max_rew.append(result["episode_reward_max"])
             self.trials[trial_id] = {"stop": False, "num_entries": 1, "mean_rewards": mean_rew, "max_rewards": max_rew}
-            #print("\n///// Creating new trial entry: ", self.trials)
 
         return False
 

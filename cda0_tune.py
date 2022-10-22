@@ -28,10 +28,10 @@ params["num_gpus_per_worker"]               = 0 #this has to allow for evaluatio
 params["num_workers"]                       = 14 #num remote workers (remember that there is a local worker also)
 params["num_envs_per_worker"]               = 4
 params["rollout_fragment_length"]           = 200 #timesteps
-params["gamma"]                             = 0.99
-params["lr"]                                = tune.loguniform(3e-6, 3e-4)
+params["gamma"]                             = 0.999
+params["lr"]                                = tune.loguniform(2e-6, 2e-4)
 params["sgd_minibatch_size"]                = 64
-params["train_batch_size"]                  = tune.choice([64, 128, 256, 512, 1024, 2048])
+params["train_batch_size"]                  = tune.choice([64, 64, 128, 256, 512, 1024])
 params["evaluation_interval"]               = 6
 params["evaluation_duration"]               = 6
 params["evaluation_duration_unit"]          = "episodes"
@@ -48,6 +48,7 @@ model_config["fcnet_hiddens"]               = tune.choice([ [300, 128, 64],
                                                           ])
 """
 model_config["fcnet_activation"]            = tune.choice(["relu", "tanh"])
+model_config["post_fcnet_activation"]       = tune.choice(["relu", "tanh"])
 params["model"] = model_config
 
 print("\n///// {} training params are:\n".format(algo))
@@ -57,13 +58,13 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric                      = "episode_reward_mean",
                 mode                        = "max",
-                num_samples                 = 15 #number of HP trials
+                num_samples                 = 18 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 200,
                     max_iterations          = 500,
-                    min_iterations          = 100,
-                    avg_over_latest         = 18,
-                    success_threshold       = 1.9,
+                    min_iterations          = 150,
+                    avg_over_latest         = 40,
+                    success_threshold       = 1.7,
                     failure_threshold       = 0.0,
                     compl_std_dev           = 0.02
                    )

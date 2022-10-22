@@ -119,7 +119,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
     MAX_JERK                = 4.0       #max desirable jerk for occupant comfort, m/s^3
     ROAD_SPEED_LIMIT        = 29.1      #Roadway's legal speed limit, m/s (29.1 m/s = 65 mph)
     SCENARIO_LENGTH         = 2000.0    #total length of the roadway, m
-    SCENARIO_BUFFER_LENGTH  = 1000.0    #length of buffer added to the end of continuing lanes, m
+    SCENARIO_BUFFER_LENGTH  = 200.0     #length of buffer added to the end of continuing lanes, m
     #TODO: make this dependent upon time step size:
     HALF_LANE_CHANGE_STEPS  = 3.0 / 0.5 // 2    #num steps to get half way across the lane (equally straddling both)
     TOTAL_LANE_CHANGE_STEPS = 2 * HALF_LANE_CHANGE_STEPS
@@ -354,7 +354,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
 
         ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_x)
-        #future (all 3 vehicles): n1_rem, _, _, _, _, _, _ = self._get_current_lane_geom(n1_lane, n1_x)
+        #TODO future (all 3 vehicles): n1_rem, _, _, _, _, _, _ = self._get_current_lane_geom(n1_lane, n1_x)
         self.vehicles[0].lane_id = ego_lane_id
         self.vehicles[0].dist_downtrack = ego_x
         self.vehicles[0].speed = ego_speed
@@ -717,29 +717,35 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             else:
 
                 # Add amount inversely proportional to the length of the episode.
-                reward = max(1.1 - 0.0015 * self.steps_since_reset, 0.0)
+                reward = max(1.4 - 0.0015 * self.steps_since_reset, 0.0)
                 explanation = "Successful episode! "
 
         # Else, episode still underway
         else:
 
             # Add a small incentive for not crashing
-            reward += 0.002
+            reward += 0.005 #was 0.002
 
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.0075)
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
-            penalty = 0.005 * abs(jerk1) / SimpleHighwayRamp.MAX_JERK
+            penalty = 0.008 * abs(jerk1) / SimpleHighwayRamp.MAX_JERK
             reward -= penalty
             if penalty > 0.0001:
-                explanation += "Jerk penalty of {:.4f}. ".format(penalty)
+                explanation += "Jerk penalty {:.4f}. ".format(penalty)
 
-            # Penalty for speed exceeding the upper speed limit (penalty = 0.5 at 1.2*speed limit)
+            # Penalty for speed exceeding the upper speed limit (penalty = 0.5 at 1.2*speed limit) or for
+            # going way slow
             norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT
             penalty = 0.0
-            if norm_speed > 1.0:
+            if norm_speed < 0.5:
+                penalty = -2.0 * norm_speed + 1.0
+                explanation += "Low speed penalty {:.4f}. ".format(penalty)
+            """
+            elif norm_speed > 1.0:
                 penalty = 2.5 * norm_speed - 2.5
-                explanation += "Speed penalty of {:.4f}".format(penalty)
-                reward -= penalty
+                explanation += "High speed penalty {:.4f}. ".format(penalty)
+            """
+            reward -= penalty
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
@@ -751,10 +757,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             # Penalty for lane change command not near one of the quantized action values (worst case -0.01)
             lcc = self.obs[self.EGO_LANE_CMD_CUR]
             term = abs(lcc) - 0.5
-            penalty = 0.004*(1.0 - 4.0*term*term)
+            penalty = 0.003*(1.0 - 4.0*term*term)
             reward -= penalty
             if penalty > 0.0001:
-                explanation += "Ln chg cmd penalty of {:.4f}. ".format(penalty)
+                explanation += "Ln chg cmd penalty {:.4f}. ".format(penalty)
 
         reward = min(max(reward, -2.0), 2.0)
         if self.debug > 0:
@@ -786,9 +792,12 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 ######################################################################################################
 ######################################################################################################
 
+
+
 class Roadway:
     """Defines the geometry of the roadway lanes and their drivable connections.
-        This is not a general container.  This class code defines the exact geometry of the
+
+        CAUTION: This is not a general container.  This class code defines the exact geometry of the
         scenario being used by this version of the code.
     """
 
@@ -803,23 +812,31 @@ class Roadway:
 
         # The roadway being modeled looks roughly like the diagram at the top of this code file.
         really_long = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
-        lane = Lane(0, really_long,
+
+        # Lane 0 - single segment as the left through lane
+        segs = [(0.0, 300.0, 2200.0, 300.0, 2200.0)]
+        lane = Lane(0, really_long, segs,
                     right_id = 1, right_join = 0.0, right_sep = really_long)
         self.lanes.append(lane)
 
-        lane = Lane(1, really_long,
+        # Lane 1 - single segment as the right through lane
+        segs = [(0.0, 270.0, 2200.0, 270.0, 2200.0)]
+        lane = Lane(1, really_long, segs,
                     left_id = 0, left_join = 0.0, left_sep = really_long,
                     right_id = 2, right_join = 800.0, right_sep = 1320.0)
         self.lanes.append(lane)
 
-        lane = Lane(2, 1000.0, left_id = 1, left_join = 480.0, left_sep = 1000.0)
+        # Lane 2 - two segments as the merge ramp; first seg is separate; second it adjacent to L1
+        segs = [(384.3, 0.0,    800.0,  240.0, 480.0),
+                (800.0, 240.0,  1320.0, 240.0, 520.0)]
+        lane = Lane(2, 1000.0, segs, left_id = 1, left_join = 480.0, left_sep = 1000.0)
         self.lanes.append(lane)
 
 
     def get_current_lane_geom(self,
                                 lane_id         : int   = 0,    #ID of the lane in question
                                 dist_from_beg   : float = 0.0   #distance of ego vehicle from the beginning of the indicated lane, m
-                             ):
+                             ) -> tuple:
         """Determines all of the variable roadway geometry relative to the given vehicle location.
             Returns a tuple of (remaining dist in this lane, ID of left neighbor ln (or -1 if none), dist to left adjoin point A,
                                 dist to left adjoin point B, remaining dist in left ajoining lane, ID of right neighbor lane (or -1
@@ -925,8 +942,11 @@ class Roadway:
         return self.lanes[lane].length
 
 
+
 ######################################################################################################
 ######################################################################################################
+
+
 
 class Lane:
     """Defines the geometry of a single lane and its relationship to other lanes.
@@ -939,6 +959,13 @@ class Lane:
     def __init__(self,
                     my_id       : int,                  #ID of this lane
                     length      : float,                #total length of this lane, m (includes buffer)
+                    segments    : list,                 #list of straight segments that make up this lane; each item is
+                                                        # a tuple containing: (x0, y0, x1, y1, length), where
+                                                        # x0, y0 are map coordinates of the starting point, in m
+                                                        # x1, y1 are map coordinates of the ending point, in m
+                                                        # length is the length of the segment, in m
+                                                        #Each lane must have at least one segment, and segment lengths
+                                                        # need to add up to total lane length
                     left_id     : int       = -1,       #ID of an adjoining lane to its left, or -1 for none
                     left_join   : float     = 0.0,      #dist downtrack where left lane first joins, m
                     left_sep    : float     = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH,
@@ -957,8 +984,16 @@ class Lane:
         self.right_id = right_id
         self.right_join = right_join
         self.right_sep = right_sep
+        self.segments = segments
 
         assert length > 0.0, "Lane {} length of {} is invalid.".format(my_id, length)
+        assert left_id >= 0  or  right_id >= 0, "Lane {} has no adjoining lanes.".format(my_id)
+        assert len(segments) > 0, "Lane {} has no segments defined.".format(my_id)
+        seg_len = 0.0
+        for si, s in enumerate(segments):
+            seg_len += s[4]
+            assert s[0] != s[2]  or  s[1] != s[3], "Lane {}, segment {} both ends have same coords.".format(my_id, si)
+        assert abs(seg_len - length) < 1.0, "Lane {} sum of segment lengths {} don't match total lane length {}.".format(my_id, seg_len, length)
         if left_id >= 0:
             assert left_id != my_id, "Lane {} left adjoining lane has same ID".format(my_id)
             assert left_join >= 0.0  and  left_join < length, "Lane {} left_join value invalid.".format(my_id)
@@ -973,27 +1008,11 @@ class Lane:
             assert left_id != right_id, "Lane {}: both left and right adjoining lanes share ID {}".format(my_id, left_id)
 
 
-    def get_dist_to_join(self,
-                            current_loc : float,        #dist downtrack in this lane of the point of interest, m
-                            left_side   : bool          #is the request for a lane on the left? False = right side
-                        ):
-        """Returns the distance from current_loc to nearest joining lane on the specified side."""
-
-        pass #TODO - do we need this?
-
-
-    def get_dist_to_separation(self,
-                                current_loc : float,    #dist downtrack in this lane of the point of interest, m
-                                left_side   : bool      #is the request for a lane on the left? False = right side
-                              ):
-        """Returns the distance from current_loc to nearest separation of an adjoining lane on the specified side.
-            Note that the separating lane may no yet be adjoining at current_locc.
-        """
-
-        pass #TODO - do we need this?
 
 ######################################################################################################
 ######################################################################################################
+
+
 
 class Vehicle:
     """Represents a single vehicle on the Roadway."""
