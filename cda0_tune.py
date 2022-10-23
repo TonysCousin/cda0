@@ -1,8 +1,9 @@
 import ray
 from ray import air, tune
-import ray.rllib.algorithms.ppo as ppo
+#import ray.rllib.algorithms.ppo as ppo
 #import ray.rllib.algorithms.a2c as a2c
 #import ray.rllib.algorithms.sac as sac
+import ray.rllib.algorithms.ddpg as ddpg
 
 from stop_logic import StopLogic
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
@@ -10,8 +11,8 @@ from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 ray.init()
 
 # Define which learning algorithm we will use
-algo = "PPO"
-params = ppo.DEFAULT_CONFIG.copy() #a2c requires empty dict
+algo = "DDPG"
+params = ddpg.DEFAULT_CONFIG.copy() #a2c requires empty dict
 
 # Define the custom environment for Ray
 env_config = {}
@@ -19,6 +20,7 @@ env_config["time_step_size"]                = 0.5
 env_config["debug"]                         = 0
 env_config["training"]                      = True
 
+# Algorithm configs
 params["env"]                               = SimpleHighwayRampWrapper
 params["env_config"]                        = env_config
 params["framework"]                         = "torch"
@@ -29,27 +31,43 @@ params["num_workers"]                       = 12 #num remote workers (remember t
 params["num_envs_per_worker"]               = 4
 params["rollout_fragment_length"]           = 200 #timesteps
 params["gamma"]                             = 0.999
-params["lr"]                                = tune.loguniform(1e-6, 1e-4)
-params["sgd_minibatch_size"]                = 256 #must be <= train_batch_size
-params["train_batch_size"]                  = 256 #tune.choice([64, 64, 128, 256, 512, 1024])
 params["evaluation_interval"]               = 6
 params["evaluation_duration"]               = 6
 params["evaluation_duration_unit"]          = "episodes"
 params["evaluation_parallel_to_training"]   = True #True requires evaluation_num_workers > 0
 params["evaluation_num_workers"]            = 2
 params["log_level"]                         = "WARN"
-params["seed"]                              = 17 #tune.lograndint(1, 1048576)
+params["seed"]                              = 17
+
+# ===== Params for DDPG ==========
+explore_config = params["exploration_config"]
+explore_config["random_timesteps"]          = tune.qrandint(1000, 21000, 1000)
+explore_config["scale_timesteps"]           = tune.qrandint(50000, 100000, 1000)
+params["exploration_config"]                = explore_config
+params["actor_hiddens"]                     = [400, 300]
+params["critic_hiddens"]                    = [400, 300]
+params["actor_lr"]                          = tune.loguniform(1e-6, 1.0e-4)
+params["critic_lr"]                         = tune.loguniform(1e-6, 1.0e-3)
+params["tau"]                               = 0.002
+
+# ===== Params for PPO ==========
+"""
+params["lr"]                                = tune.loguniform(1e-6, 1e-4)
+params["sgd_minibatch_size"]                = 256 #must be <= train_batch_size
+params["train_batch_size"]                  = 256 #tune.choice([64, 64, 128, 256, 512, 1024])
+
 # Add dict here for lots of model HPs
 model_config = params["model"]
-model_config["fcnet_hiddens"]               = [300, 128, 64]
-"""
+#model_config["fcnet_hiddens"]               = [300, 128, 64]
 model_config["fcnet_hiddens"]               = tune.choice([ [300, 128, 64],
-                                                            [256, 256]
+                                                            [200, 100, 20],
+                                                            [384, 128, 32]
                                                           ])
-"""
-model_config["fcnet_activation"]            = tune.choice(["relu", "relu", "tanh"])
-model_config["post_fcnet_activation"]       = "tanh" #tune.choice(["relu", "tanh"])
+
+model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
+model_config["post_fcnet_activation"]       = tune.choice(["linear", "tanh"])
 params["model"] = model_config
+"""
 
 print("\n///// {} training params are:\n".format(algo))
 for item in params:
@@ -58,13 +76,13 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric                      = "episode_reward_mean",
                 mode                        = "max",
-                num_samples                 = 20 #number of HP trials
+                num_samples                 = 40 #number of HP trials
               )
-stopper = StopLogic(max_timesteps           = 200,
-                    max_iterations          = 1000,
+stopper = StopLogic(max_timesteps           = 300,
+                    max_iterations          = 1500,
                     min_iterations          = 300,
-                    avg_over_latest         = 50,
-                    success_threshold       = 1.5,
+                    avg_over_latest         = 80,
+                    success_threshold       = 1.3,
                     failure_threshold       = 0.0,
                     compl_std_dev           = 0.01
                    )

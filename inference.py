@@ -39,7 +39,7 @@ def main(argv):
                 }
 
     model_config = config["model"]
-    model_config["fcnet_hiddens"]               = [300, 128, 64] #needs to be same as in the checkpoint being read!
+    model_config["fcnet_hiddens"]               = [200, 100, 20] #needs to be same as in the checkpoint being read!
     #model_config["fcnet_hiddens"]               = [256, 256]
 
     config["env_config"] = env_config

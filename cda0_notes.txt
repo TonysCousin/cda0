@@ -102,8 +102,6 @@ Notes on the cda0 project
   Only found two seemingly minor diffs in the reward structure (given that the new penalties are commented out).
   I changed those back to the way they were on 10/16 and ran a new tuning run (b24d4).
 
------ time logged to Process Dashboard to here -----
-
 10/19/22:
 * Time
   17:46 - 18:25 = 0:39
@@ -129,7 +127,7 @@ Notes on the cda0 project
 * Time
   01:12 - 01:33 = 0:21
   17:15 - 18:31 = 1:16
-  19:54 - 
+  19:54 - 10:00 = 2:06
 * Added the LCC penalty back into the reward method.  Made tuning run 211ad, all with a 3-layer network.
 	* Trial 6 mean reward = 2.01, LR = 1.04e-4, activation = tanh, batch = 1024
 	* Trial 11 mean reward = 1.75, LR = 1.99e-4, activation = tanh, batch = 1024
@@ -169,8 +167,8 @@ Notes on the cda0 project
   10:18 - 11:00 = 0:42
   11:34 - 12:55 = 1:21
   13:50 - 15:01 = 1:11
-  17:40 - 18:03 - 0:23
-  19:55 - 
+  17:40 - 18:03 = 0:23
+  19:55 - 21:25 = 1:30
 * Runs from last night (92d01) that look promising are 3 (LR 9.36e-5, tanh/tanh, batch 1024) and 12 (LR 3.50e-5, relu/tanh, batch 512).
 	* Run 3 ran close to 0 speed. When it finished, it collected 0 completion reward because it took 1176 time steps!
 * Added penalty for slow speeds (normalized speed < 0.5), slightly increased penalty for jerk and slightly reduced penalty for 
@@ -183,3 +181,11 @@ Notes on the cda0 project
   is not clear to me how to get Ray Tune to pass in random values for each episode (when reset() is called), so for now I'll
   depend on reset() to handle it.  I've added a "training" config option that opens up these random ranges; if it is False or
   undefined, the initial conditions will be as they were before.
+
+----- time logged to Process Dashboard to here -----
+
+10/23/22:
+* Time 15:11 - 15:30 = 0:19
+* Finally got one that seems to have learned: 10965 trial 10, used LR 5.80e-5, network [200, 100, 20] and output activation = tanh.
+  However, this also did not perform well.  Accelerations are all over the place, and LC commands are as well.  Several inference
+  runs failed to complete even half of the track.

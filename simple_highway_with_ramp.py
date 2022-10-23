@@ -349,6 +349,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             ego_x = max(ego_x, 5.0*SimpleHighwayRamp.VEHICLE_LENGTH) #need to start in front of the neighbor vehicles if in lane 1
         if self.debug > 0:
             print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
+        #print("///// reset: training = {}, ego_lane_id = {}, ego_x = {:.2f}, ego_speed = {:.2f}".format(self.training, ego_lane_id, ego_x, ego_speed))
 
         # Reinitialize the whole observation vector
         self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE)
@@ -763,7 +764,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         else:
 
             # Add a small incentive for not crashing
-            reward += 0.004 #was 0.002
+            reward += 0.005 #was 0.002
 
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.0075)
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
@@ -796,7 +797,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             # Penalty for lane change command not near one of the quantized action values (worst case -0.01)
             lcc = self.obs[self.EGO_LANE_CMD_CUR]
             term = abs(lcc) - 0.5
-            penalty = 0.003*(1.0 - 4.0*term*term)
+            penalty = 0.004*(1.0 - 4.0*term*term)
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Ln chg cmd penalty {:.4f}. ".format(penalty)

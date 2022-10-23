@@ -89,7 +89,7 @@ class StopLogic(Stopper):
                 # Stop if avg of mean rewards over recent history is above the succcess threshold and its standard deviation is small
                 avg = mean(list(self.trials[trial_id]["mean_rewards"]))
                 std_of_mean = stdev(self.trials[trial_id]["mean_rewards"])
-                print("///// StopLogic: iter #{}, avg reward = {:.2f}, std of mean = {:.3f}".format(total_iters, avg, std_of_mean))
+                #print("///// StopLogic: iter #{}, avg reward = {:.2f}, std of mean = {:.3f}".format(total_iters, avg, std_of_mean))
                 if avg >= self.success_avg_threshold  and  std_of_mean <= self.completion_std_threshold:
                     print("\n///// Stopping trial due to success!\n")
                     return True
