@@ -168,9 +168,18 @@ Notes on the cda0 project
 * Time
   10:18 - 11:00 = 0:42
   11:34 - 12:55 = 1:21
+  13:50 - 15:01 = 1:11
+  17:40 - 18:03 - 0:23
+  19:55 - 
 * Runs from last night (92d01) that look promising are 3 (LR 9.36e-5, tanh/tanh, batch 1024) and 12 (LR 3.50e-5, relu/tanh, batch 512).
 	* Run 3 ran close to 0 speed. When it finished, it collected 0 completion reward because it took 1176 time steps!
 * Added penalty for slow speeds (normalized speed < 0.5), slightly increased penalty for jerk and slightly reduced penalty for 
   lane change command.
 * Increased number of most_recent iterations to evaluate for stopping, and didn't stop if max reward is close to success threshold.
 * Finished the graphics code for the initial roadway display and integrated it.
+* Realized a MAJOR PROBLEM I have had: the training was always starting in lane 0. Also, since the vehicle initial conditions set by
+  reset() were pretty limited (speed and location), it was often never seeing experiences for downtrack locations or for high speeds.
+  Therefore, I modified reset() to randomize these, and the initial lane ID, over the full range of possible experiences.  It
+  is not clear to me how to get Ray Tune to pass in random values for each episode (when reset() is called), so for now I'll
+  depend on reset() to handle it.  I've added a "training" config option that opens up these random ranges; if it is False or
+  undefined, the initial conditions will be as they were before.

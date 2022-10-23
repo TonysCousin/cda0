@@ -1,6 +1,5 @@
 from cmath import inf
 import sys
-import time
 import math
 import numpy as np
 import gym
@@ -80,8 +79,13 @@ def main(argv):
                 .format(step, action[0], action[1], obs[0], obs[2], obs[1], reward, info["reward_detail"]))
 
         if done:
-            graphics.close()
             print("///// Episode complete: {}. Total reward = {:.2f}".format(info["reason"], episode_reward))
+
+            # Get user input before closing the window
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    graphics.close()
+                    sys.exit()
 
 
 ######################################################################################################
@@ -101,6 +105,7 @@ class Graphics:
     LANE_WIDTH = 30.0 #m (wider than reality for graphics aesthetics)
     WINDOW_SIZE_X = 1800
     WINDOW_SIZE_Y = 800
+    REAL_TIME_RATIO = 4.0   #Factor faster than real time
 
 
     def __init__(self,
@@ -108,6 +113,8 @@ class Graphics:
                 ):
         # set up pygame
         pygame.init()
+        self.pgclock = pygame.time.Clock()
+        self.display_freq = Graphics.REAL_TIME_RATIO / env.time_step_size
 
         # set up the window
         self.windowSurface = pygame.display.set_mode((Graphics.WINDOW_SIZE_X, Graphics.WINDOW_SIZE_Y), 0, 32)
@@ -170,7 +177,14 @@ class Graphics:
                action  : list,
                obs     : list
               ):
-        pass
+        """Paints the new motion of the vehicle on the display screen."""
+
+        # Grab the background under where we want the vehicle to appear
+
+        # Display the vehicle in its new location
+
+        # Pause until the next time step
+        self.pgclock.tick(self.display_freq)
 
 
     def close(self):

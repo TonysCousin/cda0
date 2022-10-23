@@ -126,10 +126,15 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
     MAX_STEPS_SINCE_LC      = 60        #largest num time steps we will track since previous lane change
 
 
-    def __init__(self, config: EnvContext, seed=None, render_mode=None):
+    def __init__(self,
+                 config:        EnvContext,             #dict of config params
+                 seed:          int             = None, #seed for PRNG
+                 render_mode:   int             = None  #Ray rendering info, unused in this version
+                ):
         """Initialize an object of this class.  Config options are:
             time_step_size: duration of a time step, s (default = 0.5)
             debug:          level of debug printing (0=none (default), 1=moderate, 2=full details)
+            training:       (bool) True if this is a training run, else it is inference (affects initial conditions)
             init_ego_lane:  lane ID that the agent vehicle begins in (default = 2)
             init_ego_speed: initial speed of the agent vehicle (defaults to random in [5, 20])
             init_ego_x:     initial downtrack location of the agent vehicle from lane begin (defaults to random in [0, 200])
@@ -140,7 +145,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Store the arguments
         #self.seed = seed #Ray 2.0.0 chokes on the seed() method if this is defined (it checks for this attribute also)
         #TODO: try calling self.seed() without storing it as an instance attribute
-        self.prng = np.random.default_rng(seed=seed)
+        self.prng = np.random.default_rng(seed = seed)
         self.render_mode = render_mode
 
         self.time_step_size = 0.5 #seconds
@@ -159,29 +164,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         if db is not None  and  db != ""  and  0 <= int(db) <= 2:
             self.debug = int(db)
 
-        self.init_ego_lane = None
-        try:
-            el = config["init_ego_lane"]
-            if 0 <= el <= 2:
-                self.init_ego_lane = el
-        except KeyError as e:
-            pass
-
-        self.init_ego_speed = None
-        try:
-            es = config["init_ego_speed"]
-            if 0 <= es <= SimpleHighwayRamp.ROAD_SPEED_LIMIT:
-                self.init_ego_speed = es
-        except KeyError as e:
-            pass
-
-        self.init_ego_x = None
-        try:
-            ex = config["init_ego_x"]
-            if 0 <= ex < 2000:
-                self.init_ego_x = ex
-        except KeyError as e:
-            pass
+        self._set_initial_conditions(config)
 
         if self.debug > 0:
             print("\n///// SimpleHighwayRamp init: config = ", config)
@@ -323,7 +306,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         #super().seed(seed)
 
 
-    def reset(self, seed=None, options=None):
+    def reset(self,
+              seed:         int             = None,
+              options:      dict            = None
+             ) -> list:
         """Reinitializes the environment to prepare for a new episode.  This must be called before
             making any calls to step().
 
@@ -333,6 +319,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         if self.debug > 0:
             print("///// Entering reset")
+
         # We need the following line to seed self.np_random
         #super().reset(seed=seed) #apparently gym 0.26.1 doesn't implement this method in base class!
         #self.seed = seed #okay to pass it to the parent class, but don't store a local member copy!
@@ -341,18 +328,30 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         if options is not None:
             raise ValueError("reset() called with options, but options are not used in this environment.")
 
-        # Initialize a new set of observations
-        self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE)
-        ego_lane_id = int(self.prng.random()*2) if self.init_ego_lane is None  else  self.init_ego_lane
-        #starting downtrack distance, m
-        ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
+        # If we are in a training run, then choose widely randomized initial conditions
+        ego_lane_id = None
+        ego_x = None
+        ego_speed = None
+        if self.training:
+
+            ego_lane_id = int(self.prng.random()*2) #TODO: change to 3 once all lanes are used (also in else block below!)
+            ego_x = self.prng.random() * (SimpleHighwayRamp.SCENARIO_LENGTH - 10.0) #don't start at the very end of the road
+            ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
+
+        # Else, we are doing inference, so limit the randomness of the initial conditions
+        else:
+
+            ego_lane_id = int(self.prng.random()*2) if self.init_ego_lane is None  else  self.init_ego_lane
+            ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
+            ego_speed = self.prng.random() * 25.0 + 5.0 if self.init_ego_speed is None  else self.init_ego_speed
+
         if ego_lane_id == 1:
-            ego_x = max(ego_x, 5.0*SimpleHighwayRamp.VEHICLE_LENGTH) #need to start in front of the neighbor vehicles if in this lane
-        #starting speed between 5 and 30 m/s
-        ego_speed = self.prng.random() * 25.0 + 5.0 if self.init_ego_speed is None  else self.init_ego_speed
+            ego_x = max(ego_x, 5.0*SimpleHighwayRamp.VEHICLE_LENGTH) #need to start in front of the neighbor vehicles if in lane 1
         if self.debug > 0:
             print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
 
+        # Reinitialize the whole observation vector
+        self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE)
         ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_x)
         #TODO future (all 3 vehicles): n1_rem, _, _, _, _, _, _ = self._get_current_lane_geom(n1_lane, n1_x)
         self.vehicles[0].lane_id = ego_lane_id
@@ -626,6 +625,46 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
     ##### internal methods #####
 
+
+    def _set_initial_conditions(self,
+                                config:     EnvContext
+                               ):
+        """Sets the initial conditions of the ego vehicle in member variables (lane ID, speed, downtrack position)."""
+
+        self.training = False
+        try:
+            tr = config["training"]
+            if tr:
+                self.training = True
+        except KeyError as e:
+            pass
+
+        self.init_ego_lane = None
+        try:
+            el = config["init_ego_lane"]
+            if 0 <= el <= 2:
+                self.init_ego_lane = el
+        except KeyError as e:
+            pass
+
+        self.init_ego_speed = None
+        try:
+            es = config["init_ego_speed"]
+            if 0 <= es <= SimpleHighwayRamp.MAX_SPEED: #TODO consider limiting this to speed limit
+                self.init_ego_speed = es
+        except KeyError as e:
+            pass
+
+        self.init_ego_x = None
+        try:
+            ex = config["init_ego_x"]
+            if 0 <= ex < SimpleHighwayRamp.SCENARIO_LENGTH:
+                self.init_ego_x = ex
+        except KeyError as e:
+            pass
+
+
+
     def _check_for_collisions(self):
         """Compares location and bounding box of each vehicle with all other vehicles to determine if there are
             any overlaps.  If any two vehicle bounding boxes overlap, then returns True, otherwise False.
@@ -724,7 +763,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         else:
 
             # Add a small incentive for not crashing
-            reward += 0.005 #was 0.002
+            reward += 0.004 #was 0.002
 
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.0075)
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
@@ -738,7 +777,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT
             penalty = 0.0
             if norm_speed < 0.5:
-                penalty = -2.0 * norm_speed + 1.0
+                penalty = -1.0 * norm_speed + 0.5
                 explanation += "Low speed penalty {:.4f}. ".format(penalty)
             """
             elif norm_speed > 1.0:

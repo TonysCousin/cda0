@@ -120,18 +120,18 @@ class StopLogic(Stopper):
                         # If the max reward is well below success threshold and not climbing significantly, then stop as a failure
                         dq = self.trials[trial_id]["max_rewards"]
                         dq_size = len(dq)
-                        if mean(dq) < 0.8 * self.success_avg_threshold:
+                        if mean(dq) < 0.6 * self.success_avg_threshold: #assumes success threshold > 0 (like O(1))
                             begin = 0.0
                             end = 0.0
                             if dq_size < 4:
                                 begin = dq[0]
                                 end = dq[-1]
                             elif dq_size < 21:
-                                begin = 0.333333 * mean(dq[:3])
-                                end   = 0.333333 * mean(dq[-3:])
+                                begin = 0.333333 * mean([dq[i] for i in range(3)])
+                                end   = 0.333333 * mean([dq[i] for i in range(-3, 0)])
                             else:
-                                begin = 0.1 * mean(dq[:10])
-                                end   = 0.1 * mean(dq[-10:])
+                                begin = 0.1 * mean([dq[i] for i in range(10)])
+                                end   = 0.1 * mean([dq[i] for i in range(-10, 0)])
                             if end <= begin:
                                 print("\n///// Stopping trial - no improvement in {} iters.\n".format(self.most_recent))
                                 return True

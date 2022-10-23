@@ -14,10 +14,10 @@ algo = "PPO"
 params = ppo.DEFAULT_CONFIG.copy() #a2c requires empty dict
 
 # Define the custom environment for Ray
-env_config = {  "time_step_size":   0.5,
-                "debug":            0,
-                #"init_ego_lane":    0 #left-most lane, which is just straight
-             }
+env_config = {}
+env_config["time_step_size"]                = 0.5
+env_config["debug"]                         = 0
+env_config["training"]                      = True
 
 params["env"]                               = SimpleHighwayRampWrapper
 params["env_config"]                        = env_config
@@ -25,20 +25,20 @@ params["framework"]                         = "torch"
 params["num_gpus"]                          = 1 #for the local worker
 params["num_cpus_per_worker"]               = 1 #also applies to the local worker and evaluation workers
 params["num_gpus_per_worker"]               = 0 #this has to allow for evaluation workers also
-params["num_workers"]                       = 14 #num remote workers (remember that there is a local worker also)
+params["num_workers"]                       = 12 #num remote workers (remember that there is a local worker also)
 params["num_envs_per_worker"]               = 4
 params["rollout_fragment_length"]           = 200 #timesteps
 params["gamma"]                             = 0.999
-params["lr"]                                = tune.loguniform(2e-6, 2e-4)
-params["sgd_minibatch_size"]                = 64
-params["train_batch_size"]                  = tune.choice([64, 64, 128, 256, 512, 1024])
+params["lr"]                                = tune.loguniform(1e-6, 1e-4)
+params["sgd_minibatch_size"]                = 256 #must be <= train_batch_size
+params["train_batch_size"]                  = 256 #tune.choice([64, 64, 128, 256, 512, 1024])
 params["evaluation_interval"]               = 6
 params["evaluation_duration"]               = 6
 params["evaluation_duration_unit"]          = "episodes"
 params["evaluation_parallel_to_training"]   = True #True requires evaluation_num_workers > 0
-params["evaluation_num_workers"]            = 1
+params["evaluation_num_workers"]            = 2
 params["log_level"]                         = "WARN"
-params["seed"]                              = tune.lograndint(1, 1048576)
+params["seed"]                              = 17 #tune.lograndint(1, 1048576)
 # Add dict here for lots of model HPs
 model_config = params["model"]
 model_config["fcnet_hiddens"]               = [300, 128, 64]
@@ -47,8 +47,8 @@ model_config["fcnet_hiddens"]               = tune.choice([ [300, 128, 64],
                                                             [256, 256]
                                                           ])
 """
-model_config["fcnet_activation"]            = tune.choice(["relu", "tanh"])
-model_config["post_fcnet_activation"]       = tune.choice(["relu", "tanh"])
+model_config["fcnet_activation"]            = tune.choice(["relu", "relu", "tanh"])
+model_config["post_fcnet_activation"]       = "tanh" #tune.choice(["relu", "tanh"])
 params["model"] = model_config
 
 print("\n///// {} training params are:\n".format(algo))
@@ -58,15 +58,15 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric                      = "episode_reward_mean",
                 mode                        = "max",
-                num_samples                 = 18 #number of HP trials
+                num_samples                 = 20 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 200,
-                    max_iterations          = 500,
-                    min_iterations          = 150,
-                    avg_over_latest         = 40,
-                    success_threshold       = 1.7,
+                    max_iterations          = 1000,
+                    min_iterations          = 300,
+                    avg_over_latest         = 50,
+                    success_threshold       = 1.5,
                     failure_threshold       = 0.0,
-                    compl_std_dev           = 0.02
+                    compl_std_dev           = 0.01
                    )
 run_config = air.RunConfig(
                 name                        = "cda0-l01-free",
