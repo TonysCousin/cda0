@@ -185,7 +185,9 @@ Notes on the cda0 project
 ----- time logged to Process Dashboard to here -----
 
 10/23/22:
-* Time 15:11 - 15:30 = 0:19
+* Time
+  15:11 - 15:30 = 0:19
+  20:16 - 
 * Finally got one that seems to have learned: 10965 trial 10, used LR 5.80e-5, network [200, 100, 20] and output activation = tanh.
   However, this also did not perform well.  Accelerations are all over the place, and LC commands are as well.  Several inference
   runs failed to complete even half of the track.

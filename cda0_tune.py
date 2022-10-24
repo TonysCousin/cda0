@@ -39,7 +39,8 @@ params["evaluation_num_workers"]            = 2
 params["log_level"]                         = "WARN"
 params["seed"]                              = 17
 
-# ===== Params for DDPG ==========
+# ===== Params for DDPG =====================================================================
+
 explore_config = params["exploration_config"]
 explore_config["random_timesteps"]          = tune.qrandint(1000, 21000, 1000)
 explore_config["scale_timesteps"]           = tune.qrandint(50000, 100000, 1000)
@@ -50,7 +51,7 @@ params["actor_lr"]                          = tune.loguniform(1e-6, 1.0e-4)
 params["critic_lr"]                         = tune.loguniform(1e-6, 1.0e-3)
 params["tau"]                               = 0.002
 
-# ===== Params for PPO ==========
+# ===== Params for PPO ======================================================================
 """
 params["lr"]                                = tune.loguniform(1e-6, 1e-4)
 params["sgd_minibatch_size"]                = 256 #must be <= train_batch_size

@@ -73,7 +73,7 @@ def main(argv):
         obs, reward, done, info = env.step(np.ndarray.tolist(action))
         episode_reward += reward
 
-        # Display current status
+        # Display current status of the ego vehicle
         graphics.update(action, obs)
         print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:7.4f} {}"
                 .format(step, action[0], action[1], obs[0], obs[2], obs[1], reward, info["reward_detail"]))
@@ -100,6 +100,7 @@ class Graphics:
     RED = (255, 0, 0)
     GREEN = (0, 255, 0)
     BLUE = (0, 0, 255)
+    YELLOW = (0, 255, 255)
 
     # Other graphics constants
     LANE_WIDTH = 30.0 #m (wider than reality for graphics aesthetics)
@@ -111,6 +112,11 @@ class Graphics:
     def __init__(self,
                  env    : gym.Env
                 ):
+        """Initializes the graphics and draws the roadway background display."""
+
+        # Save the environment for future reference
+        self.env = env
+
         # set up pygame
         pygame.init()
         self.pgclock = pygame.time.Clock()
@@ -168,20 +174,29 @@ class Graphics:
                 self._draw_segment(seg[0], seg[1], seg[2], seg[3], Graphics.LANE_WIDTH)
 
         pygame.display.update()
-        #time.sleep(20) #TODO debug only
+        #time.sleep(20) #debug only
 
-
+        # Initialize the previous ego vehicle location at the beginning of a lane
+        self.prev_ego_r = self.scale*(roadway.lanes[0].segments[0][0] - self.roadway_center_x) + self.display_center_r
+        self.prev_ego_s = Graphics.WINDOW_SIZE_Y -
+                          self.scale*(roadway.lanes[0].segments[0][1] - self.roadway_center_y) + self.display_center_s
+        self.veh_width = 0.5 * Graphics.LANE_WIDTH * self.scale #width of icon in pixels
 
 
     def update(self,
-               action  : list,
-               obs     : list
+               action  : list,      #vector of actions for the ego vehicle for the current time step
+               obs     : list       #vector of observations of the ego vehicle for the current time step
               ):
-        """Paints the new motion of the vehicle on the display screen."""
+        """Paints the new motion of the ego vehicle on the display screen."""
 
-        # Grab the background under where we want the vehicle to appear
+        # Grab the background under where we want the vehicle to appear & erase the old vehicle
+        pygame.draw.circle(self.windowSurface, BLACK, (self.prev_ego_r, self.prev_ego_s), self.veh_width, 0)
 
         # Display the vehicle in its new location
+        new_x, new_y = self._get_vehicle_coords(obs)
+        new_r = self.scale*(new_x - self.roadway_center_x) + self.display_center_r
+        new_s = Graphics.WINDOW_SIZE_Y - self.scale*(new_y - self.roadway_center_y) + self.display_center_s
+        pygame.draw.circle(self.windowSurface, YELLOW, (new_r, new_s), self.veh_width, 0)
 
         # Pause until the next time step
         self.pgclock.tick(self.display_freq)
@@ -230,6 +245,43 @@ class Graphics:
         # Draw the edge lines
         pygame.draw.line(self.windowSurface, Graphics.WHITE, (left_r0, left_s0), (left_r1, left_s1), 1)
         pygame.draw.line(self.windowSurface, Graphics.WHITE, (right_r0, right_s0), (right_r1, right_s1), 1)
+
+
+    def _get_vehicle_coords(self,
+                            obs:    list
+                           ) -> tuple:
+        """Returns the map coordinates of the ego vehicle based on lane ID and distance downtrack.
+
+            CAUTION: these calcs are hard-coded to the specific roadway geometry in this code,
+            it is not a general solution.
+        """
+
+        x = None
+        y = None
+        lane = obs[env.EGO_LANE_ID]
+        if lane == 0:
+            x = obs[env.EGO_X]
+            y = env.roadway.lanes[0].segments[0][1]
+        elif lane == 1:
+            x = obs[env.EGO_X]
+            y = env.roadway.lanes[1].segments[0][1]
+        else:
+            ddt = obs[env.EGO_X]
+            if ddt < self.env.roadway.lanes[2].segments[0][4]: #vehicle is in seg 0
+                seg0x0 = self.env.roadway.lanes[2].segments[0][0]
+                seg0y0 = self.env.roadway.lanes[2].segments[0][1]
+                seg0x1 = self.env.roadway.lanes[2].segments[0][2]
+                seg0y1 = self.env.roadway.lanes[2].segments[0][3]
+
+                factor = ddt / self.env.roadway.lanes[2].segments[0][4]
+                x = seg0x0 + factor*(seg0x1 - seg0x0)
+                y = seg0y0 + factor*(seg0y1 - seg0y0)
+
+            else: #vehicle is in seg 1
+                x = self.env.roadway.lanes[2].segments[1][0] + ddt - self.env.roadway.lanes[2].segments[0][4]
+                y = self.env.roadway.lanes[2].segments[1][1]
+
+        return x, y
 
 
 ######################################################################################################
