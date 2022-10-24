@@ -43,12 +43,20 @@ params["seed"]                              = 17
 
 explore_config = params["exploration_config"]
 explore_config["random_timesteps"]          = tune.qrandint(1000, 21000, 1000)
-explore_config["scale_timesteps"]           = tune.qrandint(50000, 100000, 1000)
+explore_config["scale_timesteps"]           = tune.qrandint(60000, 100000, 1000)
 params["exploration_config"]                = explore_config
-params["actor_hiddens"]                     = [400, 300]
-params["critic_hiddens"]                    = [400, 300]
+params["actor_hiddens"]                     = tune.choice([ [400, 300],
+                                                            [100, 16],
+                                                            [128, 32],
+                                                            [256, 128]
+                                                          ])
+params["critic_hiddens"]                    = tune.choice([ [400, 300],
+                                                            [100, 16],
+                                                            [128, 32],
+                                                            [256, 128]
+                                                          ])
 params["actor_lr"]                          = tune.loguniform(1e-6, 1.0e-4)
-params["critic_lr"]                         = tune.loguniform(1e-6, 1.0e-3)
+params["critic_lr"]                         = tune.loguniform(1e-5, 1.0e-3)
 params["tau"]                               = 0.002
 
 # ===== Params for PPO ======================================================================
@@ -70,6 +78,8 @@ model_config["post_fcnet_activation"]       = tune.choice(["linear", "tanh"])
 params["model"] = model_config
 """
 
+# ===== Final setup =========================================================================
+
 print("\n///// {} training params are:\n".format(algo))
 for item in params:
     print("{}:  {}".format(item, params[item]))
@@ -77,13 +87,13 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric                      = "episode_reward_mean",
                 mode                        = "max",
-                num_samples                 = 40 #number of HP trials
+                num_samples                 = 20 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 300,
-                    max_iterations          = 1500,
-                    min_iterations          = 300,
-                    avg_over_latest         = 80,
-                    success_threshold       = 1.3,
+                    max_iterations          = 800,
+                    min_iterations          = 200,
+                    avg_over_latest         = 60,
+                    success_threshold       = 1.2,
                     failure_threshold       = 0.0,
                     compl_std_dev           = 0.01
                    )
@@ -95,7 +105,7 @@ run_config = air.RunConfig(
                 checkpoint_config           = air.CheckpointConfig(
                                                 checkpoint_frequency        = 100,
                                                 checkpoint_score_attribute  = "episode_reward_mean",
-                                                num_to_keep                 = 3,
+                                                num_to_keep                 = 2,
                                                 checkpoint_at_end           = True
                 )
              )

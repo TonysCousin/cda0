@@ -187,7 +187,11 @@ Notes on the cda0 project
 10/23/22:
 * Time
   15:11 - 15:30 = 0:19
-  20:16 - 
+  20:16 - 21:03 = 0:47
 * Finally got one that seems to have learned: 10965 trial 10, used LR 5.80e-5, network [200, 100, 20] and output activation = tanh.
   However, this also did not perform well.  Accelerations are all over the place, and LC commands are as well.  Several inference
   runs failed to complete even half of the track.
+* Added remaining code to the Graphics class in the inference program to do rudimentary display of ego vehicle driving on the track.
+* Started a new training run using the DDPG algo instead of PPO (which I had been using thus far).  It seemed to produce some
+  good results quickly, but the rewards never grew enough.  Started playing with the network structures more.
+	* Some of the iterations are showing min rewards in the -200 to -300 range - how is this possible?

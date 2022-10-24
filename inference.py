@@ -4,7 +4,8 @@ import math
 import numpy as np
 import gym
 import ray
-import ray.rllib.algorithms.ppo as ppo
+#import ray.rllib.algorithms.ppo as ppo
+import ray.rllib.algorithms.ddpg as ddpg
 import pygame
 from pygame.locals import *
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
@@ -31,19 +32,18 @@ def main(argv):
     ray.init()
 
     # Set up the environment
-    config = ppo.DEFAULT_CONFIG.copy()
+    config = ddpg.DEFAULT_CONFIG.copy()
 
     env_config = {  "time_step_size":   0.5,
                     "debug":            0,
                     "init_ego_lane":    start_lane
                 }
 
-    model_config = config["model"]
-    model_config["fcnet_hiddens"]               = [200, 100, 20] #needs to be same as in the checkpoint being read!
-    #model_config["fcnet_hiddens"]               = [256, 256]
+    # These need to be same as in the checkpoint being read!
+    config["actor_hiddens"]               = [128, 32]
+    config["critic_hiddens"]              = [100, 16]
 
     config["env_config"] = env_config
-    config["model"] = model_config
     config["framework"] = "torch"
     config["num_gpus"] = 0
     config["num_workers"] = 1
@@ -55,7 +55,7 @@ def main(argv):
     # not to run the environment, so any environment info we pass to the algo is irrelevant for this program.  The
     # algo doesn't recognize the config key "env_configs", so need to remove it here.
     #config.pop("env_configs")
-    algo = ppo.PPO(config = config, env = SimpleHighwayRampWrapper) #needs the env class, not the object created above
+    algo = ddpg.DDPG(config = config, env = SimpleHighwayRampWrapper) #needs the env class, not the object created above
     algo.restore(checkpoint)
     print("///// Checkpoint {} successfully loaded.".format(checkpoint))
 
@@ -177,9 +177,9 @@ class Graphics:
         #time.sleep(20) #debug only
 
         # Initialize the previous ego vehicle location at the beginning of a lane
-        self.prev_ego_r = self.scale*(roadway.lanes[0].segments[0][0] - self.roadway_center_x) + self.display_center_r
-        self.prev_ego_s = Graphics.WINDOW_SIZE_Y -
-                          self.scale*(roadway.lanes[0].segments[0][1] - self.roadway_center_y) + self.display_center_s
+        self.prev_ego_r = self.scale*(self.env.roadway.lanes[0].segments[0][0] - self.roadway_center_x) + self.display_center_r
+        self.prev_ego_s = Graphics.WINDOW_SIZE_Y - \
+                          self.scale*(self.env.roadway.lanes[0].segments[0][1] - self.roadway_center_y) + self.display_center_s
         self.veh_width = 0.5 * Graphics.LANE_WIDTH * self.scale #width of icon in pixels
 
 
@@ -190,13 +190,13 @@ class Graphics:
         """Paints the new motion of the ego vehicle on the display screen."""
 
         # Grab the background under where we want the vehicle to appear & erase the old vehicle
-        pygame.draw.circle(self.windowSurface, BLACK, (self.prev_ego_r, self.prev_ego_s), self.veh_width, 0)
+        pygame.draw.circle(self.windowSurface, Graphics.BLACK, (self.prev_ego_r, self.prev_ego_s), self.veh_width, 0)
 
         # Display the vehicle in its new location
         new_x, new_y = self._get_vehicle_coords(obs)
         new_r = self.scale*(new_x - self.roadway_center_x) + self.display_center_r
         new_s = Graphics.WINDOW_SIZE_Y - self.scale*(new_y - self.roadway_center_y) + self.display_center_s
-        pygame.draw.circle(self.windowSurface, YELLOW, (new_r, new_s), self.veh_width, 0)
+        pygame.draw.circle(self.windowSurface, Graphics.YELLOW, (new_r, new_s), self.veh_width, 0)
 
         # Pause until the next time step
         self.pgclock.tick(self.display_freq)
@@ -258,15 +258,15 @@ class Graphics:
 
         x = None
         y = None
-        lane = obs[env.EGO_LANE_ID]
+        lane = obs[self.env.EGO_LANE_ID]
         if lane == 0:
-            x = obs[env.EGO_X]
-            y = env.roadway.lanes[0].segments[0][1]
+            x = obs[self.env.EGO_X]
+            y = self.env.roadway.lanes[0].segments[0][1]
         elif lane == 1:
-            x = obs[env.EGO_X]
-            y = env.roadway.lanes[1].segments[0][1]
+            x = obs[self.env.EGO_X]
+            y = self.env.roadway.lanes[1].segments[0][1]
         else:
-            ddt = obs[env.EGO_X]
+            ddt = obs[self.env.EGO_X]
             if ddt < self.env.roadway.lanes[2].segments[0][4]: #vehicle is in seg 0
                 seg0x0 = self.env.roadway.lanes[2].segments[0][0]
                 seg0y0 = self.env.roadway.lanes[2].segments[0][1]

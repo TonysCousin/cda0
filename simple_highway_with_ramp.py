@@ -586,9 +586,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # If vehicle has been stopped for several time steps, then declare the episode done as a failure
         stopped_vehicle = False
-        if self.vehicles[0].speed < 0.01:
+        if self.vehicles[0].speed < 0.1:
             self.stopped_count += 1
-            if self.stopped_count > 5:
+            if self.stopped_count > 3:
                 done = True
                 stopped_vehicle = True
                 return_info["reason"] = "Vehicle chose to stop moving"
