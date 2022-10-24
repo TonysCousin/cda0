@@ -40,8 +40,12 @@ def main(argv):
                 }
 
     # These need to be same as in the checkpoint being read!
-    config["actor_hiddens"]               = [128, 32]
+    # Run 41f25-00003
+    config["actor_hiddens"]               = [256, 128]
     config["critic_hiddens"]              = [100, 16]
+    # Run 41f25-00014
+    config["actor_hiddens"]               = [100, 16]
+    config["critic_hiddens"]              = [128, 32]
 
     config["env_config"] = env_config
     config["framework"] = "torch"
@@ -70,13 +74,16 @@ def main(argv):
     while not done:
         step += 1
         action = algo.compute_single_action(obs)
-        obs, reward, done, info = env.step(np.ndarray.tolist(action))
+        raw_obs, reward, done, info = env.step(np.ndarray.tolist(action)) #obs returned is UNSCALED
         episode_reward += reward
 
         # Display current status of the ego vehicle
-        graphics.update(action, obs)
+        graphics.update(action, raw_obs)
         print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:7.4f} {}"
-                .format(step, action[0], action[1], obs[0], obs[2], obs[1], reward, info["reward_detail"]))
+                .format(step, action[0], action[1], raw_obs[0], raw_obs[2], raw_obs[1], reward, info["reward_detail"]))
+
+        # Scale the observations to be ready for NN ingest next time step
+        obs = env.scale_obs(raw_obs)
 
         if done:
             print("///// Episode complete: {}. Total reward = {:.2f}".format(info["reason"], episode_reward))
@@ -100,7 +107,7 @@ class Graphics:
     RED = (255, 0, 0)
     GREEN = (0, 255, 0)
     BLUE = (0, 0, 255)
-    YELLOW = (0, 255, 255)
+    YELLOW = (168, 168, 0)
 
     # Other graphics constants
     LANE_WIDTH = 30.0 #m (wider than reality for graphics aesthetics)
@@ -180,7 +187,7 @@ class Graphics:
         self.prev_ego_r = self.scale*(self.env.roadway.lanes[0].segments[0][0] - self.roadway_center_x) + self.display_center_r
         self.prev_ego_s = Graphics.WINDOW_SIZE_Y - \
                           self.scale*(self.env.roadway.lanes[0].segments[0][1] - self.roadway_center_y) + self.display_center_s
-        self.veh_width = 0.5 * Graphics.LANE_WIDTH * self.scale #width of icon in pixels
+        self.veh_radius = int(0.25 * Graphics.LANE_WIDTH * self.scale) #radius of icon in pixels
 
 
     def update(self,
@@ -190,13 +197,18 @@ class Graphics:
         """Paints the new motion of the ego vehicle on the display screen."""
 
         # Grab the background under where we want the vehicle to appear & erase the old vehicle
-        pygame.draw.circle(self.windowSurface, Graphics.BLACK, (self.prev_ego_r, self.prev_ego_s), self.veh_width, 0)
+        pygame.draw.circle(self.windowSurface, Graphics.BLACK, (self.prev_ego_r, self.prev_ego_s), self.veh_radius, 0)
 
-        # Display the vehicle in its new location
+        # Display the vehicle in its new location.  Note that the obs vector is scaled for the NN.
         new_x, new_y = self._get_vehicle_coords(obs)
-        new_r = self.scale*(new_x - self.roadway_center_x) + self.display_center_r
-        new_s = Graphics.WINDOW_SIZE_Y - self.scale*(new_y - self.roadway_center_y) + self.display_center_s
-        pygame.draw.circle(self.windowSurface, Graphics.YELLOW, (new_r, new_s), self.veh_width, 0)
+        new_r = int(self.scale*(new_x - self.roadway_center_x)) + self.display_center_r
+        new_s = Graphics.WINDOW_SIZE_Y - int(self.scale*(new_y - self.roadway_center_y) + self.display_center_s)
+        pygame.draw.circle(self.windowSurface, Graphics.YELLOW, (new_r, new_s), self.veh_radius, 0)
+        pygame.display.update()
+
+        # Update the previous location
+        self.prev_ego_r = new_r
+        self.prev_ego_s = new_s
 
         # Pause until the next time step
         self.pgclock.tick(self.display_freq)

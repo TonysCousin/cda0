@@ -194,4 +194,17 @@ Notes on the cda0 project
 * Added remaining code to the Graphics class in the inference program to do rudimentary display of ego vehicle driving on the track.
 * Started a new training run using the DDPG algo instead of PPO (which I had been using thus far).  It seemed to produce some
   good results quickly, but the rewards never grew enough.  Started playing with the network structures more.
-	* Some of the iterations are showing min rewards in the -200 to -300 range - how is this possible?
+	* Some of the iterations are showing min rewards in the -200 to -300 range - how is this possible? Apparently, due to lots
+	  of accumulated low-speed penalties.
+
+10/24/22:
+* time
+  13:34 - 
+* DDPG run from last night found some success!  Run 41f25, trial 3 used actor network of [256, 128] and LR = 9.6e-6, with critic
+  network of [100, 16] and LR = 3.8e-4.  Inference run in lane 0 stayed there with small lane chg cmds the whole way, and gradually
+  accelerated to max speed with no jerk penalties anywhere!  Running checkpoint 500 (after which the mean reward dropped a bit).
+  Full run captured total episode reward of 1.54 taking 85 time steps.  Another inference run started with a low speed (0.16 scaled)
+  and performed similarly, but, because of the low speed penalties at beginning, its total episode reward was only 0.34.
+	* Trial 14 from that run also performed really well in inference, using actor network of [100, 16] and LR = 6.6e-6, and
+	  critic network of [128, 32] and LR = 9.6e-4.
+* Completed testing the graphics update method.  Had to modify the env wrapper to get access to both the scaled and uscaled obs.
