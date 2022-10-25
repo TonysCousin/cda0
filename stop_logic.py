@@ -117,10 +117,10 @@ class StopLogic(Stopper):
                     # If the avg mean reward over recent history is below the success threshold then
                     if avg < self.failure_avg_threshold:
 
-                        # If the max reward is well below success threshold and not climbing significantly, then stop as a failure
+                        # If the max reward is below success threshold and not climbing significantly, then stop as a failure
                         dq = self.trials[trial_id]["max_rewards"]
                         dq_size = len(dq)
-                        if mean(dq) < 0.6 * self.success_avg_threshold: #assumes success threshold > 0 (like O(1))
+                        if mean(dq) < self.success_avg_threshold:
                             begin = 0.0
                             end = 0.0
                             if dq_size < 4:

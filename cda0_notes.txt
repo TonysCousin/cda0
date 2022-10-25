@@ -199,7 +199,8 @@ Notes on the cda0 project
 
 10/24/22:
 * time
-  13:34 - 
+  13:34 - 15:07 = 1:33
+  19:57 - 22:31, int 15 = 2:19
 * DDPG run from last night found some success!  Run 41f25, trial 3 used actor network of [256, 128] and LR = 9.6e-6, with critic
   network of [100, 16] and LR = 3.8e-4.  Inference run in lane 0 stayed there with small lane chg cmds the whole way, and gradually
   accelerated to max speed with no jerk penalties anywhere!  Running checkpoint 500 (after which the mean reward dropped a bit).
@@ -208,3 +209,10 @@ Notes on the cda0 project
 	* Trial 14 from that run also performed really well in inference, using actor network of [100, 16] and LR = 6.6e-6, and
 	  critic network of [128, 32] and LR = 9.6e-4.
 * Completed testing the graphics update method.  Had to modify the env wrapper to get access to both the scaled and uscaled obs.
+* Added upper speed limit penalty and ran new training runs with DDPG, but not getting success. Max rewards tend to settle around 1.3
+  while min rewards settle around -10 to -20, with means in the -5 to -10 range.  Maybe this settling is because noise gets removed
+  too early?
+* Started another run with:
+	* Reduced upper speed limit penalty (0.2 at 1.2*speed limit)
+	* Much larger noise decay schedule (from 90k timesteps to 900k), plus random noise for 20k timesteps.
+	* Longer trials, up to 900 iters.

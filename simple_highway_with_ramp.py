@@ -773,7 +773,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             if penalty > 0.0001:
                 explanation += "Jerk penalty {:.4f}. ".format(penalty)
 
-            # Penalty for speed exceeding the upper speed limit (penalty = 0.5 at 1.2*speed limit) or for
+            # Penalty for speed exceeding the upper speed limit (penalty = 0.2 at 1.2*speed limit) or for
             # going way slow (max penalty = 0.2 at zero speed)
             norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT
             penalty = 0.0
@@ -781,7 +781,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 penalty = -0.4 * norm_speed + 0.2
                 explanation += "Low speed penalty {:.4f}. ".format(penalty)
             elif norm_speed > 1.0:
-                penalty = 2.5 * norm_speed - 2.5
+                #penalty = 2.5 * norm_speed - 2.5
+                penalty = 1.0 * norm_speed - 1.0
                 explanation += "HIGH speed penalty {:.4f}. ".format(penalty)
             reward -= penalty
 
