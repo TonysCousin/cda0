@@ -216,3 +216,14 @@ Notes on the cda0 project
 	* Reduced upper speed limit penalty (0.2 at 1.2*speed limit)
 	* Much larger noise decay schedule (from 90k timesteps to 900k), plus random noise for 20k timesteps.
 	* Longer trials, up to 900 iters.
+
+10/25/22:
+* Time 19:00 - 19:58 = 0:58
+  21:45 - 
+* Last night's DDPG run did not succeed either.  From the four best ones, I see that the actor performed best with the largest
+  network ([400, 100]), implying that maybe bigger would be better.  Also, it seemed to prefer LR ~2e-5.  The critic didn't seem
+  to care as much about either of these params, so it is probably good with a smaller network.
+* Created a new DDPG run, notably with a much larger replay buffer. Before, the default 50k experiences was used; now I am using
+  1M experiences.  Also adjusted some HPs a bit.  Still no good.
+* Run ac6fb: it seems that adding the upper speed limit penalty is causing it not to learn, so I removed that penalty and made no
+  other changes for this run.

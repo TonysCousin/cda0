@@ -44,18 +44,19 @@ params["seed"]                              = 17
 explore_config = params["exploration_config"]
 explore_config["random_timesteps"]          = 20000 #tune.qrandint(1000, 21000, 1000)
 explore_config["scale_timesteps"]           = 900000 #tune.qrandint(60000, 100000, 1000)
+rb_config = params["replay_buffer_config"]
+rb_config["capacity"]                       = 1000000
+
 params["exploration_config"]                = explore_config
+params["replay_buffer_config"]              = rb_config
 params["actor_hiddens"]                     = tune.choice([ [400, 100],
-                                                            [128, 32],
-                                                            [256, 128]
+                                                            [512, 128, 32],
+                                                            [512, 128, 32],
+                                                            [400, 200, 64]
                                                           ])
-params["critic_hiddens"]                    = tune.choice([ [400, 100],
-                                                            [100, 16],
-                                                            [128, 32],
-                                                            [256, 128]
-                                                          ])
-params["actor_lr"]                          = tune.loguniform(8e-6, 5e-5)
-params["critic_lr"]                         = tune.loguniform(1e-5, 2e-4)
+params["critic_hiddens"]                    = [128, 32]
+params["actor_lr"]                          = tune.loguniform(8e-6, 3e-5)
+params["critic_lr"]                         = tune.loguniform(3e-5, 2e-4)
 params["tau"]                               = tune.loguniform(0.0005, 0.002)
 
 # ===== Params for PPO ======================================================================
@@ -89,12 +90,12 @@ tune_config = tune.TuneConfig(
                 num_samples                 = 20 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 300,
-                    max_iterations          = 900,
+                    max_iterations          = 1100,
                     min_iterations          = 200,
                     avg_over_latest         = 60,
-                    success_threshold       = 1.0,
+                    success_threshold       = 1.2,
                     failure_threshold       = 0.0,
-                    compl_std_dev           = 0.02
+                    compl_std_dev           = 0.03
                    )
 run_config = air.RunConfig(
                 name                        = "cda0-l01-free",

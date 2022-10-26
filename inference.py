@@ -49,6 +49,13 @@ def main(argv):
     # Run 78fd9-00003
     config["actor_hiddens"]               = [256, 128]
     config["critic_hiddens"]              = [256, 128]
+    # Run f9f5e-00019
+    config["actor_hiddens"]               = [400, 100]
+    config["critic_hiddens"]              = [100, 16]
+    # Run ac6fb-00001
+    config["actor_hiddens"]               = [512, 128, 32]
+    config["critic_hiddens"]              = [128, 32]
+
 
     config["env_config"] = env_config
     config["framework"] = "torch"
