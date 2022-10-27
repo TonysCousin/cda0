@@ -68,7 +68,7 @@ class StopLogic(Stopper):
         # If this trial is already underway and being tracked, then
         if trial_id in self.trials:
 
-            # Capture the values of max and mean rewards for this iteration
+            # Capture the values of max, min and mean rewards for this iteration
             mean_rew = -100.0
             if not math.isnan(result["episode_reward_mean"]):
                 mean_rew = result["episode_reward_mean"]
@@ -77,6 +77,10 @@ class StopLogic(Stopper):
             if not math.isnan(result["episode_reward_max"]):
                 max_rew = result["episode_reward_max"]
             self.trials[trial_id]["max_rewards"].append(max_rew)
+            min_rew = -100.0
+            if not math.isnan(result["episode_reward_min"]):
+                min_rew = result["episode_reward_min"]
+            self.trians[trial_id]["min_rewards"].append(min_rew)
             #print("///// Appending reward ", mean_rew, max_rew)
 
             # If the deque of N most recent rewards is not yet full then increment its count
@@ -87,10 +91,10 @@ class StopLogic(Stopper):
             # Else the deque is full so we can start analyzing stop criteria
             else:
                 # Stop if avg of mean rewards over recent history is above the succcess threshold and its standard deviation is small
-                avg = mean(list(self.trials[trial_id]["mean_rewards"]))
+                avg_of_mean = mean(list(self.trials[trial_id]["mean_rewards"]))
                 std_of_mean = stdev(self.trials[trial_id]["mean_rewards"])
                 #print("///// StopLogic: iter #{}, avg reward = {:.2f}, std of mean = {:.3f}".format(total_iters, avg, std_of_mean))
-                if avg >= self.success_avg_threshold  and  std_of_mean <= self.completion_std_threshold:
+                if avg_of_mean >= self.success_avg_threshold  and  std_of_mean <= self.completion_std_threshold:
                     print("\n///// Stopping trial due to success!\n")
                     return True
 
@@ -115,12 +119,13 @@ class StopLogic(Stopper):
                         return True
 
                     # If the avg mean reward over recent history is below the success threshold then
-                    if avg < self.failure_avg_threshold:
+                    if avg_of_mean < self.failure_avg_threshold:
 
                         # If the max reward is below success threshold and not climbing significantly, then stop as a failure
                         dq = self.trials[trial_id]["max_rewards"]
                         dq_size = len(dq)
-                        if mean(dq) < self.success_avg_threshold:
+                        avg_of_max = mean(dq)
+                        if avg_of_max < self.success_avg_threshold:
                             begin = 0.0
                             end = 0.0
                             if dq_size < 4:
@@ -136,13 +141,22 @@ class StopLogic(Stopper):
                                 print("\n///// Stopping trial - no improvement in {} iters.\n".format(self.most_recent))
                                 return True
 
+                        # If the mean is a lot closer to the min than to the max then stop as failure
+                        avg_of_min = mean(list(self.trials[trial_id]["min_rewards"]))
+                        if avg_of_mean - avg_of_min < 0.25*(avg_of_max - avg_of_min):
+                            print("\n///// Stopping trial - no improvement and min reward is dominating.")
+                            return True
+
         # Else, it is a brand new trial
         else:
             mean_rew = deque(maxlen = self.most_recent)
             mean_rew.append(result["episode_reward_mean"])
             max_rew = deque(maxlen = self.most_recent)
             max_rew.append(result["episode_reward_max"])
-            self.trials[trial_id] = {"stop": False, "num_entries": 1, "mean_rewards": mean_rew, "max_rewards": max_rew}
+            min_rew = deque(maxlen = self.most_recent)
+            min_rew.append(result["episode_reward_min"])
+            self.trials[trial_id] = {"stop": False, "num_entries": 1, \
+                                     "mean_rewards": mean_rew, "max_rewards": max_rew, "min_rewards": min_rew}
 
         return False
 

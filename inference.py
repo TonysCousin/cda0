@@ -52,19 +52,19 @@ def main(argv):
     # Run f9f5e-00019
     config["actor_hiddens"]               = [400, 100]
     config["critic_hiddens"]              = [100, 16]
-    # Run ac6fb-00001
-    config["actor_hiddens"]               = [512, 128, 32]
-    config["critic_hiddens"]              = [128, 32]
-
     # Run 9d9a5-00001
     config["actor_hiddens"]               = [400, 100]
     config["critic_hiddens"]              = [128, 32]
+    # Run ???
+    config["actor_hiddens"]               = [512, 128, 32]
+    config["critic_hiddens"]              = [256, 32]
 
 
     config["env_config"] = env_config
     config["framework"] = "torch"
     config["num_gpus"] = 0
     config["num_workers"] = 1
+    config["seed"] = 17
     env = SimpleHighwayRampWrapper(env_config)
     print("///// Environment configured.")
 
@@ -93,6 +93,8 @@ def main(argv):
 
         # Display current status of the ego vehicle
         graphics.update(action, raw_obs)
+        #if step == 1:
+        #   input("///// Press Enter to begin...")
         print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:7.4f} {}"
                 .format(step, action[0], action[1], raw_obs[0], raw_obs[2], raw_obs[1], reward, info["reward_detail"]))
 
@@ -101,9 +103,12 @@ def main(argv):
 
         if done:
             print("///// Episode complete: {}. Total reward = {:.2f}".format(info["reason"], episode_reward))
+            input("///// Press Enter to close...")
+            graphics.close()
+            sys.exit()
 
             # Get user input before closing the window
-            for event in pygame.event.get():
+            for event in pygame.event.get(): #this isn't working
                 if event.type == pygame.QUIT:
                     graphics.close()
                     sys.exit()
@@ -127,7 +132,7 @@ class Graphics:
     LANE_WIDTH = 30.0 #m (wider than reality for graphics aesthetics)
     WINDOW_SIZE_X = 1800
     WINDOW_SIZE_Y = 800
-    REAL_TIME_RATIO = 4.0   #Factor faster than real time
+    REAL_TIME_RATIO = 8.0   #Factor faster than real time
 
 
     def __init__(self,

@@ -481,6 +481,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # It's legal, but not desirable, to command opposite lane change directions in consecutive time steps.
         # TODO future: replace instance variables lane_change_underway and lane_id with those in vehicle[0]
         ran_off_road = False
+
+
+        action[1] = 0.0 #TODO debugging only!  Forces env to ignore lane change commands
+
+
         if action[1] < -0.5  or  action[1] > 0.5  or  self.lane_change_underway != "none":
             if self.lane_change_underway == "none": #count should always be 0 in this case, so initiate a new count
                 if action[1] < -0.5:
@@ -766,7 +771,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             # Add a small incentive for not crashing
             reward += 0.0
 
-            # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.0075)
+            # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
             penalty = 0.001 * abs(jerk1) / SimpleHighwayRamp.MAX_JERK
             reward -= penalty
@@ -792,12 +797,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 explanation += "Lane change penalty {:.4f}. ".format(penalty)
 
             # Penalty for lane change command not near one of the quantized action values (worst case -0.01)
+            """
             lcc = self.obs[self.EGO_LANE_CMD_CUR]
             term = abs(lcc) - 0.5
             penalty = 0.004*(1.0 - 4.0*term*term)
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Ln chg cmd penalty {:.4f}. ".format(penalty)
+            """
 
         reward = min(max(reward, -2.0), 2.0)
         if self.debug > 0:

@@ -234,7 +234,7 @@ Notes on the cda0 project
 * Reduced the low & high speed penalties by about 2 orders of magnitude for new run fad55.
 
 10/26/22:
-* Time 20:04 - 
+* Time 20:04 - 21:12 = 1:08
 * A few runs scored decent mean rewards (~0.9) very early, then they gradually dropped as the episodes went on. However, their
   early checkpoints perform pretty well.
 	* It is willing to accept a penalty of ~0.003 for low speed and ln chg cmd (each). But it doesn't like a large jerk
@@ -247,3 +247,17 @@ Notes on the cda0 project
 	* low speed penalty maxes out at 0.02 (was 0.01)
 	* high speed penalty at 1.2x speed limit is 0.02 (was 0.01)
 	* Reduced success threshold to 1.1 (was 1.2)
+
+10/27/22:
+* Time
+  09:07 - 09:33 = 0:26
+  11:53 - 12:25 = 0:32
+  14:29 - 15:07 = 0:38
+  16:29 - 16:51 = 0:22
+* Got a few runs whose mean reward peak came very early, and only hit ~0.2.  Common to accept lots of ongoing penalty for low
+  speeds, but kept very gradual & small accels.
+* Reduced jerk penalty.  Also removed the time step existence reward and reshaped the completion reward to drop off faster for
+  slow traversal.
+* Fixed defect in steps_since_reset counter initialization, which was causing success reward to be less than it should. Also
+  set up new run with wider exploration of actor LR and noise params.
+* Added condition to stop logic in case mean reward is low but max is above threshold; if mean is near the min than stop it.

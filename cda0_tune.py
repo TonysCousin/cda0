@@ -30,7 +30,7 @@ params["num_gpus_per_worker"]               = 0 #this has to allow for evaluatio
 params["num_workers"]                       = 12 #num remote workers (remember that there is a local worker also)
 params["num_envs_per_worker"]               = 4
 params["rollout_fragment_length"]           = 200 #timesteps
-params["gamma"]                             = 0.999
+params["gamma"]                             = tune.choice([0.99, 0.999])
 params["evaluation_interval"]               = 6
 params["evaluation_duration"]               = 6
 params["evaluation_duration_unit"]          = "episodes"
@@ -42,22 +42,25 @@ params["seed"]                              = 17
 # ===== Params for DDPG =====================================================================
 
 explore_config = params["exploration_config"]
-explore_config["random_timesteps"]          = 20000 #tune.qrandint(1000, 21000, 1000)
-explore_config["scale_timesteps"]           = 900000 #tune.qrandint(60000, 100000, 1000)
+explore_config["random_timesteps"]          = tune.qrandint(0, 21000, 1000) #was 20000
+explore_config["scale_timesteps"]           = tune.choice([30000, 100000, 500000, 900000]) #was 900k
 rb_config = params["replay_buffer_config"]
 rb_config["capacity"]                       = 1000000
 
 params["exploration_config"]                = explore_config
 params["replay_buffer_config"]              = rb_config
+params["actor_hiddens"]                     = [512, 128, 32]
+"""
 params["actor_hiddens"]                     = tune.choice([ [400, 100],
                                                             [512, 128, 32],
                                                             [512, 128, 32],
                                                             [400, 200, 64]
                                                           ])
-params["critic_hiddens"]                    = [128, 32]
-params["actor_lr"]                          = tune.loguniform(8e-6, 3e-5)
-params["critic_lr"]                         = tune.loguniform(3e-5, 2e-4)
-params["tau"]                               = tune.loguniform(0.0005, 0.002)
+"""
+params["critic_hiddens"]                    = [256, 32]
+params["actor_lr"]                          = tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
+params["critic_lr"]                         = 8e-5 #tune.loguniform(3e-5, 2e-4)
+params["tau"]                               = 0.001 #tune.loguniform(0.0005, 0.002)
 
 # ===== Params for PPO ======================================================================
 """
@@ -87,7 +90,7 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric                      = "episode_reward_mean",
                 mode                        = "max",
-                num_samples                 = 20 #number of HP trials
+                num_samples                 = 15 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 300,
                     max_iterations          = 1100,
