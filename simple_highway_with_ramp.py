@@ -114,7 +114,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
     OBS_SIZE                = 29
     VEHICLE_LENGTH          = 5.0       #m
-    MAX_SPEED               = 45.0      #vehicle's max achievable speed, m/s
+    MAX_SPEED               = 35.0      #vehicle's max achievable speed, m/s
     MAX_ACCEL               = 3.0       #vehicle's max achievable acceleration (fwd or backward), m/s^2
     MAX_JERK                = 4.0       #max desirable jerk for occupant comfort, m/s^3
     ROAD_SPEED_LIMIT        = 29.1      #Roadway's legal speed limit, m/s (29.1 m/s = 65 mph)
@@ -408,7 +408,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Other persistent data
         self.lane_change_underway = "none"
         self.lane_change_count = 0
-        self.steps_since_reset = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
+        self.steps_since_reset = 0
         self.stopped_count = 0
 
         if self.debug > 1:
@@ -756,19 +756,19 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             # Else (episode ended successfully)
             else:
 
-                # Add amount inversely proportional to the length of the episode.
-                reward = max(1.4 - 0.0015 * self.steps_since_reset, 0.0)
-                explanation = "Successful episode! "
+                # Add amount inversely proportional to the length of the episode (1.0 @100 steps, 0 @ 300+ steps)
+                reward = max(1.5 - 0.005 * self.steps_since_reset, 0.0)
+                explanation = "Successful episode! {} steps".format(self.steps_since_reset)
 
         # Else, episode still underway
         else:
 
             # Add a small incentive for not crashing
-            reward += 0.003
+            reward += 0.0
 
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.0075)
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
-            penalty = 0.002 * abs(jerk1) / SimpleHighwayRamp.MAX_JERK
+            penalty = 0.001 * abs(jerk1) / SimpleHighwayRamp.MAX_JERK
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Jerk penalty {:.4f}. ".format(penalty)
