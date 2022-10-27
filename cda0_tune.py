@@ -93,7 +93,7 @@ stopper = StopLogic(max_timesteps           = 300,
                     max_iterations          = 1100,
                     min_iterations          = 200,
                     avg_over_latest         = 60,
-                    success_threshold       = 1.2,
+                    success_threshold       = 1.1,
                     failure_threshold       = 0.0,
                     compl_std_dev           = 0.03
                    )
@@ -103,9 +103,9 @@ run_config = air.RunConfig(
                 stop                        = stopper,
                 sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
                 checkpoint_config           = air.CheckpointConfig(
-                                                checkpoint_frequency        = 100,
+                                                checkpoint_frequency        = 20,
                                                 checkpoint_score_attribute  = "episode_reward_mean",
-                                                num_to_keep                 = 2,
+                                                num_to_keep                 = 3,
                                                 checkpoint_at_end           = True
                 )
              )

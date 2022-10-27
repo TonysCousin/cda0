@@ -218,12 +218,32 @@ Notes on the cda0 project
 	* Longer trials, up to 900 iters.
 
 10/25/22:
-* Time 19:00 - 19:58 = 0:58
-  21:45 - 
+* Time
+  19:00 - 19:58 = 0:58
+  21:45 - 23:22 = 1:37
 * Last night's DDPG run did not succeed either.  From the four best ones, I see that the actor performed best with the largest
   network ([400, 100]), implying that maybe bigger would be better.  Also, it seemed to prefer LR ~2e-5.  The critic didn't seem
   to care as much about either of these params, so it is probably good with a smaller network.
 * Created a new DDPG run, notably with a much larger replay buffer. Before, the default 50k experiences was used; now I am using
   1M experiences.  Also adjusted some HPs a bit.  Still no good.
 * Run ac6fb: it seems that adding the upper speed limit penalty is causing it not to learn, so I removed that penalty and made no
-  other changes for this run.
+  other changes for this run. This produced at least 2 successful trials!  It has therefore dawned on me that the problem is the
+  magnitude of the penalties being imposed for approaching the speed limits.  They are way too big for a per-time step penalty,
+  considering the other penalties are O(0.001) and these are O(0.1), especially when the offending situation is not possible to
+  get out of in a single time step.  The negative reward piles up very quickly, discouraging any learning.
+* Reduced the low & high speed penalties by about 2 orders of magnitude for new run fad55.
+
+10/26/22:
+* Time 20:04 - 
+* A few runs scored decent mean rewards (~0.9) very early, then they gradually dropped as the episodes went on. However, their
+  early checkpoints perform pretty well.
+	* It is willing to accept a penalty of ~0.003 for low speed and ln chg cmd (each). But it doesn't like a large jerk
+	  penalty at all.  Seems to be willing to accept the low speed penalty in order to pick up more existence reward (0.005).
+	* In another run that started much faster, it was willing to accept a high speed penalty of up to 0.014 for the entire
+	  run of 100 steps, in order to pick up 1.14 points for completing the run fast.
+* Changed rewards so that
+	* Reduced existence reward to 0.003 (was 0.005)
+	* jerk penalty maxes out at 0.006 (was much higher)
+	* low speed penalty maxes out at 0.02 (was 0.01)
+	* high speed penalty at 1.2x speed limit is 0.02 (was 0.01)
+	* Reduced success threshold to 1.1 (was 1.2)
