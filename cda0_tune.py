@@ -42,11 +42,18 @@ params["seed"]                              = 17
 # ===== Params for DDPG =====================================================================
 
 explore_config = params["exploration_config"]
-explore_config["random_timesteps"]          = tune.qrandint(0, 21000, 1000) #was 20000
-explore_config["scale_timesteps"]           = tune.choice([30000, 100000, 500000, 900000]) #was 900k
+explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
+explore_config["stddev"]                    = 1.0 #this param is specific to GaussianNoise
+explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 21000, 1000) #was 20000
+explore_config["scale_timesteps"]           = tune.choice([100000, 500000, 900000]) #was 900k
+explore_config.pop("ou_base_scale")         #need to remove since this is specific to OU noise
+explore_config.pop("ou_theta")              #need to remove since this is specific to OU noise
+explore_config.pop("ou_sigma")              #need to remove since this is specific to OU noise
+
 rb_config = params["replay_buffer_config"]
 rb_config["capacity"]                       = 1000000
 
+params["explore"]                           = True
 params["exploration_config"]                = explore_config
 params["replay_buffer_config"]              = rb_config
 params["actor_hiddens"]                     = [512, 128, 32]
@@ -93,10 +100,10 @@ tune_config = tune.TuneConfig(
                 num_samples                 = 15 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 300,
-                    max_iterations          = 1100,
-                    min_iterations          = 200,
+                    max_iterations          = 600,
+                    min_iterations          = 150,
                     avg_over_latest         = 60,
-                    success_threshold       = 1.1,
+                    success_threshold       = 1.3,
                     failure_threshold       = 0.0,
                     compl_std_dev           = 0.03
                    )

@@ -80,7 +80,7 @@ class StopLogic(Stopper):
             min_rew = -100.0
             if not math.isnan(result["episode_reward_min"]):
                 min_rew = result["episode_reward_min"]
-            self.trians[trial_id]["min_rewards"].append(min_rew)
+            self.trials[trial_id]["min_rewards"].append(min_rew)
             #print("///// Appending reward ", mean_rew, max_rew)
 
             # If the deque of N most recent rewards is not yet full then increment its count

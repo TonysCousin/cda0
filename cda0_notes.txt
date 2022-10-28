@@ -254,6 +254,7 @@ Notes on the cda0 project
   11:53 - 12:25 = 0:32
   14:29 - 15:07 = 0:38
   16:29 - 16:51 = 0:22
+  21:00 - 
 * Got a few runs whose mean reward peak came very early, and only hit ~0.2.  Common to accept lots of ongoing penalty for low
   speeds, but kept very gradual & small accels.
 * Reduced jerk penalty.  Also removed the time step existence reward and reshaped the completion reward to drop off faster for
@@ -261,3 +262,19 @@ Notes on the cda0 project
 * Fixed defect in steps_since_reset counter initialization, which was causing success reward to be less than it should. Also
   set up new run with wider exploration of actor LR and noise params.
 * Added condition to stop logic in case mean reward is low but max is above threshold; if mean is near the min than stop it.
+* Turned off all lane change command penalties and ignore LC command coming into step() so it only has to learn about speed
+  control.
+  Still got no good results. This time each of the min, mean & max reward curves was almost flat, except for some noise, with
+  the mean centered aroune 0.2, which is way below what it should be.  Running inference on one of the more successful trials,
+  I see that it is on the gas all the way, maxing out high speed penalties, which accumulated to ~2x the completion reward.
+  This doesn't make sense.  I therefore think it is learning that max speed is the best policy because each episode begins
+  at a random downtrack location, so some of them are gathering close to 1.5 completion points for going very fast for only
+  a few time steps.  Therefore, I changed the restart() method to always initialize training runs at the very beginning of
+  the track so it has to drive the entire track to get a completion reward.
+	* Debugging statments reveal that incoming accel actions, even at the very beginning of a training trial, are
+	  highly correlated throughout the episode - mostly in the 0.8 - 1.2 m/s^2 range! But it is completing episodes
+	  regularly very early.  It quickly learns to max out accel (+3.0) and minimize number of time steps, and never gets
+	  to explore what happens below the speed limit.
+* Replaced the OU noise model with Gaussian using sigma = 1.0 m/s^2 at the beginning (gradually annealed).  I confirmed that
+  it initially produces accels all over the place.  However, it still quickly learns to push the accel to the max throughout
+  the episode.

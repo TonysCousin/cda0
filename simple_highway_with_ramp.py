@@ -298,6 +298,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             print("///// init complete.")
 
 
+        self.iter_count = 0 #TODO debug only
+
+
+
+
     def seed(self, seed=None):
         """A required method that is apparently not yet supported in Ray 2.0.0."""
         pass
@@ -335,7 +340,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         if self.training:
 
             ego_lane_id = int(self.prng.random()*2) #TODO: change to 3 once all lanes are used (also in else block below!)
-            ego_x = self.prng.random() * (SimpleHighwayRamp.SCENARIO_LENGTH - 10.0) #don't start at the very end of the road
+            ego_x = 0.0 #self.prng.random() * (SimpleHighwayRamp.SCENARIO_LENGTH - 10.0) #don't start at the very end of the road
             ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
 
         # Else, we are doing inference, so limit the randomness of the initial conditions
@@ -411,6 +416,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.steps_since_reset = 0
         self.stopped_count = 0
 
+
+        self.ep_accels = [] #TODO for debug only
+        self.iter_count += 1
+
+
         if self.debug > 1:
             print("///// End of reset().")
         return self.obs
@@ -484,6 +494,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
 
         action[1] = 0.0 #TODO debugging only!  Forces env to ignore lane change commands
+        self.ep_accels.append(action[0])
 
 
         if action[1] < -0.5  or  action[1] > 0.5  or  self.lane_change_underway != "none":
@@ -621,6 +632,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             for i, v in enumerate(self.vehicles):
                 v.print(i)
             print("      reason = {}".format(return_info["reason"]))
+
+
+        if done  and  self.iter_count >= 2: #TODO for debugging only
+            self.iter_count = 0
+            print("///// Ep done: step r = {:.4f}, {}".format(reward, return_info["reward_detail"]))
+            print("      Ep accels = {}".format(self.ep_accels))
+
+
         return self.obs, reward, done, return_info
 
 
@@ -778,7 +797,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             if penalty > 0.0001:
                 explanation += "Jerk penalty {:.4f}. ".format(penalty)
 
-            # Penalty for speed exceeding the upper speed limit (penalty = 0.01 at 1.2*speed limit) or for
+            # Penalty for speed exceeding the upper speed limit (penalty = 0.04 at 1.2*speed limit) or for
             # going way slow (max penalty = 0.02 at zero speed)
             norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT
             penalty = 0.0
@@ -786,7 +805,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 penalty = -0.04 * norm_speed + 0.02
                 explanation += "Low speed penalty {:.4f}. ".format(penalty)
             elif norm_speed > 1.0:
-                penalty = 0.1 * norm_speed - 0.1
+                penalty = 0.2 * norm_speed - 0.2
                 explanation += "HIGH speed penalty {:.4f}. ".format(penalty)
             reward -= penalty
 
