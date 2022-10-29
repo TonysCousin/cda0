@@ -30,7 +30,7 @@ params["num_gpus_per_worker"]               = 0 #this has to allow for evaluatio
 params["num_workers"]                       = 1 #num remote workers (remember that there is a local worker also)
 params["num_envs_per_worker"]               = 4
 params["rollout_fragment_length"]           = 200 #timesteps
-params["gamma"]                             = tune.choice([0.99, 0.999])
+params["gamma"]                             = 0.999 #tune.choice([0.99, 0.999])
 params["evaluation_interval"]               = 6
 params["evaluation_duration"]               = 6
 params["evaluation_duration_unit"]          = "episodes"
@@ -43,9 +43,9 @@ params["seed"]                              = 17
 
 explore_config = params["exploration_config"]
 explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-explore_config["stddev"]                    = 0.1 #this param is specific to GaussianNoise
-explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 21000, 1000) #was 20000
-explore_config["scale_timesteps"]           = tune.choice([100000, 500000]) #was 900k
+explore_config["stddev"]                    = tune.uniform(0.1, 0.5) #this param is specific to GaussianNoise
+explore_config["random_timesteps"]          = tune.qrandint(0, 20000, 50000) #was 20000
+explore_config["scale_timesteps"]           = tune.choice([100000, 400000]) #was 900k
 explore_config.pop("ou_base_scale")         #need to remove since this is specific to OU noise
 explore_config.pop("ou_theta")              #need to remove since this is specific to OU noise
 explore_config.pop("ou_sigma")              #need to remove since this is specific to OU noise
@@ -67,9 +67,9 @@ params["actor_hiddens"]                     = tune.choice([ [400, 100],
                                                           ])
 """
 params["critic_hiddens"]                    = [256, 32]
-params["actor_lr"]                          = tune.loguniform(1e-8, 1.2e-7) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
-params["critic_lr"]                         = tune.loguniform(1e-6, 8e-5) #tune.loguniform(3e-5, 2e-4)
-params["tau"]                               = 0.001 #tune.loguniform(0.0005, 0.002)
+params["actor_lr"]                          = tune.loguniform(4e-8, 1e-7) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
+params["critic_lr"]                         = tune.loguniform(1e-6, 1e-5) #tune.loguniform(3e-5, 2e-4)
+params["tau"]                               = tune.loguniform(0.00001, 0.003) #tune.loguniform(0.0005, 0.002)
 
 # ===== Params for PPO ======================================================================
 """

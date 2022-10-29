@@ -295,3 +295,11 @@ Notes on the cda0 project
 * TIMING: on laptop battery, one episode of 145 iterations on 1 worker/1 env took 2:51.
 	  1 worker/4 env took 3:01 on battery (took 3:09 on AC power)
 
+10/29/22:
+* Time
+  09:00 - 09:18 = 0:18
+  11:29 - 
+* Runs from last night with much lower LRs kept the max reward steady > 2, and even mean rewards stayed steady instead of
+  dropping, but still < -1, since the mins never improved.  It does appear that gamma = 0.999 is important, and a more
+  narrow range of LRs is the sweet spot.
+* More tuning with tau.  Doesn't make a big difference. Nor does adding more Gaussian noise.
