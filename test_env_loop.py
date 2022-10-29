@@ -3,109 +3,119 @@ import sys
 import math
 import numpy as np
 import gym
-import ray
-#import ray.rllib.algorithms.ppo as ppo
-import ray.rllib.algorithms.ddpg as ddpg
 import pygame
 from pygame.locals import *
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 from simple_highway_with_ramp    import SimpleHighwayRamp, Roadway, Lane
 
-"""This program runs the selected policy checkpoint for one episode and captures key state variables throughout."""
+"""This program runs the selected policy checkpoint for one episode and captures key state variables throughout.
+
+
+
+    * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+    MANUAL TRAINING LOOP WITHOUT THE TRAINING!
+
+    Action vector is specified up front for the episode, then it is fed into the environment in a loop.
+    This is for testing the environment.  The NN i not involved.
+
+    * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+"""
+
+# Here are the actions to be taken at each time step (scaled) as [accel, LC cmd]
+actions = [
+    [0.0,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.5,   0.0],
+    [0.0,   0.0],
+    [0.0,   0.0],
+    [0.0,   0.0],
+    [0.0,   0.0],
+    [0.0,   0.0],
+    [0.0,   0.0],
+    [0.0,   0.0],
+    [0.0,   0.0],
+]
 
 def main(argv):
 
     prng = np.random.default_rng()
 
     # Handle any args
-    if len(argv) == 1:
-        print("Usage is: {} <checkpoint> [starting lane]".format(argv[0]))
+    if len(argv) > 3  or  argv[1] == "--help":
+        print("Usage is: {} [mode [starting lane]]".format(argv[0]))
+        print("           mode h = hand-entered one at a time, mode p = pre-defined list")
         sys.exit(1)
 
-    checkpoint = argv[1]
+    mode_auto = True
     start_lane = int(prng.random()*3)
-    if len(argv) > 2:
-        lane = int(argv[2])
-        if 0 <= lane <= 2:
-            start_lane = lane
+    if len(argv) > 1:
+        mode = argv[1]
+        if mode == 'h':
+            mode_auto = False
 
-    ray.init()
-
-    # Set up the environment
-    config = ddpg.DEFAULT_CONFIG.copy()
-    exp = config["exploration_config"]
-    exp.pop("ou_sigma")
-    exp.pop("ou_theta")
-    exp.pop("ou_base_scale")
-    exp["type"] = "GaussianNoise"
-    config["exploration_config"] = exp
+        if len(argv) > 2:
+            lane = int(argv[1])
+            if 0 <= lane <= 2:
+                start_lane = lane
 
     env_config = {  "time_step_size":   0.5,
                     "debug":            0,
-                    "init_ego_lane":    start_lane
+                    "init_ego_lane":    start_lane,
+                    "training":         True        #forces vehicle to start at beginning of track
                 }
 
-    # These need to be same as in the checkpoint being read!
-    # Run 41f25-00003
-    config["actor_hiddens"]               = [256, 128]
-    config["critic_hiddens"]              = [100, 16]
-    # Run 41f25-00014
-    config["actor_hiddens"]               = [100, 16]
-    config["critic_hiddens"]              = [128, 32]
-    # Run 78fd9-00003
-    config["actor_hiddens"]               = [256, 128]
-    config["critic_hiddens"]              = [256, 128]
-    # Run f9f5e-00019
-    config["actor_hiddens"]               = [400, 100]
-    config["critic_hiddens"]              = [100, 16]
-    # Run 9d9a5-00001
-    config["actor_hiddens"]               = [400, 100]
-    config["critic_hiddens"]              = [128, 32]
-    # Run ???
-    config["actor_hiddens"]               = [512, 128, 32]
-    config["critic_hiddens"]              = [256, 32]
-
-
-    config["env_config"] = env_config
-    config["framework"] = "torch"
-    config["num_gpus"] = 0
-    config["num_workers"] = 1
-    config["seed"] = 17
     env = SimpleHighwayRampWrapper(env_config)
     print("///// Environment configured.")
 
-    # Restore the selected checkpoint file
-    # Note that the raw environment class is passed to the algo, but we are only using the algo to run the NN model,
-    # not to run the environment, so any environment info we pass to the algo is irrelevant for this program.  The
-    # algo doesn't recognize the config key "env_configs", so need to remove it here.
-    #config.pop("env_configs")
-    algo = ddpg.DDPG(config = config, env = SimpleHighwayRampWrapper) #needs the env class, not the object created above
-    algo.restore(checkpoint)
-    print("///// Checkpoint {} successfully loaded.".format(checkpoint))
-
     # Set up the graphic display
-    graphics = Graphics(env)
+    if mode_auto:
+        graphics = Graphics(env)
 
     # Run the agent through a complete episode
     episode_reward = 0
     done = False
-    obs = env.reset()
+    env.reset() #output is scaled obs
     step = 0
+    accel = 0.0
+    cont_accel = False
     while not done:
-        step += 1
-        action = algo.compute_single_action(obs)
-        raw_obs, reward, done, info = env.step(np.ndarray.tolist(action)) #obs returned is UNSCALED
+        if mode_auto:
+            action = actions[step]
+        else:
+            action = [accel, 0.0]
+
+        raw_obs, reward, done, info = env.step(action) #obs returned is UNSCALED
         episode_reward += reward
 
         # Display current status of the ego vehicle
-        graphics.update(action, raw_obs)
+        if mode_auto:
+            graphics.update(action, raw_obs)
         #if step == 1:
         #   input("///// Press Enter to begin...")
         print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:7.4f} {}"
                 .format(step, action[0], action[1], raw_obs[0], raw_obs[2], raw_obs[1], reward, info["reward_detail"]))
+        if not cont_accel  and  not mode_auto:
+            opt = input("Next scaled accel? ")
+            if opt == 'c':
+                cont_accel = True
+            else:
+                acc = float(opt)
+                if -1.0 <= acc <= 1.0:
+                    accel = acc
 
-        # Scale the observations to be ready for NN ingest next time step
-        obs = env.scale_obs(raw_obs)
+        step += 1
 
         if done:
             print("///// Episode complete: {}. Total reward = {:.2f}".format(info["reason"], episode_reward))

@@ -633,12 +633,12 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 v.print(i)
             print("      reason = {}".format(return_info["reason"]))
 
-
+        """
         if done  and  self.iter_count >= 2: #TODO for debugging only
             self.iter_count = 0
             print("///// Ep done: step r = {:.4f}, {}".format(reward, return_info["reward_detail"]))
             print("      Ep accels = {}".format(self.ep_accels))
-
+        """
 
         return self.obs, reward, done, return_info
 

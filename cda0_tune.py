@@ -27,7 +27,7 @@ params["framework"]                         = "torch"
 params["num_gpus"]                          = 1 #for the local worker
 params["num_cpus_per_worker"]               = 1 #also applies to the local worker and evaluation workers
 params["num_gpus_per_worker"]               = 0 #this has to allow for evaluation workers also
-params["num_workers"]                       = 12 #num remote workers (remember that there is a local worker also)
+params["num_workers"]                       = 1 #num remote workers (remember that there is a local worker also)
 params["num_envs_per_worker"]               = 4
 params["rollout_fragment_length"]           = 200 #timesteps
 params["gamma"]                             = tune.choice([0.99, 0.999])
@@ -43,9 +43,9 @@ params["seed"]                              = 17
 
 explore_config = params["exploration_config"]
 explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-explore_config["stddev"]                    = 1.0 #this param is specific to GaussianNoise
+explore_config["stddev"]                    = 0.1 #this param is specific to GaussianNoise
 explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 21000, 1000) #was 20000
-explore_config["scale_timesteps"]           = tune.choice([100000, 500000, 900000]) #was 900k
+explore_config["scale_timesteps"]           = tune.choice([100000, 500000]) #was 900k
 explore_config.pop("ou_base_scale")         #need to remove since this is specific to OU noise
 explore_config.pop("ou_theta")              #need to remove since this is specific to OU noise
 explore_config.pop("ou_sigma")              #need to remove since this is specific to OU noise
@@ -56,6 +56,8 @@ rb_config["capacity"]                       = 1000000
 params["explore"]                           = True
 params["exploration_config"]                = explore_config
 params["replay_buffer_config"]              = rb_config
+params["actor_hidden_activation"]           = "tanh"
+params["critic_hidden_activation"]          = "tanh"
 params["actor_hiddens"]                     = [512, 128, 32]
 """
 params["actor_hiddens"]                     = tune.choice([ [400, 100],
@@ -65,8 +67,8 @@ params["actor_hiddens"]                     = tune.choice([ [400, 100],
                                                           ])
 """
 params["critic_hiddens"]                    = [256, 32]
-params["actor_lr"]                          = tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
-params["critic_lr"]                         = 8e-5 #tune.loguniform(3e-5, 2e-4)
+params["actor_lr"]                          = tune.loguniform(1e-8, 1.2e-7) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
+params["critic_lr"]                         = tune.loguniform(1e-6, 8e-5) #tune.loguniform(3e-5, 2e-4)
 params["tau"]                               = 0.001 #tune.loguniform(0.0005, 0.002)
 
 # ===== Params for PPO ======================================================================
@@ -100,8 +102,8 @@ tune_config = tune.TuneConfig(
                 num_samples                 = 15 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 300,
-                    max_iterations          = 600,
-                    min_iterations          = 150,
+                    max_iterations          = 800,
+                    min_iterations          = 120,
                     avg_over_latest         = 60,
                     success_threshold       = 1.3,
                     failure_threshold       = 0.0,

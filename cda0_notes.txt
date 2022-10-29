@@ -254,7 +254,7 @@ Notes on the cda0 project
   11:53 - 12:25 = 0:32
   14:29 - 15:07 = 0:38
   16:29 - 16:51 = 0:22
-  21:00 - 
+  21:00 - 22:47 = 1:47
 * Got a few runs whose mean reward peak came very early, and only hit ~0.2.  Common to accept lots of ongoing penalty for low
   speeds, but kept very gradual & small accels.
 * Reduced jerk penalty.  Also removed the time step existence reward and reshaped the completion reward to drop off faster for
@@ -278,3 +278,20 @@ Notes on the cda0 project
 * Replaced the OU noise model with Gaussian using sigma = 1.0 m/s^2 at the beginning (gradually annealed).  I confirmed that
   it initially produces accels all over the place.  However, it still quickly learns to push the accel to the max throughout
   the episode.
+
+10/28/22:
+* Time
+  19:28 - 21:41 int 15 = 1:58
+* Walked through a few series of manually specified accelerations through episodes in the new environment loop tester.  It
+  appears all the rewards make sense.  Further, running a full episode at speed just below the speed limit gives a much
+  better episode reward than going full throttle all the way through.
+* Changed the hidden layer activations from relu to tanh for both actor & critic.  No improvement.
+* Reduced the lower limit of the actor LR range.  Started to see some hope at the low end.  Need to go down into the e-7 area.
+* Turned down the Gaussian noise sigma from 1.0 to 0.1.  No noticeable effect on the reward plots.
+	* Inference on the best one of these (episode reward max ~0.8) showed that it seems to be learning to reduce its
+	  accelerations (held close to 0.2), but it still lets speeds max out, so maybe slowing down the LR more will allow
+	  it to discover the sweet spot.
+* Reduced both actor & critic LRs even more.
+* TIMING: on laptop battery, one episode of 145 iterations on 1 worker/1 env took 2:51.
+	  1 worker/4 env took 3:01 on battery (took 3:09 on AC power)
+
