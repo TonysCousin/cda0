@@ -63,9 +63,9 @@ params["actor_hiddens"]                     = tune.choice([ [256, 32],
                                                             [512, 64],
                                                           ])
 params["critic_hiddens"]                    = [256, 32]
-params["actor_lr"]                          = tune.loguniform(1e-6, 3e-5) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
+params["actor_lr"]                          = tune.loguniform(1e-7, 3e-5) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
 params["critic_lr"]                         = tune.loguniform(1e-6, 1e-4) #tune.loguniform(3e-5, 2e-4)
-params["tau"]                               = 0.005
+params["tau"]                               = tune.choice([0.0005, 0.001, 0.005])
 params["train_batch_size"]                  = 1024
 
 # ===== Params for TD3 (added to the DDPG params) ===========================================

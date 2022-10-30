@@ -340,7 +340,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         if self.training:
 
             ego_lane_id = int(self.prng.random()*2) #TODO: change to 3 once all lanes are used (also in else block below!)
-            ego_x = 0.0 #self.prng.random() * (SimpleHighwayRamp.SCENARIO_LENGTH - 10.0) #don't start at the very end of the road
+            ego_x = self.prng.random() * (SimpleHighwayRamp.SCENARIO_LENGTH - 10.0) #don't start at the very end of the road
             ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
 
         # Else, we are doing inference, so limit the randomness of the initial conditions

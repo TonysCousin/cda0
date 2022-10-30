@@ -325,4 +325,6 @@ Notes on the cda0 project
 	* I was unable to get checkpoints to load for inference engine - error about differing state dict param sets,
 	  even though I verified the network structures were specified the same.
 	* Max rewards were smaller than I had hoped (but I can't see exactly what's going on due to no inference).
-* Created new run 67f17, moving back to straight DDPG, with lane change control reenabled.
+* New training run using DDPG and using lane change control also (just lanes 0 & 1).  Changed reset() to randomize the
+  vehicle's initial location anywhere along the lane instead of just at the beginning (it was learning to just come to a
+  stop to avoid the perpetual negative rewards).
