@@ -310,8 +310,19 @@ Notes on the cda0 project
 
 10/30/22:
 * Time
-  15:08 - 
+  15:08 - 16:09 = 1:01
+  16:48 - 
 * Racecar toy taught me that it is important to keep the cumulative amount of possible penalties (over the episode) on the
   same order of magnitude as the completion reward.  I had had them about 2 orders of magnitude larger.  I also suspect that
   it will be beneficial to just let the system train a lot longer than I have, even though there hasn't been any clear
   progress in a few hundred iterations.
+* Applying these lessons to the cda0 project brought some quick success for the limited case of just speed control with TD3.
+	* Critic was [256, 32] for all trials.
+	* Found that actor network of [128, 16] is definitely too small.
+	* Best performers had actor of [256, 32].  They all learned quickly and reward curves were smooth.
+	* Actor network of [512, 128, 32] struggled to learn, but some trials did well. Best ones were the lowest LRs
+	  (1.2e-6 for actor and 4.7e-6 for critic)
+	* I was unable to get checkpoints to load for inference engine - error about differing state dict param sets,
+	  even though I verified the network structures were specified the same.
+	* Max rewards were smaller than I had hoped (but I can't see exactly what's going on due to no inference).
+* Created new run 67f17, moving back to straight DDPG, with lane change control reenabled.

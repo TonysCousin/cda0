@@ -11,7 +11,7 @@ from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 ray.init()
 
 # Define which learning algorithm we will use
-algo = "TD3"
+algo = "DDPG"
 params = ddpg.DEFAULT_CONFIG.copy() #a2c & td3 don't have defaults (td3 builds on ddpg)
 
 # Define the custom environment for Ray
@@ -27,7 +27,7 @@ params["framework"]                         = "torch"
 params["num_gpus"]                          = 1 #for the local worker
 params["num_cpus_per_worker"]               = 1 #also applies to the local worker and evaluation workers
 params["num_gpus_per_worker"]               = 0 #this has to allow for evaluation workers also
-params["num_workers"]                       = 1 #num remote workers (remember that there is a local worker also)
+params["num_workers"]                       = 12 #num remote workers (remember that there is a local worker also)
 params["num_envs_per_worker"]               = 1
 params["rollout_fragment_length"]           = 200 #timesteps
 params["gamma"]                             = 0.999 #tune.choice([0.99, 0.999])
@@ -41,15 +41,6 @@ params["seed"]                              = 17
 
 # ===== Params for DDPG =====================================================================
 
-params["actor_hiddens"]                     = tune.choice([ [256, 32],
-                                                            [512, 128, 32],
-                                                            [128, 16]
-                                                          ])
-params["critic_hiddens"]                    = [256, 32]
-params["actor_lr"]                          = tune.loguniform(1e-6, 1e-4) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
-params["critic_lr"]                         = tune.loguniform(1e-6, 1e-4) #tune.loguniform(3e-5, 2e-4)
-
-# ===== Params for TD3 (added to the DDPG params) ===========================================
 replay = params["replay_buffer_config"]
 replay["type"]                              = "MultiAgentReplayBuffer"
 replay["capacity"]                          = 1000000
@@ -60,21 +51,30 @@ exp["type"]                                 = "GaussianNoise"
 exp["random_timesteps"]                     = 10000
 exp["stddev"]                               = 0.3
 exp["initial_scale"]                        = 1.0
-exp["final_scale"]                          = 0.2
-exp["scale_timesteps"]                      = 1000000
-exp.pop("ou_sigma")
+exp["final_scale"]                          = 0.02
+exp["scale_timesteps"]                      = 1500000
+exp.pop("ou_sigma")                         #these ou items need to be removed if not using OU noise
 exp.pop("ou_theta")
 exp.pop("ou_base_scale")
 
 params["replay_buffer_config"]              = replay
 params["exploration_config"]                = exp
+params["actor_hiddens"]                     = tune.choice([ [256, 32],
+                                                            [512, 64],
+                                                          ])
+params["critic_hiddens"]                    = [256, 32]
+params["actor_lr"]                          = tune.loguniform(1e-6, 3e-5) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
+params["critic_lr"]                         = tune.loguniform(1e-6, 1e-4) #tune.loguniform(3e-5, 2e-4)
+params["tau"]                               = 0.005
+params["train_batch_size"]                  = 1024
+
+# ===== Params for TD3 (added to the DDPG params) ===========================================
+"""
 params["twin_q"]                            = True
 params["policy_delay"]                      = 2
 params["smooth_target_policy"]              = True
 params["l2_reg"]                            = 0.0
-params["tau"]                               = 0.005
-params["train_batch_size"]                  = 1024
-
+"""
 # ===== Params for PPO ======================================================================
 """
 params["lr"]                                = tune.loguniform(1e-6, 1e-4)
@@ -106,12 +106,12 @@ tune_config = tune.TuneConfig(
                 num_samples                 = 15 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 300,
-                    max_iterations          = 800,
-                    min_iterations          = 120,
+                    max_iterations          = 1000,
+                    min_iterations          = 150,
                     avg_over_latest         = 60,
-                    success_threshold       = 1.3,
+                    success_threshold       = 1.0,
                     failure_threshold       = 0.0,
-                    compl_std_dev           = 0.03
+                    compl_std_dev           = 0.02
                    )
 run_config = air.RunConfig(
                 name                        = "cda0-l01-free",
@@ -132,4 +132,4 @@ tuner = tune.Tuner(algo, param_space=params, tune_config=tune_config, run_config
 print("\n///// Tuner created.\n")
 
 result = tuner.fit()
-print("\n///// tuner.fit() returned: ", result) #we should only look at result[0] for some reason?
+print("\n///// tuner.fit() returned: ", type(result), " - ", result[0]) #we should only look at result[0] for some reason?

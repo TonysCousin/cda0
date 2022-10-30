@@ -346,7 +346,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Else, we are doing inference, so limit the randomness of the initial conditions
         else:
 
-            ego_lane_id = int(self.prng.random()*2) if self.init_ego_lane is None  else  self.init_ego_lane
+            ego_lane_id = int(self.prng.random()*2) if self.init_ego_lane is None  else  self.init_ego_lane #TODO: change to 3
             ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
             ego_speed = self.prng.random() * 25.0 + 5.0 if self.init_ego_speed is None  else self.init_ego_speed
 
@@ -493,7 +493,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         ran_off_road = False
 
 
-        action[1] = 0.0 #TODO debugging only!  Forces env to ignore lane change commands
+        #action[1] = 0.0 #TODO debugging only!  Forces env to ignore lane change commands
         self.ep_accels.append(action[0])
 
 

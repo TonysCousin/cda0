@@ -6,6 +6,7 @@ import gym
 import ray
 #import ray.rllib.algorithms.ppo as ppo
 import ray.rllib.algorithms.ddpg as ddpg
+import ray.rllib.algorithms.td3  as td3
 import pygame
 from pygame.locals import *
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
@@ -34,11 +35,10 @@ def main(argv):
     # Set up the environment
     config = ddpg.DEFAULT_CONFIG.copy()
     exp = config["exploration_config"]
-    exp.pop("ou_sigma")
+    exp["type"] = "GaussianNoise"
+    exp.pop("ou_sigma") #remvoe all ou items if OU noise is not being used
     exp.pop("ou_theta")
     exp.pop("ou_base_scale")
-    exp["type"] = "GaussianNoise"
-    config["exploration_config"] = exp
 
     env_config = {  "time_step_size":   0.5,
                     "debug":            0,
@@ -46,29 +46,13 @@ def main(argv):
                 }
 
     # These need to be same as in the checkpoint being read!
-    # Run 41f25-00003
-    config["actor_hiddens"]               = [256, 128]
-    config["critic_hiddens"]              = [100, 16]
-    # Run 41f25-00014
-    config["actor_hiddens"]               = [100, 16]
-    config["critic_hiddens"]              = [128, 32]
-    # Run 78fd9-00003
-    config["actor_hiddens"]               = [256, 128]
-    config["critic_hiddens"]              = [256, 128]
-    # Run f9f5e-00019
-    config["actor_hiddens"]               = [400, 100]
-    config["critic_hiddens"]              = [100, 16]
-    # Run 9d9a5-00001
-    config["actor_hiddens"]               = [400, 100]
-    config["critic_hiddens"]              = [128, 32]
-    # Run ???
-    config["actor_hiddens"]               = [512, 128, 32]
+    config["actor_hiddens"]               = [256, 32]
     config["critic_hiddens"]              = [256, 32]
 
-
+    config["exploration_config"] = exp
     config["env_config"] = env_config
     config["framework"] = "torch"
-    config["num_gpus"] = 0
+    config["num_gpus"] = 1
     config["num_workers"] = 1
     config["seed"] = 17
     env = SimpleHighwayRampWrapper(env_config)
