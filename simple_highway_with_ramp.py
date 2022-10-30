@@ -780,15 +780,15 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             # Else (episode ended successfully)
             else:
 
-                # Add amount inversely proportional to the length of the episode (1.0 @100 steps, 0 @ 300+ steps)
-                reward = max(1.5 - 0.005 * self.steps_since_reset, 0.0)
+                # Add amount inversely proportional to the length of the episode
+                reward = max(1.5 - 0.004 * self.steps_since_reset, 0.0)
                 explanation = "Successful episode! {} steps".format(self.steps_since_reset)
 
         # Else, episode still underway
         else:
 
-            # Add a small incentive for not crashing
-            reward += 0.0
+            # Add a small incentive to move quickly
+            reward -= 0.0002
 
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
@@ -802,10 +802,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT
             penalty = 0.0
             if norm_speed < 0.5:
-                penalty = -0.04 * norm_speed + 0.02
+                penalty = -0.002 * norm_speed + 0.001
                 explanation += "Low speed penalty {:.4f}. ".format(penalty)
             elif norm_speed > 1.0:
-                penalty = 0.2 * norm_speed - 0.2
+                penalty = 0.005 * norm_speed - 0.005
                 explanation += "HIGH speed penalty {:.4f}. ".format(penalty)
             reward -= penalty
 

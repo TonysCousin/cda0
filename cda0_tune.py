@@ -11,8 +11,8 @@ from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 ray.init()
 
 # Define which learning algorithm we will use
-algo = "DDPG"
-params = ddpg.DEFAULT_CONFIG.copy() #a2c requires empty dict
+algo = "TD3"
+params = ddpg.DEFAULT_CONFIG.copy() #a2c & td3 don't have defaults (td3 builds on ddpg)
 
 # Define the custom environment for Ray
 env_config = {}
@@ -28,7 +28,7 @@ params["num_gpus"]                          = 1 #for the local worker
 params["num_cpus_per_worker"]               = 1 #also applies to the local worker and evaluation workers
 params["num_gpus_per_worker"]               = 0 #this has to allow for evaluation workers also
 params["num_workers"]                       = 1 #num remote workers (remember that there is a local worker also)
-params["num_envs_per_worker"]               = 4
+params["num_envs_per_worker"]               = 1
 params["rollout_fragment_length"]           = 200 #timesteps
 params["gamma"]                             = 0.999 #tune.choice([0.99, 0.999])
 params["evaluation_interval"]               = 6
@@ -41,35 +41,39 @@ params["seed"]                              = 17
 
 # ===== Params for DDPG =====================================================================
 
-explore_config = params["exploration_config"]
-explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-explore_config["stddev"]                    = tune.uniform(0.1, 0.5) #this param is specific to GaussianNoise
-explore_config["random_timesteps"]          = tune.qrandint(0, 20000, 50000) #was 20000
-explore_config["scale_timesteps"]           = tune.choice([100000, 400000]) #was 900k
-explore_config.pop("ou_base_scale")         #need to remove since this is specific to OU noise
-explore_config.pop("ou_theta")              #need to remove since this is specific to OU noise
-explore_config.pop("ou_sigma")              #need to remove since this is specific to OU noise
-
-rb_config = params["replay_buffer_config"]
-rb_config["capacity"]                       = 1000000
-
-params["explore"]                           = True
-params["exploration_config"]                = explore_config
-params["replay_buffer_config"]              = rb_config
-params["actor_hidden_activation"]           = "tanh"
-params["critic_hidden_activation"]          = "tanh"
-params["actor_hiddens"]                     = [512, 128, 32]
-"""
-params["actor_hiddens"]                     = tune.choice([ [400, 100],
+params["actor_hiddens"]                     = tune.choice([ [256, 32],
                                                             [512, 128, 32],
-                                                            [512, 128, 32],
-                                                            [400, 200, 64]
+                                                            [128, 16]
                                                           ])
-"""
 params["critic_hiddens"]                    = [256, 32]
-params["actor_lr"]                          = tune.loguniform(4e-8, 1e-7) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
-params["critic_lr"]                         = tune.loguniform(1e-6, 1e-5) #tune.loguniform(3e-5, 2e-4)
-params["tau"]                               = tune.loguniform(0.00001, 0.003) #tune.loguniform(0.0005, 0.002)
+params["actor_lr"]                          = tune.loguniform(1e-6, 1e-4) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
+params["critic_lr"]                         = tune.loguniform(1e-6, 1e-4) #tune.loguniform(3e-5, 2e-4)
+
+# ===== Params for TD3 (added to the DDPG params) ===========================================
+replay = params["replay_buffer_config"]
+replay["type"]                              = "MultiAgentReplayBuffer"
+replay["capacity"]                          = 1000000
+replay["learning_starts"]                   =   10000
+
+exp = params["exploration_config"]
+exp["type"]                                 = "GaussianNoise"
+exp["random_timesteps"]                     = 10000
+exp["stddev"]                               = 0.3
+exp["initial_scale"]                        = 1.0
+exp["final_scale"]                          = 0.2
+exp["scale_timesteps"]                      = 1000000
+exp.pop("ou_sigma")
+exp.pop("ou_theta")
+exp.pop("ou_base_scale")
+
+params["replay_buffer_config"]              = replay
+params["exploration_config"]                = exp
+params["twin_q"]                            = True
+params["policy_delay"]                      = 2
+params["smooth_target_policy"]              = True
+params["l2_reg"]                            = 0.0
+params["tau"]                               = 0.005
+params["train_batch_size"]                  = 1024
 
 # ===== Params for PPO ======================================================================
 """

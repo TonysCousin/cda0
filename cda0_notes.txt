@@ -144,7 +144,7 @@ Notes on the cda0 project
   Modified the reward shape a bit to better emphasize completing the course as fast as possible.
 * New tuning run (b5410) to finalize work on lane change issues.
 
-10/21/22:
+10/21/22 Fri:
 * Time
   16:52 - 19:37, int 23 = 2:22
   20:12 - 21:12 = 1:00
@@ -162,7 +162,7 @@ Notes on the cda0 project
 * During training, I continued to write the graphics code, but in separate copies of the files: inference.py,
   simple_highway_with_ramp.py, using the suffix "_new" on each one, so it won't affect the ongoing training.
 
-10/22/22:
+10/22/22 Sat:
 * Time
   10:18 - 11:00 = 0:42
   11:34 - 12:55 = 1:21
@@ -184,7 +184,7 @@ Notes on the cda0 project
 
 ----- time logged to Process Dashboard to here -----
 
-10/23/22:
+10/23/22 Sun:
 * Time
   15:11 - 15:30 = 0:19
   20:16 - 21:03 = 0:47
@@ -298,8 +298,20 @@ Notes on the cda0 project
 10/29/22:
 * Time
   09:00 - 09:18 = 0:18
-  11:29 - 
+  11:29 - 12:08 = 0:39
+  16:15 - 18:23 = 2:08
 * Runs from last night with much lower LRs kept the max reward steady > 2, and even mean rewards stayed steady instead of
   dropping, but still < -1, since the mins never improved.  It does appear that gamma = 0.999 is important, and a more
   narrow range of LRs is the sweet spot.
 * More tuning with tau.  Doesn't make a big difference. Nor does adding more Gaussian noise.
+* Switched to TD3 algorithm, using the defaults suggested in the algo manual (they aren't provided to copy).
+* Took a break to train the racecar project, which is a simplified version of this, only trying to drive straight down
+  a lane as fast as possible, but while respecting the speed limit.
+
+10/30/22:
+* Time
+  15:08 - 
+* Racecar toy taught me that it is important to keep the cumulative amount of possible penalties (over the episode) on the
+  same order of magnitude as the completion reward.  I had had them about 2 orders of magnitude larger.  I also suspect that
+  it will be beneficial to just let the system train a lot longer than I have, even though there hasn't been any clear
+  progress in a few hundred iterations.

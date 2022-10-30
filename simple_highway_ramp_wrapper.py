@@ -72,6 +72,13 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         else:
             o = raw_obs
 
+
+        #TODO debug only
+        #print("///// wrapper.step: scaled obs vector =")
+        #for j in range(len(o)):
+        #    print("      {:2d}:  {}".format(j, o[j]))
+
+
         return o, r, d, i
 
 
