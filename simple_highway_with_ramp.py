@@ -805,7 +805,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 penalty = -0.002 * norm_speed + 0.001
                 explanation += "Low speed penalty {:.4f}. ".format(penalty)
             elif norm_speed > 1.0:
-                penalty = 0.005 * norm_speed - 0.005
+                penalty = 0.01 * norm_speed - 0.01
                 explanation += "HIGH speed penalty {:.4f}. ".format(penalty)
             reward -= penalty
 
@@ -815,15 +815,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 reward -= penalty
                 explanation += "Lane change penalty {:.4f}. ".format(penalty)
 
-            # Penalty for lane change command not near one of the quantized action values (worst case -0.01)
-            """
+            # Penalty for lane change command not near one of the quantized action values
             lcc = self.obs[self.EGO_LANE_CMD_CUR]
             term = abs(lcc) - 0.5
-            penalty = 0.004*(1.0 - 4.0*term*term)
+            penalty = 0.0004*(1.0 - 4.0*term*term)
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Ln chg cmd penalty {:.4f}. ".format(penalty)
-            """
 
         reward = min(max(reward, -2.0), 2.0)
         if self.debug > 0:

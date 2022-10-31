@@ -60,7 +60,7 @@ exp.pop("ou_base_scale")
 params["replay_buffer_config"]              = replay
 params["exploration_config"]                = exp
 params["actor_hiddens"]                     = tune.choice([ [256, 32],
-                                                            [512, 64],
+                                                            [200, 20],
                                                           ])
 params["critic_hiddens"]                    = [256, 32]
 params["actor_lr"]                          = tune.loguniform(1e-7, 3e-5) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
@@ -107,9 +107,9 @@ tune_config = tune.TuneConfig(
               )
 stopper = StopLogic(max_timesteps           = 300,
                     max_iterations          = 1000,
-                    min_iterations          = 150,
+                    min_iterations          = 300,
                     avg_over_latest         = 60,
-                    success_threshold       = 1.0,
+                    success_threshold       = 1.1,
                     failure_threshold       = 0.0,
                     compl_std_dev           = 0.02
                    )

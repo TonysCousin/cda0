@@ -311,7 +311,8 @@ Notes on the cda0 project
 10/30/22:
 * Time
   15:08 - 16:09 = 1:01
-  16:48 - 
+  16:48 - 17:53 = 1:05
+  21:33 - 
 * Racecar toy taught me that it is important to keep the cumulative amount of possible penalties (over the episode) on the
   same order of magnitude as the completion reward.  I had had them about 2 orders of magnitude larger.  I also suspect that
   it will be beneficial to just let the system train a lot longer than I have, even though there hasn't been any clear
@@ -328,3 +329,18 @@ Notes on the cda0 project
 * New training run using DDPG and using lane change control also (just lanes 0 & 1).  Changed reset() to randomize the
   vehicle's initial location anywhere along the lane instead of just at the beginning (it was learning to just come to a
   stop to avoid the perpetual negative rewards).
+	* Five of the 15 trials appear to have succeeded! Run 8c03d using critic net [256,32]. Results are in the
+	  cda0-l01-free dir.
+	* Trial 0 had a long & jagged learning curve, but got there. Actor [256, 32], actor LR = 2.5e-5, critic LR = 3.1e-5.
+	* Trial 2 had actor [256, 32], actor LR = 8.2e-6, critic LR = 1.6e-5.
+	* Trial 10 had actor [256, 32], actor LR = 7.8e-7, critic LR = 1.1e-6.
+	* Trial 11 had the fastest learniing curve, with actor [256, 32], actor LR = 9.6e-7, critic LR = 7.7e-5.  In
+	  inference it used modestly high accel all the time and ignored the speed penalty. Rewards ~0.94
+	* Trial 12 had actor [256, 32], actor LR = 4.7e-6, critic LR = 1.8e-5.
+	* None of the trials with an actor net of [512, 64] was even close.
+* Next run includes the following mods:
+	* Increased success threshold from 1.0 to 1.1, which is not reachable by going full throttle all the time.
+	* Increased minimum required iterations to 300 to ensure we have plenty of settling time.
+	* Added penalty for LC cmd values near +/-0.5.
+	* Doubled the penalty for high speed violation (previously maxed out at 0.001).
+* Results of this run (be9bc) are...
