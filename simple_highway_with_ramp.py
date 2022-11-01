@@ -791,11 +791,13 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             reward -= 0.0002
 
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
+            """
             jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
             penalty = 0.001 * abs(jerk1) / SimpleHighwayRamp.MAX_JERK
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Jerk penalty {:.4f}. ".format(penalty)
+            """
 
             # Penalty for speed exceeding the upper speed limit (penalty = 0.04 at 1.2*speed limit) or for
             # going way slow (max penalty = 0.02 at zero speed)
@@ -805,7 +807,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 penalty = -0.002 * norm_speed + 0.001
                 explanation += "Low speed penalty {:.4f}. ".format(penalty)
             elif norm_speed > 1.0:
-                penalty = 0.01 * norm_speed - 0.01
+                penalty = 0.04 * norm_speed - 0.04
                 explanation += "HIGH speed penalty {:.4f}. ".format(penalty)
             reward -= penalty
 

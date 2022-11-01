@@ -83,8 +83,19 @@ def main(argv):
 
         # Display current status of the ego vehicle
         graphics.update(action, raw_obs)
-        #if step == 1:
-        #   input("///// Press Enter to begin...")
+
+        # Wait for user to indicate okay to begin animation
+        """
+        if step == 1:
+            print("///// Press Down key to begin...")
+            go = False
+            while not go:
+                keys = pygame.key.get_pressed() #this doesn't work
+                if keys[pygame.K_DOWN]:
+                    go = True
+                    break;
+        """
+
         print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:7.4f} {}"
                 .format(step, action[0], action[1], raw_obs[0], raw_obs[2], raw_obs[1], reward, info["reward_detail"]))
 

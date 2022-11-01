@@ -182,8 +182,6 @@ Notes on the cda0 project
   depend on reset() to handle it.  I've added a "training" config option that opens up these random ranges; if it is False or
   undefined, the initial conditions will be as they were before.
 
------ time logged to Process Dashboard to here -----
-
 10/23/22 Sun:
 * Time
   15:11 - 15:30 = 0:19
@@ -312,7 +310,7 @@ Notes on the cda0 project
 * Time
   15:08 - 16:09 = 1:01
   16:48 - 17:53 = 1:05
-  21:33 - 
+  21:33 - 22:56 = 1:23
 * Racecar toy taught me that it is important to keep the cumulative amount of possible penalties (over the episode) on the
   same order of magnitude as the completion reward.  I had had them about 2 orders of magnitude larger.  I also suspect that
   it will be beneficial to just let the system train a lot longer than I have, even though there hasn't been any clear
@@ -331,16 +329,38 @@ Notes on the cda0 project
   stop to avoid the perpetual negative rewards).
 	* Five of the 15 trials appear to have succeeded! Run 8c03d using critic net [256,32]. Results are in the
 	  cda0-l01-free dir.
-	* Trial 0 had a long & jagged learning curve, but got there. Actor [256, 32], actor LR = 2.5e-5, critic LR = 3.1e-5.
-	* Trial 2 had actor [256, 32], actor LR = 8.2e-6, critic LR = 1.6e-5.
-	* Trial 10 had actor [256, 32], actor LR = 7.8e-7, critic LR = 1.1e-6.
-	* Trial 11 had the fastest learniing curve, with actor [256, 32], actor LR = 9.6e-7, critic LR = 7.7e-5.  In
-	  inference it used modestly high accel all the time and ignored the speed penalty. Rewards ~0.94
-	* Trial 12 had actor [256, 32], actor LR = 4.7e-6, critic LR = 1.8e-5.
+	* Trial 0 had a long & jagged learning curve, but got there. Actor [256, 32], actor LR = 2.5e-5, critic LR = 3.1e-5,
+	  tau = 0.005.
+	* Trial 2 had actor [256, 32], actor LR = 8.2e-6, critic LR = 1.6e-5, tau = 0.005.
+	* Trial 10 had actor [256, 32], actor LR = 7.8e-7, critic LR = 1.1e-6, tau = 0.001.
+	* Trial 11 had the fastest learniing curve, with actor [256, 32], actor LR = 9.6e-7, critic LR = 7.7e-5,
+	  tau = 0.005.  In inference it used modestly high accel all the time and ignored the speed penalty. Rewards ~0.94.
+	* Trial 12 had actor [256, 32], actor LR = 4.7e-6, critic LR = 1.8e-5, tau = 0.001.
 	* None of the trials with an actor net of [512, 64] was even close.
 * Next run includes the following mods:
 	* Increased success threshold from 1.0 to 1.1, which is not reachable by going full throttle all the time.
 	* Increased minimum required iterations to 300 to ensure we have plenty of settling time.
-	* Added penalty for LC cmd values near +/-0.5.
-	* Doubled the penalty for high speed violation (previously maxed out at 0.001).
-* Results of this run (be9bc) are...
+	* Added penalty for LC cmd values near +/-0.5. 
+	* Doubled the penalty for high speed violation (previously maxed out at 0.001). 
+	* Results of this run (be9bc) showed that the [200, 20] actor network could achieve success, but not as easily.
+	  Also, inference of a couple winners showed they still prefer full speed and a lower episode reward.
+* Next run (23f2e) doubled the high speed penalty again.
+
+----- time logged to Process Dashboard to here -----
+
+10/31/22 Mon:
+* Time
+  16:18 - 17:00 = 1:42
+  20:50 - 
+* Results of 23f2e run:
+	* Several trials reached episode reward between 1.0 and 1.05 quickly, and mostly stayed there.
+	* None reached the success threshold of 1.1.
+	* Best trials were 4, 7, 9, 13.  Others that reached 1.0 but had some downward spikes: 1, 8, 12
+	* It appears that probability of success favors the [256, 32] network over the [200, 20] actor; also the larger
+	  tau (0.005) seems more favored.  Also, as expected, a ratio of actor LR / critic LR ~0.1 seems best.
+	* Inference shows that these models still want to use a high accel and are very reluctant to change its value.
+* New run with following changes (8755a):
+	* Trying larger 2-layer networks (the 200 last time wanted higher accels)
+	* Eliminate the jerk penalty to encourage large changes in accel.
+	* Double the high speed penalty (it was maxing at 0.0041).
+	* Use OU noise to be more realistic in generating variations in accel.

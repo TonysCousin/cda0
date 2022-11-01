@@ -47,20 +47,20 @@ replay["capacity"]                          = 1000000
 replay["learning_starts"]                   =   10000
 
 exp = params["exploration_config"]
-exp["type"]                                 = "GaussianNoise"
+exp["type"]                                 = "OrnsteinUhlenbeckNoise"
 exp["random_timesteps"]                     = 10000
-exp["stddev"]                               = 0.3
+#exp["stddev"]                               = 0.5 #used for GaussianNoise only
 exp["initial_scale"]                        = 1.0
 exp["final_scale"]                          = 0.02
 exp["scale_timesteps"]                      = 1500000
-exp.pop("ou_sigma")                         #these ou items need to be removed if not using OU noise
-exp.pop("ou_theta")
-exp.pop("ou_base_scale")
+#exp.pop("ou_sigma")                         #these ou items need to be removed if not using OU noise
+#exp.pop("ou_theta")
+#exp.pop("ou_base_scale")
 
 params["replay_buffer_config"]              = replay
 params["exploration_config"]                = exp
 params["actor_hiddens"]                     = tune.choice([ [256, 32],
-                                                            [200, 20],
+                                                            [400, 64],
                                                           ])
 params["critic_hiddens"]                    = [256, 32]
 params["actor_lr"]                          = tune.loguniform(1e-7, 3e-5) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
