@@ -351,7 +351,7 @@ Notes on the cda0 project
 10/31/22 Mon:
 * Time
   16:18 - 17:00 = 1:42
-  20:50 - 
+  20:50 - 21:15 = 0:25
 * Results of 23f2e run:
 	* Several trials reached episode reward between 1.0 and 1.05 quickly, and mostly stayed there.
 	* None reached the success threshold of 1.1.
@@ -359,8 +359,31 @@ Notes on the cda0 project
 	* It appears that probability of success favors the [256, 32] network over the [200, 20] actor; also the larger
 	  tau (0.005) seems more favored.  Also, as expected, a ratio of actor LR / critic LR ~0.1 seems best.
 	* Inference shows that these models still want to use a high accel and are very reluctant to change its value.
-* New run with following changes (8755a):
+* New run with following changes (3b68a):
 	* Trying larger 2-layer networks (the 200 last time wanted higher accels)
 	* Eliminate the jerk penalty to encourage large changes in accel.
 	* Double the high speed penalty (it was maxing at 0.0041).
 	* Use OU noise to be more realistic in generating variations in accel.
+* Results: successful trials have mean rewards plateauing ~0.8, despite max rewards consistently being > 1.4. 
+  Inference run still accelerates to max speed and stays there.  Lane chg commands remain close to 0, however.
+* New run with following changes
+	* Tuning noise magnitude
+	* Tuning with larger actor network (512 nodes in first layer)
+	* Tuning with larger choice of critic network
+	* Doubled the high speed penalty again to give max of 0.016
+
+11/1/22 Tue:
+* Time
+  04:07 - 
+* Analysis of prev run:
+	* No cases were successful.  However, 3 of them quickly reached mean reward ~0.5 and stayed there.  Then
+	  2 of them fairly quickly (~500k steps) reached mean reward ~0.2 then slowly climbed to reach 0.8 after
+	  7M steps.  It appears they would keep going with further training.
+	* The two promising ones had both networks at [512, 64], noise in use (for 3M steps), and a LR ratio of
+	  actor/critic close to 0.1 with actor LR between 2e-7 and 5e-7.  In each case their min reward stayed around
+	  -1 and max stayed at 1.48.
+	* On inference, they both had learned that small positive accel is the answer, and kept the LC cmd quite
+	  small as well.  They did not learn to maximize speed within the safe range, however.
+	* The four that got almost as high results showed a similar LR ratio, and 3/4 had the larger critic network.
+* Modified reward code to randomly cancel the episode completion bonus if high speed violation occurs; probability
+  of cancellation is proportional to the amount of excess speed involved in that time step.

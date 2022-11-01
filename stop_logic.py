@@ -118,7 +118,7 @@ class StopLogic(Stopper):
                         print("\n///// Stopping trial due to no further change")
                         return True
 
-                    # If the avg mean reward over recent history is below the success threshold then
+                    # If the avg mean reward over recent history is below the failure threshold then
                     if avg_of_mean < self.failure_avg_threshold:
 
                         # If the max reward is below success threshold and not climbing significantly, then stop as a failure
@@ -141,9 +141,9 @@ class StopLogic(Stopper):
                                 print("\n///// Stopping trial - no improvement in {} iters.\n".format(self.most_recent))
                                 return True
 
-                        # If the mean is a lot closer to the min than to the max then stop as failure
+                        # If the mean is closer to the min than to the max then stop as failure
                         avg_of_min = mean(list(self.trials[trial_id]["min_rewards"]))
-                        if avg_of_mean - avg_of_min < 0.25*(avg_of_max - avg_of_min):
+                        if avg_of_mean - avg_of_min < 0.5*(avg_of_max - avg_of_min):
                             print("\n///// Stopping trial - no improvement and min reward is dominating.")
                             return True
 

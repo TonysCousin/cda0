@@ -282,6 +282,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.lane_change_count = 0 #num consecutive time steps since a lane change was begun
         self.steps_since_reset = 0 #length of the current episode in time steps
         self.stopped_count = 0 #num consecutive time steps in an episode where vehicle speed is zero
+        self.reward_for_completion = True #should we award the episode completion bonus?
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
         #self.render_mode = render_mode
@@ -415,11 +416,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.lane_change_count = 0
         self.steps_since_reset = 0
         self.stopped_count = 0
-
-
-        self.ep_accels = [] #TODO for debug only
-        self.iter_count += 1
-
+        self.reward_for_completion = True
 
         if self.debug > 1:
             print("///// End of reset().")
@@ -780,9 +777,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             # Else (episode ended successfully)
             else:
 
-                # Add amount inversely proportional to the length of the episode
-                reward = max(1.5 - 0.004 * self.steps_since_reset, 0.0)
-                explanation = "Successful episode! {} steps".format(self.steps_since_reset)
+                # If we are allowed to reward the completion bonus then add amount inversely proportional
+                # to the length of the episode.
+                if self.reward_for_completion:
+                    reward = max(1.5 - 0.004 * self.steps_since_reset, 0.0)
+                    explanation = "Successful episode! {} steps".format(self.steps_since_reset)
+                else:
+                    reward = 0.0
+                    explanation = "Completed episode, but no bonus due to rule violation."
 
         # Else, episode still underway
         else:
@@ -799,16 +801,24 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 explanation += "Jerk penalty {:.4f}. ".format(penalty)
             """
 
-            # Penalty for speed exceeding the upper speed limit (penalty = 0.04 at 1.2*speed limit) or for
-            # going way slow (max penalty = 0.02 at zero speed)
+            # Penalty for going way slow
             norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT
             penalty = 0.0
             if norm_speed < 0.5:
                 penalty = -0.002 * norm_speed + 0.001
                 explanation += "Low speed penalty {:.4f}. ".format(penalty)
+
+            # Penalty for exceeding roadway speed limit - in some cases, this triggers a cancellation of the
+            # eventual completion award (similar punishment to stopping the episode, but without changing the
+            # physical environment)
             elif norm_speed > 1.0:
-                penalty = 0.04 * norm_speed - 0.04
-                explanation += "HIGH speed penalty {:.4f}. ".format(penalty)
+                penalty = 0.08 * norm_speed - 0.08
+                explanation += "HIGH speed penalty {:.4f}".format(penalty)
+                ceiling = 0.1*(norm_speed - 1.0)
+                if self.prng.random() < ceiling:
+                    self.reward_for_completion = False
+                    explanation += "*"
+                explanation += ". "
             reward -= penalty
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
