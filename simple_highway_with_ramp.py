@@ -283,6 +283,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.steps_since_reset = 0 #length of the current episode in time steps
         self.stopped_count = 0 #num consecutive time steps in an episode where vehicle speed is zero
         self.reward_for_completion = True #should we award the episode completion bonus?
+        self.iter_count = 0 #number of training iterations (number of calls to reset())
+
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
         #self.render_mode = render_mode
@@ -297,11 +299,6 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.clock = None
         if self.debug == 2:
             print("///// init complete.")
-
-
-        self.iter_count = 0 #TODO debug only
-
-
 
 
     def seed(self, seed=None):
@@ -339,14 +336,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         ego_x = None
         ego_speed = None
         if self.training:
-
             ego_lane_id = int(self.prng.random()*2) #TODO: change to 3 once all lanes are used (also in else block below!)
-            ego_x = self.prng.random() * (SimpleHighwayRamp.SCENARIO_LENGTH - 10.0) #don't start at the very end of the road
+            m = SimpleHighwayRamp.SCENARIO_LENGTH - 10.0 #initially can start almost anywhere along the track
+            max_distance = max(self.iter_count * (100.0 - m)/250.0 + m, 100.0) #decreases over 250 iterations
+            ego_x = self.prng.random() * max_distance
             ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
 
         # Else, we are doing inference, so limit the randomness of the initial conditions
         else:
-
             ego_lane_id = int(self.prng.random()*2) if self.init_ego_lane is None  else  self.init_ego_lane #TODO: change to 3
             ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
             ego_speed = self.prng.random() * 25.0 + 5.0 if self.init_ego_speed is None  else self.init_ego_speed
@@ -417,6 +414,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.steps_since_reset = 0
         self.stopped_count = 0
         self.reward_for_completion = True
+        self.iter_count += 1
 
         if self.debug > 1:
             print("///// End of reset().")
@@ -488,11 +486,6 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # It's legal, but not desirable, to command opposite lane change directions in consecutive time steps.
         # TODO future: replace instance variables lane_change_underway and lane_id with those in vehicle[0]
         ran_off_road = False
-
-
-        #action[1] = 0.0 #TODO debugging only!  Forces env to ignore lane change commands
-        self.ep_accels.append(action[0])
-
 
         if action[1] < -0.5  or  action[1] > 0.5  or  self.lane_change_underway != "none":
             if self.lane_change_underway == "none": #count should always be 0 in this case, so initiate a new count
@@ -629,13 +622,6 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             for i, v in enumerate(self.vehicles):
                 v.print(i)
             print("      reason = {}".format(return_info["reason"]))
-
-        """
-        if done  and  self.iter_count >= 2: #TODO for debugging only
-            self.iter_count = 0
-            print("///// Ep done: step r = {:.4f}, {}".format(reward, return_info["reward_detail"]))
-            print("      Ep accels = {}".format(self.ep_accels))
-        """
 
         return self.obs, reward, done, return_info
 
@@ -814,7 +800,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             elif norm_speed > 1.0:
                 penalty = 0.08 * norm_speed - 0.08
                 explanation += "HIGH speed penalty {:.4f}".format(penalty)
-                ceiling = 0.1*(norm_speed - 1.0)
+                ceiling = 0.2*(norm_speed - 1.0)
                 if self.prng.random() < ceiling:
                     self.reward_for_completion = False
                     explanation += "*"

@@ -47,7 +47,7 @@ def main(argv):
 
     # These need to be same as in the checkpoint being read!
     config["actor_hiddens"]               = [512, 64] #[256, 32]
-    config["critic_hiddens"]              = [512, 64]
+    config["critic_hiddens"]              = [768, 80]
 
     config["exploration_config"] = exp
     config["env_config"] = env_config

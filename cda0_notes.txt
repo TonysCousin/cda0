@@ -374,7 +374,8 @@ Notes on the cda0 project
 
 11/1/22 Tue:
 * Time
-  04:07 - 
+  04:07 - 04:47 = 0:40
+  11:46 - 
 * Analysis of prev run:
 	* No cases were successful.  However, 3 of them quickly reached mean reward ~0.5 and stayed there.  Then
 	  2 of them fairly quickly (~500k steps) reached mean reward ~0.2 then slowly climbed to reach 0.8 after
@@ -387,3 +388,13 @@ Notes on the cda0 project
 	* The four that got almost as high results showed a similar LR ratio, and 3/4 had the larger critic network.
 * Modified reward code to randomly cancel the episode completion bonus if high speed violation occurs; probability
   of cancellation is proportional to the amount of excess speed involved in that time step.
+	* Similar to previous run, a couple cases gradually increased mean reward (max ~0.7).  These were 0, 2, 3
+	  (for a while, then dropped off).  These all had actor network of [512, 64] and critic network of [768, 80]
+	  and similar LRs: actor ~3e-7, critic ~2e-5.
+	* Inference on two of them showed same pattern of sticking to very small, positive accelerations, regardless
+	  of initial speed, and letting it run into the high speed violation.
+* Modified reset() method to change initial position of the vehicle during training.  It had been allowed to start
+  anywhere along the route, but I feel that is encouraging it to go for the big score and ignore speed limits, and
+  therefore, not worry much about accel.  As iterations progress, the initial position will gradually be squeezed
+  toward the beginning of the track, forcing it to train for longer episodes.  Also adjusted the probability of
+  cancelling the completion bonus upward (to worst case 4%).
