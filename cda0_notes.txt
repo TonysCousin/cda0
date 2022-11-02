@@ -375,7 +375,9 @@ Notes on the cda0 project
 11/1/22 Tue:
 * Time
   04:07 - 04:47 = 0:40
-  11:46 - 
+  11:46 - 12:20 = 0:34
+  15:56 - 16:32 = 0:36
+  19:01 - 20:03 = 1:02
 * Analysis of prev run:
 	* No cases were successful.  However, 3 of them quickly reached mean reward ~0.5 and stayed there.  Then
 	  2 of them fairly quickly (~500k steps) reached mean reward ~0.2 then slowly climbed to reach 0.8 after
@@ -398,3 +400,17 @@ Notes on the cda0 project
   therefore, not worry much about accel.  As iterations progress, the initial position will gradually be squeezed
   toward the beginning of the track, forcing it to train for longer episodes.  Also adjusted the probability of
   cancelling the completion bonus upward (to worst case 4%).
+	* Most cases resulted in flat mean reward curves plateauing at ~-0.2, so no good.  Three reached positive
+	  territory, however.
+	* All 3 best trials used actor of [512, 64] at LR between 2e-7 and 7e-7, and critic of [768, 80] at LR
+	  between 2e-5 and 5e-5.
+	* The biggest peak mean reward (trial 14) was 0.3, but it eventually tailed off to < 0 (after 5M steps).
+	* The worst performing of the 3 (trial 12) peaked ~0.1, then quickly dropped to < 0 after 2.5M steps.
+	* Inference runs show that these didn't perform any better than the previous training run.  They learned
+	  to keep accel small, but have no idea that speeding up to the speed limit is advantageous, or that
+	  slowing down if above it is good.
+	* I confirmed that actions coming into the step() method tend to cover the full range of possible values,
+	  at least early in a training run.
+* Modified reward code to add an accel bonus if recent (4 steps) avg speed > speed limit and avg accel over that
+  period is < 0, and vice versa for speeds below speed limit (exceept for a deadband).  Bonus increases with
+  larger speed difference from the limit and with larger acceleration magnitude.

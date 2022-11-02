@@ -1,4 +1,5 @@
-from distutils.log import debug
+from collections import deque
+from statistics import mean
 import gym
 from gym.spaces import Discrete, Box
 import numpy as np
@@ -284,6 +285,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.stopped_count = 0 #num consecutive time steps in an episode where vehicle speed is zero
         self.reward_for_completion = True #should we award the episode completion bonus?
         self.iter_count = 0 #number of training iterations (number of calls to reset())
+        self.accel_hist = deque(maxlen = 4)
+        self.speed_hist = deque(maxlen = 4)
 
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -415,6 +418,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.stopped_count = 0
         self.reward_for_completion = True
         self.iter_count += 1
+        self.accel_hist.clear()
+        self.speed_hist.clear()
 
         if self.debug > 1:
             print("///// End of reset().")
@@ -775,8 +780,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Else, episode still underway
         else:
 
-            # Add a small incentive to move quickly
-            reward -= 0.0002
+            # Since we tend to start an episode near the beginning of the track, it needs some incentive
+            # to continue to the next time step, until it learns there is a big carrot at the end.
+            reward += 0.0005
 
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
             """
@@ -803,9 +809,39 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 ceiling = 0.2*(norm_speed - 1.0)
                 if self.prng.random() < ceiling:
                     self.reward_for_completion = False
-                    explanation += "*"
-                explanation += ". "
+                    explanation += "* "
+
             reward -= penalty
+
+            # Track historical speed & accels for possible incentives
+            self.accel_hist.append(self.obs[self.EGO_ACCEL_CMD_CUR])
+            self.speed_hist.append(norm_speed)
+            avg_accel = 0.0
+            avg_speed = SimpleHighwayRamp.ROAD_SPEED_LIMIT
+            if len(self.accel_hist) == self.accel_hist.maxlen:
+                avg_accel = mean(self.accel_hist)
+                avg_speed = mean(self.speed_hist)
+            bonus = 0.0
+            max_bonus = 0.02
+
+            # If recent speed was above speed limit and avg accel since then was negative then
+            if self.speed_hist[0] > 1.02  and  self.speed_hist[-1] > 1.0  and  avg_accel < 0.0:
+
+                # Award a bonus proportional to the ratio of accel / excess speed
+                slope = -avg_accel/SimpleHighwayRamp.MAX_ACCEL * max_bonus / (0.2 - 0.02)
+                bonus = slope * (self.speed_hist[0] - 1.02)
+
+            # Else if recent speed was significantly below speed limit and avg accel since then was positive then
+            elif self.speed_hist[0] < 0.95  and self.speed_hist[-1] < 1.0  and  avg_accel > 0.0:
+
+                # Award a bonus proportional to the ratio of accel / speed deficit
+                intercept = avg_accel / SimpleHighwayRamp.MAX_ACCEL * max_bonus
+                slope = -intercept / 0.95
+                bonus = slope * self.speed_hist[0] + intercept
+
+            if bonus > 0.0001:
+                reward += bonus
+                explanation += "Accel bonus {:.4f}. ".format(bonus)
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
