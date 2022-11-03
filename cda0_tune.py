@@ -6,6 +6,7 @@ from ray import air, tune
 import ray.rllib.algorithms.ddpg as ddpg
 
 from stop_logic import StopLogic
+from stop_long  import StopLong
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 
 ray.init()
@@ -48,26 +49,24 @@ replay["learning_starts"]                   =   10000
 
 exp = params["exploration_config"]
 exp["type"]                                 = "OrnsteinUhlenbeckNoise"
-exp["random_timesteps"]                     = 10000
+exp["random_timesteps"]                     = 100000
 #exp["stddev"]                               = 0.5 #used for GaussianNoise only
 exp["initial_scale"]                        = 1.0 #tune.choice([1.0, 0.05])
-exp["final_scale"]                          = 0.01
+exp["final_scale"]                          = 0.1
 exp["scale_timesteps"]                      = 4000000
-exp["ou_sigma"]                             = 0.5
+exp["ou_sigma"]                             = 1.0
 #exp.pop("ou_sigma")                         #these ou items need to be removed if not using OU noise
 #exp.pop("ou_theta")
 #exp.pop("ou_base_scale")
 
 params["replay_buffer_config"]              = replay
 params["exploration_config"]                = exp
-params["actor_hiddens"]                     = tune.choice([ [512, 64],
-                                                            [768, 80]
-                                                          ])
+params["actor_hiddens"]                     = [512, 64] #tune.choice([ [512, 64],
 params["critic_hiddens"]                    = [768, 80] #tune.choice([[768, 80],
-params["actor_lr"]                          = tune.loguniform(1e-7, 3e-6) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
-params["critic_lr"]                         = tune.loguniform(4e-6, 1e-4) #tune.loguniform(3e-5, 2e-4)
+params["actor_lr"]                          = tune.loguniform(7e-8, 5e-7) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
+params["critic_lr"]                         = tune.loguniform(3e-5, 1e-4) #tune.loguniform(3e-5, 2e-4)
 params["tau"]                               = 0.005 #tune.choice([0.0005, 0.001, 0.005])
-params["train_batch_size"]                  = 1024
+params["train_batch_size"]                  = tune.choice([8, 16, 32, 128, 1024])
 
 # ===== Params for TD3 (added to the DDPG params) ===========================================
 """
@@ -106,8 +105,8 @@ tune_config = tune.TuneConfig(
                 mode                        = "max",
                 num_samples                 = 15 #number of HP trials
               )
-stopper = StopLogic(max_timesteps           = 300,
-                    max_iterations          = 1200,
+stopper = StopLong(max_timesteps           = 300,
+                    max_iterations          = 2000,
                     min_iterations          = 300,
                     avg_over_latest         = 60,
                     success_threshold       = 1.1,
@@ -122,7 +121,7 @@ run_config = air.RunConfig(
                 checkpoint_config           = air.CheckpointConfig(
                                                 checkpoint_frequency        = 20,
                                                 checkpoint_score_attribute  = "episode_reward_mean",
-                                                num_to_keep                 = 3,
+                                                num_to_keep                 = 4,
                                                 checkpoint_at_end           = True
                 )
              )

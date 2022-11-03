@@ -346,8 +346,6 @@ Notes on the cda0 project
 	  Also, inference of a couple winners showed they still prefer full speed and a lower episode reward.
 * Next run (23f2e) doubled the high speed penalty again.
 
------ time logged to Process Dashboard to here -----
-
 10/31/22 Mon:
 * Time
   16:18 - 17:00 = 1:42
@@ -414,3 +412,50 @@ Notes on the cda0 project
 * Modified reward code to add an accel bonus if recent (4 steps) avg speed > speed limit and avg accel over that
   period is < 0, and vice versa for speeds below speed limit (exceept for a deadband).  Bonus increases with
   larger speed difference from the limit and with larger acceleration magnitude.
+
+----- time logged to Process Dashboard to here -----
+
+11/2/22:
+* Time
+  10:37 - 10:59 = 0:22
+  12:51 - 13:38 = 0:47
+  19:51 - 20:32 = 0:41
+* Analyzed run from last night:
+	* Pretty similar performance as before - 3 runs reached mean reward > 0, maxing ~0.3. 
+	* Inference still shows a desire for accels very close to 0 and a slow change to it.  However, one run
+	  demonstrated a slight response to the high speed penalty, where speed got into that zone, then accels
+	  turned negative and returned it below speed limit.  It took many time steps, however.
+* Modified reward code to double the probability of eliminating the completion reward if high speed, and
+  doubled the accel bonus value.  
+	* Running inference on some very early checkpoints (2-20 iterations) shows that already the accels and
+	  LC cmds are very small.  This makes me wonder if there is a scaling problem.
+	* Adding print statement during training run shows that scaling is not a problem; all calcs seem proper.
+	  It is just learning very quickly (in first 20 iters) to keep accels close to zero.  I now suspect
+	  that this may be due to too much smoothing by training in large batches.  Also the small time step
+	  may be having some smoothing impact.
+* Next set of mods:
+	* Tuning with much smaller batch sizes (down to 8)
+	* Simplified accel bonus calcs to just be based on current time step, not history.
+* Analyzed above run (0c04c):
+	* All cases had a mean reward > 0, but none of them exceeded 0.8 despite each one having a max > 1.3.
+	* Runs 0 & 1 peaked quickly then dropped rapidly.  Batch sizes were 1024 and 128, respectively.
+	* Run 2 took the longest to peak (6M+ steps) but also had the lowest max (as low as 1.25 at 7M). Its
+	  batch size = 128.  LR among the smallest & largest at 1.2e-7 for actor and 9.3e-5 for critic.
+	* Run 3 also peaked fairly quickly and dropped off a lot. Batch = 128.
+	* Run 4 was a slow mover but peaked nicely. Batch = 16, actor LR 1.7e-7, one of the lowest.
+	* Run 7 was lowest mean peak (but highest max), and dropped away very quickly.  The only batch = 8.
+	* Runs 2, 5, 4, 13 had the lowest actor LRs, and their critic LRs were widely different. They all
+	  showed gradual peak then tail-off of mean, plus max started high (~1.55), dipped, then climbed again
+	  until its end.  The dip was lower for those whose means took longer to peak.  Once means tail off,
+	  the max climbs again.  These had batch = 128, 16, 1024, 1024.  It seems they may have continued to
+	  improve with more time.
+	* Inference performed similar to previous runs - accel very small and slow to change, but they are
+	  starting to see the correct directions to move.
+	* It doesn't appear that small batch size has a noticeable effect.  Best bet seems to be LR ~1e-7 for
+	  actor and 5e-5 to 9e-5 for critic, then let it run a lot longer.
+* New run:
+	* Using new StopLong class for the stopper, which pretty much lets it run to max iterations unless
+	  the max reward is a failure.  Also extended max iterations to 2000.
+	* Magnified the noise.
+	* Tightened the LR ranges, and moved the actor lower and critic higher.
+	* Doubled reward bonus for correct accel action.
