@@ -1,4 +1,5 @@
 from collections import deque
+from concurrent.futures.process import _threads_wakeups
 import math
 from statistics import mean, stdev
 from ray.tune import Stopper
@@ -91,7 +92,7 @@ class StopLogic(Stopper):
             # Else the deque is full so we can start analyzing stop criteria
             else:
                 # Stop if avg of mean rewards over recent history is above the succcess threshold and its standard deviation is small
-                avg_of_mean = mean(list(self.trials[trial_id]["mean_rewards"]))
+                avg_of_mean = mean(self.trials[trial_id]["mean_rewards"])
                 std_of_mean = stdev(self.trials[trial_id]["mean_rewards"])
                 #print("///// StopLogic: iter #{}, avg reward = {:.2f}, std of mean = {:.3f}".format(total_iters, avg, std_of_mean))
                 if avg_of_mean >= self.success_avg_threshold  and  std_of_mean <= self.completion_std_threshold:
@@ -114,37 +115,39 @@ class StopLogic(Stopper):
 
                     # Stop if mean and max rewards haven't significantly changed in recent history
                     std_of_max  = stdev(self.trials[trial_id]["max_rewards"])
-                    if std_of_mean <= self.completion_std_threshold  and  std_of_max <= self.completion_std_threshold:
-                        print("\n///// Stopping trial due to no further change")
+                    if std_of_mean <= self.completion_std_threshold  and  std_of_max <= self.completion_std_threshold \
+                       and  avg_of_mean >= self.success_avg_threshold:
+                        print("\n///// Stopping trial due to winner with no further change")
                         return True
 
                     # If the avg mean reward over recent history is below the failure threshold then
                     if avg_of_mean < self.failure_avg_threshold:
+                        done = False
 
                         # If the max reward is below success threshold and not climbing significantly, then stop as a failure
-                        dq = self.trials[trial_id]["max_rewards"]
-                        dq_size = len(dq)
-                        avg_of_max = mean(dq)
+                        dq_max = self.trials[trial_id]["max_rewards"]
+                        avg_of_max = mean(dq_max)
+                        slope_max = self._get_slope(dq_max)
                         if avg_of_max < self.success_avg_threshold:
-                            begin = 0.0
-                            end = 0.0
-                            if dq_size < 4:
-                                begin = dq[0]
-                                end = dq[-1]
-                            elif dq_size < 21:
-                                begin = 0.333333 * mean([dq[i] for i in range(3)])
-                                end   = 0.333333 * mean([dq[i] for i in range(-3, 0)])
-                            else:
-                                begin = 0.1 * mean([dq[i] for i in range(10)])
-                                end   = 0.1 * mean([dq[i] for i in range(-10, 0)])
-                            if end <= begin:
+                            if slope_max <= 0.0:
                                 print("\n///// Stopping trial - no improvement in {} iters.\n".format(self.most_recent))
-                                return True
+                                done = True
 
-                        # If the mean is closer to the min than to the max then stop as failure
+                        # If the mean curve is heading down and the max is not increasing then stop as a failure
+                        if slope_max <= 0.0  and  self._get_slope(self.trials[trial_id]["mean_rewards"]) < 0.0:
+                            print("\n///// Stopping trial - mean reward bad & getting worse, max is not improving in latest {} iters."
+                                    .format(self.most_recent))
+                            done = True
+
+                        # If the mean is a lot closer to the min than to the max then stop as failure
                         avg_of_min = mean(list(self.trials[trial_id]["min_rewards"]))
-                        if avg_of_mean - avg_of_min < 0.5*(avg_of_max - avg_of_min):
-                            print("\n///// Stopping trial - no improvement and min reward is dominating.")
+                        if avg_of_mean - avg_of_min < 0.25*(avg_of_max - avg_of_min):
+                            print("\n///// Stopping trial - no improvement and min reward is dominating in latest {} iters."
+                                    .format(self.most_recent))
+                            done = True
+
+                        if done:
+                            print("      means = ", self.trials[trial_id]["mean_rewards"])
                             return True
 
         # Else, it is a brand new trial
@@ -164,3 +167,19 @@ class StopLogic(Stopper):
     def stop_all(self):
         #print("\n\n///// In StopLogic.stop_all /////\n")
         return False
+
+    def _get_slope(self, dq):
+        begin = 0.0
+        end = 0.0
+        dq_size = len(dq)
+        if dq_size < 4:
+            begin = dq[0]
+            end = dq[-1]
+        elif dq_size < 21:
+            begin = 0.333333 * mean([dq[i] for i in range(3)])
+            end   = 0.333333 * mean([dq[i] for i in range(-3, 0)])
+        else:
+            begin = 0.1 * mean([dq[i] for i in range(10)])
+            end   = 0.1 * mean([dq[i] for i in range(-10, 0)])
+
+        return end - begin

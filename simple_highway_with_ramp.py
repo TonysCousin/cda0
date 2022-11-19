@@ -340,9 +340,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         ego_speed = None
         if self.training:
             ego_lane_id = int(self.prng.random()*2) #TODO: change to 3 once all lanes are used (also in else block below!)
-            m = SimpleHighwayRamp.SCENARIO_LENGTH - 10.0 #initially can start almost anywhere along the track
-            max_distance = max(self.episode_count * (100.0 - m)/10000.0 + m, 100.0) #decreases over episodes
-            ego_x = self.prng.random() * max_distance
+            ego_x = 0.0
+            if self.randomize_start_dist:
+                m = SimpleHighwayRamp.SCENARIO_LENGTH - 10.0 #initially can start almost anywhere along the track
+                max_distance = max(self.episode_count * (100.0 - m)/400000.0 + m, 100.0) #decreases over episodes
+                ego_x = self.prng.random() * max_distance
             ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
 
         # Else, we are doing inference, so limit the randomness of the initial conditions
@@ -627,6 +629,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             for i, v in enumerate(self.vehicles):
                 v.print(i)
             print("      reason = {}".format(return_info["reason"]))
+            print("      reward_detail = {}".format(return_info["reward_detail"]))
 
         return self.obs, reward, done, return_info
 
@@ -649,6 +652,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             tr = config["training"]
             if tr:
                 self.training = True
+        except KeyError as e:
+            pass
+
+        self.randomize_start_dist = False
+        try:
+            rsd = config["randomize_start_dist"]
+            if rsd:
+                self.randomize_start_dist = True
         except KeyError as e:
             pass
 
@@ -755,14 +766,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             if crash  or  off_road:
 
                 # Subtract a crash penalty
-                reward = -1.0
+                reward = -50.0
                 explanation = "Crash or ran off road. "
 
             # Else if the vehicle just stopped in the middle of the road then
             elif stopped:
 
                 # Subtract a penalty for no movement
-                reward -= 0.5
+                reward = -50.0
                 explanation = "Vehicle stopped. "
 
             # Else (episode ended successfully)
@@ -771,7 +782,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 # If we are allowed to reward the completion bonus then add amount inversely proportional
                 # to the length of the episode.
                 if self.reward_for_completion:
-                    reward = max(1.5 - 0.004 * self.steps_since_reset, 0.0)
+                    diff = 600 - self.steps_since_reset
+                    reward = max(47.26e-6 * diff*diff, 0.0)
                     explanation = "Successful episode! {} steps".format(self.steps_since_reset)
                 else:
                     reward = 0.0
@@ -780,39 +792,25 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Else, episode still underway
         else:
 
-            # Since we tend to start an episode near the beginning of the track, it needs some incentive
-            # to continue to the next time step, until it learns there is a big carrot at the end.
-            reward += 0.0002
-
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
-            """
-            jerk1 = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
-            penalty = 0.001 * abs(jerk1) / SimpleHighwayRamp.MAX_JERK
+            jerk = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
+            penalty = 0.04 * jerk*jerk
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Jerk pen {:.4f}. ".format(penalty)
-            """
-
-            # Penalty for going way slow
-            norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT
-            penalty = 0.0
-            if norm_speed < 0.5:
-                penalty = -0.002 * norm_speed + 0.001
-                explanation += "Low spd pen {:.4f}. ".format(penalty)
 
             # Penalty for exceeding roadway speed limit - in some cases, this triggers a cancellation of the
             # eventual completion award (similar punishment to stopping the episode, but without changing the
             # physical environment)
-            elif norm_speed > 1.0:
-                penalty = 0.08 * norm_speed - 0.08
-                explanation += "HIGH spd pen {:.4f}. ".format(penalty)
-                ceiling = 1.0*(norm_speed - 1.0)
-                if self.prng.random() < ceiling:
-                    self.reward_for_completion = False
-                    explanation += "* "
-
+            norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT #1.0 = speed limit
+            penalty = 0.0
+            if norm_speed > 1.0:
+                diff = norm_speed - 1.0
+                penalty = 10.0 * diff*diff
+                explanation += "HIGH speed pen {:.4f}. ".format(penalty)
             reward -= penalty
 
+            """
             # Track historical speed & accels for possible incentives
             self.accel_hist.append(self.obs[self.EGO_ACCEL_CMD_CUR])
             self.speed_hist.append(norm_speed)
@@ -844,6 +842,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 explanation += "Accel bonus {:.4f}. ".format(bonus)
             #print("///// ep {}, step {}, speed {:.4f}, accel = {:.4f}, bonus = {:.4f}"
             #        .format(self.episode_count, self.steps_since_reset, norm_speed, self.obs[self.EGO_ACCEL_CMD_CUR], bonus))
+            """
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
@@ -859,9 +858,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             if penalty > 0.0001:
                 explanation += "LCcmd pen {:.4f}. ".format(penalty)
 
-        reward = min(max(reward, -2.0), 2.0)
         if self.debug > 0:
-            print("///// reward returning {:.3f} due to crash = {}, off_road = {}, stopped = {}"
+            print("///// reward returning {:.4f} due to crash = {}, off_road = {}, stopped = {}"
                     .format(reward, crash, off_road, stopped))
 
         return reward, explanation

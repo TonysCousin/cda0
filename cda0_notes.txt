@@ -413,8 +413,6 @@ Notes on the cda0 project
   period is < 0, and vice versa for speeds below speed limit (exceept for a deadband).  Bonus increases with
   larger speed difference from the limit and with larger acceleration magnitude.
 
------ time logged to Process Dashboard to here -----
-
 11/2/22:
 * Time
   10:37 - 10:59 = 0:22
@@ -459,3 +457,81 @@ Notes on the cda0 project
 	* Magnified the noise.
 	* Tightened the LR ranges, and moved the actor lower and critic higher.
 	* Doubled reward bonus for correct accel action.
+
+11/3/22:
+* Time
+  10:31 - 10:59 = 0:28
+  18:00 - 19:17 = 1:17
+  21:13 - ?
+* Analysis of last night's run
+	* Some runs got peak mean reward of close to 0.7, similar to previous. Most has max rewards >= 2.
+	* Case 1 and 7 started very slowly, then gradually increased mean reward; the only two that didn't
+	  drop off within the 2000 iterations.  Peak value of mean was ~0.4.  Also, their max values were on
+	  the lower side (~1), then began to climb towards the end.  They are ripe for additional training. 
+	  These both had batch = 8 and 2 of the lowest actor LRs (7e-8 and 9e-8), with the same critic LR
+	  of 9.8e-5.
+	* Case 6 is also interesting, as possibly the best performing of the others, with peak rewards
+	  ~8M steps.
+	* Inference results are similar to previous, however. Not satisfying.
+* Mods for a new run:
+	* Check for even smaller LRs for actor, larger for critic.  Also, throw in a couple really big ones.
+	* Try batch size = 4.
+    ***** Can config params get passed into the env object for each run?  Yes - the configs are passed in to
+	  the init method, and it is called by each worker at the beginning of an iteration.  Any values
+	  will be held constant throughout all episodes of that iteration (just like extrinsic items are,
+	  such as LR).  This could be a means to schedule gradual changes in individual reward penalties or
+	  bonuses, or even in environment dynamics, such as taking off training wheels (removing limits on
+	  action outputs).  It could also be used to randomize some env constants to effectively provide
+	  data augmentation (e.g. change friction coefficients, control response times, control biases, etc).
+* Analysis of above run (e9151):
+	* Case 2 looks maybe promising in late time steps - long, steady mean reward, probably the highest
+	  mean and max reward near the 12.5M step mark.  Actor LR = 1e-5, critic LR = 9e-5, batch = 8.
+	* Case 3 very similar to 2 but much less erratic reward plots.  Actor LR = 4e-8, critic LR = 9e-5,
+	  batch = 16.
+	* Case 5 no good but had an interesting, huge spike in both mean and max rewards at ~2M steps, then
+	  terminated soon after.  Is this where noise ended?
+	* None of the 3 cases with batch = 4 was able to hold a mean reward > 0.  At least one had what I
+	  believe is a good LR ratio.
+	* Inference runs (of case 2) show that it is definitely reacting to the high and low speed penalties
+	  and/or accel rewards, but its reaction time is many seconds, not one or two time steps as I would
+   **     like to see.  Is it possible that the unused historical accel values in the obs vector arc
+	  contributing to that?  Hard to believe, but maybe.  No - experiment shows it is not.
+   **   * Other things to try:  play with size of completion reward (even make it zero at all times) or
+	  at least ratio of completion reward to penalty magnitudes (maybe the all need to be closer to 1?).
+	  Try PPO or another algo to get more dynamic action response to changing conditions.
+	  Try training with a slow-down zone in the road to force larger accels.
+
+Took a few days off and played with the simpler Racecar project to get back to basics. This is in the
+projects/cda0_copy dir.  An even simpler variant, Car, is in the projects/copy2 dir, and in Github under
+repo name simple-car.  Used PPO as the training algo.
+
+LESSONS LEARNED from simple-car:
+* I was able to train a car to drive a straight lane without traffic, as fast as possible while obeying the
+  speed limit.
+* Keeping time step rewards large enough to present noticeable impacts on derivatives is important (values
+  in O(1e-3) or O(1e-4) were not doing it). Final time step's completion reward was O(10) and incremental
+  values were O(0.01) for 150 time step episodes.
+* Shaping all rewards/penalties as smoothly differentiable seems to be important. Using quadratic function
+  of distance from target value is better than piecewise linear.
+* Start with really small NN structure.  I was getting good results with a [16, 4] FC network.
+* HP tuning takes a LOT of time.  Most of them don't have much impact, but LR is very sensitive.
+* May need to get several trials of ~same LR before finding one that works with initial weights distro.
+* May need to let training run a long time so it can gradually converge after several chaotic dips in 
+  performance.
+* Important to get a good balance of noise, which probably needs to be extended throughout most of the
+  trial.
+* Be sure noise is explicitly turned off during inference runs!  Using Ray algorithms may bring in unseen
+  config settings that turns it on by default (e.g. PPO's "explore" flag).
+* Ray makes it very difficult to continue training from a Tuner checkpoint.  For insights, see
+	* https://discuss.ray.io/t/save-and-reuse-checkpoints-in-ray-2-0-version/8169
+	* https://discuss.ray.io/t/correct-way-of-using-tuner-restore/8247
+	* https://discuss.ray.io/t/retraining-a-loaded-checkpoint-using-tuner-fit-with-different-config/7994/7
+
+----- time logged to Process Dashboard to here -----
+
+11/19/22:
+* Time recorded directly on dashboard
+* Merged the reward and tuning code from the simple Car code into the cda0 code and ran a tuning run there in
+  attempt to duplicate the success of training a drive in a straight lane with no other traffic around.  The
+  only difference is that the cda0 environment now involves all the other observation elements and a 2D action
+  vector (although the 2nd element is not yet used).

@@ -103,7 +103,7 @@ class StopLong(Stopper):
                         return True
 
                     # If max is below failure threshold, then stop as failure
-                    if avg_of_max < self.failure_avg_threshold:
+                    if avg_of_max < self.success_avg_threshold:
                         print("\n///// Stopping trial - max reward is failure.")
                         return True
 
