@@ -343,7 +343,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             ego_x = 0.0
             if self.randomize_start_dist:
                 m = SimpleHighwayRamp.SCENARIO_LENGTH - 10.0 #initially can start almost anywhere along the track
-                max_distance = max(self.episode_count * (100.0 - m)/400000.0 + m, 100.0) #decreases over episodes
+                max_distance = max(self.episode_count * (10.0 - m)/400000.0 + m, 10.0) #decreases over episodes
                 ego_x = self.prng.random() * max_distance
             ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
 
@@ -794,7 +794,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
             jerk = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
-            penalty = 0.02 * jerk*jerk
+            penalty = 0.002 * jerk*jerk
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Jerk pen {:.4f}. ".format(penalty)
@@ -810,7 +810,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 explanation += "HIGH speed pen {:.4f}. ".format(penalty)
             elif norm_speed < 0.95:
                 diff = 0.95 - norm_speed
-                penalty = 0.15 * diff*diff
+                penalty = 0.4 * diff*diff
                 explanation += "Low speed penalty {:.4f}. ".format(penalty)
             reward -= penalty
 

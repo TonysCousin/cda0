@@ -20,7 +20,7 @@ env_config = {}
 env_config["time_step_size"]                = 0.5
 env_config["debug"]                         = 0
 env_config["training"]                      = True
-env_config["randomize_start_dist"]          = tune.choice([True, False])
+env_config["randomize_start_dist"]          = True #tune.choice([True, False])
 env_config["init_ego_lane"]                 = 0
 
 # Algorithm configs

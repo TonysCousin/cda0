@@ -538,4 +538,8 @@ LESSONS LEARNED from simple-car:
 	* Results: two of the first 4 trials achieved mean rewards > 9.  Running them in inference (with no
 	  noise) starting in either lane 0 or 1 showed good performance.  However, it seemed to be a little
 	  too afraid of jerk, and happier to go slowly and take a lower completion reward.
+	* The one trial that had random_start_dist turned off never went anywhere, so it seems this is essential.
 * Trying a new run with the low speed penalty turned on and a little smaller jerk penalty.
+	* This was still really tame in terms of acceleration & jerk, so accepted some slower-than-desired
+	  solutions, with very slow, smooth accels.
+* New run with ligher jerk penalty again, by 10x more, and with 2.5x more low-speed penalty.
