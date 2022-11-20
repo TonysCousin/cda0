@@ -543,3 +543,12 @@ LESSONS LEARNED from simple-car:
 	* This was still really tame in terms of acceleration & jerk, so accepted some slower-than-desired
 	  solutions, with very slow, smooth accels.
 * New run with ligher jerk penalty again, by 10x more, and with 2.5x more low-speed penalty.
+	* Trial 00006 performed beautifully! Smart accel at the beginning, and smoothly leveled off when speed
+	  approached posted limit, then stayed there.  Exactly what I wanted.  This is saved as trial
+	  PPO_SimpleHighwayRampWrapper_1656e_00006 under ray_results/cda0-l01-free, and against code committed
+	  on 11/20, commit 
+* Straight lane performance is now complete.  Time to move on.
+
+11/20/22:
+* Time recorded in dashboard
+* 
