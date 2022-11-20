@@ -4,8 +4,8 @@ import math
 import numpy as np
 import gym
 import ray
-#import ray.rllib.algorithms.ppo as ppo
-import ray.rllib.algorithms.ddpg as ddpg
+import ray.rllib.algorithms.ppo as ppo
+#import ray.rllib.algorithms.ddpg as ddpg
 import ray.rllib.algorithms.td3  as td3
 import pygame
 from pygame.locals import *
@@ -33,26 +33,37 @@ def main(argv):
     ray.init()
 
     # Set up the environment
-    config = ddpg.DEFAULT_CONFIG.copy()
-    exp = config["exploration_config"]
-    exp["type"] = "GaussianNoise"
-    exp.pop("ou_sigma") #remvoe all ou items if OU noise is not being used
-    exp.pop("ou_theta")
-    exp.pop("ou_base_scale")
+    config = ppo.DEFAULT_CONFIG.copy()
 
     env_config = {  "time_step_size":   0.5,
                     "debug":            0,
                     "init_ego_lane":    start_lane
                 }
 
-    # These need to be same as in the checkpoint being read!
-    config["actor_hiddens"]               = [512, 64] #[256, 32]
-    config["critic_hiddens"]              = [768, 80]
-
+    # DDPG - These need to be same as in the checkpoint being read!
+    """
+    exp = config["exploration_config"]
+    exp["type"] = "GaussianNoise"
+    exp.pop("ou_sigma")
+    exp.pop("ou_theta")
+    exp.pop("ou_base_scale")
     config["exploration_config"] = exp
+    config["actor_hiddens"]               = [512, 64]
+    config["critic_hiddens"]              = [512, 64]
+    """
+
+    # PPO - need to match checkpoint being read!
+    model = config["model"]
+    model["fcnet_hiddens"]          = [64, 48, 8]
+    #model["fcnet_hiddens"]          = [1024, 128, 16]
+    model["fcnet_activation"]       = "relu"
+    model["post_fcnet_activation"]  = "linear"
+    config["model"] = model
+
     config["env_config"] = env_config
+    config["explore"] = False
     config["framework"] = "torch"
-    config["num_gpus"] = 1
+    config["num_gpus"] = 0
     config["num_workers"] = 1
     config["seed"] = 17
     env = SimpleHighwayRampWrapper(env_config)
@@ -63,7 +74,7 @@ def main(argv):
     # not to run the environment, so any environment info we pass to the algo is irrelevant for this program.  The
     # algo doesn't recognize the config key "env_configs", so need to remove it here.
     #config.pop("env_configs")
-    algo = ddpg.DDPG(config = config, env = SimpleHighwayRampWrapper) #needs the env class, not the object created above
+    algo = ppo.PPO(config = config, env = SimpleHighwayRampWrapper) #needs the env class, not the object created above
     algo.restore(checkpoint)
     print("///// Checkpoint {} successfully loaded.".format(checkpoint))
 

@@ -794,7 +794,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
             jerk = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
-            penalty = 0.04 * jerk*jerk
+            penalty = 0.02 * jerk*jerk
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Jerk pen {:.4f}. ".format(penalty)
@@ -808,6 +808,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 diff = norm_speed - 1.0
                 penalty = 10.0 * diff*diff
                 explanation += "HIGH speed pen {:.4f}. ".format(penalty)
+            elif norm_speed < 0.95:
+                diff = 0.95 - norm_speed
+                penalty = 0.15 * diff*diff
+                explanation += "Low speed penalty {:.4f}. ".format(penalty)
             reward -= penalty
 
             """

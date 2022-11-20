@@ -535,3 +535,7 @@ LESSONS LEARNED from simple-car:
   attempt to duplicate the success of training a drive in a straight lane with no other traffic around.  The
   only difference is that the cda0 environment now involves all the other observation elements and a 2D action
   vector (although the 2nd element is not yet used).
+	* Results: two of the first 4 trials achieved mean rewards > 9.  Running them in inference (with no
+	  noise) starting in either lane 0 or 1 showed good performance.  However, it seemed to be a little
+	  too afraid of jerk, and happier to go slowly and take a lower completion reward.
+* Trying a new run with the low speed penalty turned on and a little smaller jerk penalty.
