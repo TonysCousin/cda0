@@ -21,7 +21,7 @@ env_config["time_step_size"]                = 0.5
 env_config["debug"]                         = 0
 env_config["training"]                      = True
 env_config["randomize_start_dist"]          = True #tune.choice([True, False])
-env_config["init_ego_lane"]                 = 0
+#env_config["init_ego_lane"]                 = 0
 
 # Algorithm configs
 params["env"]                               = SimpleHighwayRampWrapper
@@ -30,7 +30,7 @@ params["framework"]                         = "torch"
 params["num_gpus"]                          = 1 #for the local worker
 params["num_cpus_per_worker"]               = 1 #also applies to the local worker and evaluation workers
 params["num_gpus_per_worker"]               = 0 #this has to allow for evaluation workers also
-params["num_workers"]                       = 4 #num remote workers (remember that there is a local worker also)
+params["num_workers"]                       = 8 #num remote workers (remember that there is a local worker also)
 params["num_envs_per_worker"]               = 1
 params["rollout_fragment_length"]           = 200 #timesteps pulled from a sampler
 params["gamma"]                             = 0.999 #tune.choice([0.99, 0.999])
@@ -80,9 +80,9 @@ params["l2_reg"]                            = 0.0
 """
 # ===== Params for PPO ======================================================================
 
-params["lr"]                                = tune.loguniform(5e-6, 1e-4)
+params["lr"]                                = tune.loguniform(1e-6, 1e-4)
 params["sgd_minibatch_size"]                = 32 #must be <= train_batch_size (and divide into it)
-params["train_batch_size"]                  = 800 #must be = rollout_fragment_length * num_workers * num_envs_per_worker
+params["train_batch_size"]                  = 1600 #must be = rollout_fragment_length * num_workers * num_envs_per_worker
 #params["grad_clip"]                         = tune.uniform(0.1, 0.5)
 #params["clip_param"]                        = None #tune.choice([0.2, 0.3, 0.6, 1.0])
 
@@ -99,7 +99,7 @@ explore_config["stddev"]                    = 0.3 #tune.uniform(0.1, 0.5) #this 
 explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
 explore_config["initial_scale"]             = 1.0
 explore_config["final_scale"]               = 0.04 #tune.choice([1.0, 0.01])
-explore_config["scale_timesteps"]           = 900000  #tune.choice([100000, 400000]) #was 900k
+explore_config["scale_timesteps"]           = 1000000  #tune.choice([100000, 400000]) #was 900k
 params["exploration_config"] = explore_config
 
 
@@ -115,7 +115,7 @@ tune_config = tune.TuneConfig(
                 num_samples                 = 15 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 400,
-                    max_iterations          = 1200,
+                    max_iterations          = 1500,
                     min_iterations          = 400,
                     avg_over_latest         = 300,
                     success_threshold       = 7.0,
@@ -123,7 +123,7 @@ stopper = StopLogic(max_timesteps           = 400,
                     compl_std_dev           = 0.05
                    )
 run_config = air.RunConfig(
-                name                        = "cda0-l01-free",
+                name                        = "cda0",
                 local_dir                   = "~/ray_results",
                 stop                        = stopper,
                 sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir

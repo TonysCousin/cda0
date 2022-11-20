@@ -274,6 +274,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             print("///// action_space = ", self.action_space)
 
         self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE) #will be returned from reset() and step()
+        self._verify_obs_limits("init after space defined")
 
         # Create the roadway geometry
         self.roadway = Roadway(self.debug)
@@ -339,10 +340,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         ego_x = None
         ego_speed = None
         if self.training:
-            ego_lane_id = int(self.prng.random()*2) #TODO: change to 3 once all lanes are used (also in else block below!)
+            ego_lane_id = int(self.prng.random()*3)
             ego_x = 0.0
             if self.randomize_start_dist:
-                m = SimpleHighwayRamp.SCENARIO_LENGTH - 10.0 #initially can start almost anywhere along the track
+                m = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                 max_distance = max(self.episode_count * (10.0 - m)/400000.0 + m, 10.0) #decreases over episodes
                 ego_x = self.prng.random() * max_distance
             ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
@@ -358,6 +359,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         if self.debug > 0:
             print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
         #print("///// reset: training = {}, ego_lane_id = {}, ego_x = {:.2f}, ego_speed = {:.2f}".format(self.training, ego_lane_id, ego_x, ego_speed))
+        self._verify_obs_limits("reset after initializing local vars")
 
         # Reinitialize the whole observation vector
         self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE)
@@ -381,6 +383,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.ADJ_LN_RIGHT_CONN_B]  = rb
         self.obs[self.ADJ_LN_RIGHT_REM]     = r_rem
         self.obs[self.STEPS_SINCE_LN_CHG]   = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
+        self._verify_obs_limits("reset after populating main obs")
 
         #neighbor vehicles don't move for initial phase - since these are constant speed, they stay out of the way
         self.vehicles[1].lane_id = 1
@@ -423,7 +426,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.accel_hist.clear()
         self.speed_hist.clear()
 
-        if self.debug > 1:
+        self._verify_obs_limits("end of reset")
+
+        if self.debug > 0:
             print("///// End of reset().")
         return self.obs
 
@@ -613,7 +618,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         return_info["reward_detail"] = expl
 
         # Verify that the obs are within design limits
-        self._verify_obs_limits()
+        self._verify_obs_limits("step after reward calc")
 
         # According to gym docs, return tuple should have 5 elements:
         #   obs
@@ -674,7 +679,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.init_ego_speed = None
         try:
             es = config["init_ego_speed"]
-            if 0 <= es <= SimpleHighwayRamp.MAX_SPEED: #TODO consider limiting this to speed limit
+            if 0 <= es <= SimpleHighwayRamp.MAX_SPEED:
                 self.init_ego_speed = es
         except KeyError as e:
             pass
@@ -869,7 +874,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         return reward, explanation
 
 
-    def _verify_obs_limits(self):
+    def _verify_obs_limits(self,
+                           tag      : str = ""  #optional explanation of where in the code this was called
+                          ):
         """Checks that each element of the observation vector is within the limits of the observation space."""
 
         lo = self.observation_space.low
@@ -882,7 +889,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         except AssertionError as e:
             print(e)
-            print("///// Full obs vector content:")
+            print("///// Full obs vector content at {}:".format(tag))
             for j in range(SimpleHighwayRamp.OBS_SIZE):
                 print("      {:2d}: {}".format(j, self.obs[j]))
 
