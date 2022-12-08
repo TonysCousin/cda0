@@ -340,7 +340,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         ego_x = None
         ego_speed = None
         if self.training:
-            ego_lane_id = int(self.prng.random()*3)
+            ego_lane_id = 2 #int(self.prng.random()*3)
             ego_x = 0.0
             if self.randomize_start_dist:
                 m = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
@@ -533,6 +533,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                     new_ego_lane = tgt_lane
                     adjustment = self.roadway.adjust_downtrack_dist(int(self.obs[self.EGO_LANE_ID]), tgt_lane)
                     new_ego_x += adjustment
+                    self.vehicles[0].dist_downtrack += adjustment
 
             # Else, we have already crossed the dividing line and are now mostly in the target lane
             else:
@@ -797,12 +798,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Else, episode still underway
         else:
 
+            """
             # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
             jerk = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
             penalty = 0.002 * jerk*jerk
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Jerk pen {:.4f}. ".format(penalty)
+            """
 
             # Penalty for exceeding roadway speed limit - in some cases, this triggers a cancellation of the
             # eventual completion award (similar punishment to stopping the episode, but without changing the
@@ -855,7 +858,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
-                penalty = 0.05 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
+                penalty = 0.1 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
                 reward -= penalty
                 explanation += "Lane chg pen {:.4f}. ".format(penalty)
 

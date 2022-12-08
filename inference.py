@@ -107,11 +107,17 @@ def main(argv):
                     break;
         """
 
-        print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, r = {:7.4f} {}"
-                .format(step, action[0], action[1], raw_obs[0], raw_obs[2], raw_obs[1], reward, info["reward_detail"]))
-
         # Scale the observations to be ready for NN ingest next time step
         obs = env.scale_obs(raw_obs)
+
+        print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, rem = {:4.0f}, r = {:7.4f} {}"
+                .format(step, action[0], action[1], raw_obs[0], raw_obs[2], raw_obs[1], raw_obs[3], reward, info["reward_detail"]))
+        print("      lft ln: Id = {:2.0f}, conn_a = {:6.0f}, conn_b = {:6.0f}, rem = {:6.0f}"
+                .format(raw_obs[21], raw_obs[22], raw_obs[23], raw_obs[24]))
+        print("      rgt ln: Id = {:2.0f}, conn_a = {:6.0f}, conn_b = {:6.0f}, rem = {:6.0f}"
+                .format(raw_obs[25], raw_obs[26], raw_obs[27], raw_obs[28]))
+        print("   SC lft ln: Id = {:2.0f}, conn_a = {:7.4f}, conn_b = {:7.4f}, rem = {:7.4f}, ego rem = {:.4f}"
+                .format(obs[21], obs[22], obs[23], obs[24], obs[3]))
 
         if done:
             print("///// Episode complete: {}. Total reward = {:.2f}".format(info["reason"], episode_reward))

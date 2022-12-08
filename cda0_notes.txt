@@ -546,9 +546,68 @@ LESSONS LEARNED from simple-car:
 	* Trial 00006 performed beautifully! Smart accel at the beginning, and smoothly leveled off when speed
 	  approached posted limit, then stayed there.  Exactly what I wanted.  This is saved as trial
 	  PPO_SimpleHighwayRampWrapper_1656e_00006 under ray_results/cda0-l01-free, and against code committed
-	  on 11/20, commit 
+	  on 11/20, commit fe894d0.
 * Straight lane performance is now complete.  Time to move on.
 
 11/20/22:
 * Time recorded in dashboard
-* 
+* Ran the cda0 tuning code with all 3 lanes as starting options, meaning in lane 2 the agent has to learn to change
+  lanes in order to finish.  Results are now being recorded in ray_results/cda0.
+	* Results were poor.  None of the 15 trials got a mean reward > -8 or so, although the max reward was
+	  consistently ~ +16.
+	* One trial aborted due to a Ray error, but was looking like it could possibly break out to higher ground
+	  than the others.  Its LR = 4.5e-5.
+
+12/4/22:
+* Time recorded in dashboard
+* Narrowed the LR range a bit and increased the noise magnitude (stddev) from 0.3 to 0.5 (Gaussian).
+
+12/5/22:
+* Results from yesterday's run:
+	* Nothing got above mean reward of 0, but one trial came close, peaking twice around -8 before falling off.
+	  Running inference on this one's peak checkpoint...
+	* Starting in lane 0, it ran smoothly, but at a nearly constant, small positive accel, thus hitting top
+	  speed eventually, and taking a penalty of 0.4 per time step.  Total score = 10.4, but it could have done
+	  a lot better.
+	* Starting in lane 1, it immediately changed to lane 0, taking a 0.05 penalty for that (trivial), then
+	  stayed there decisively. Accel performance was similar to lane 0.
+	* Starting in lane 2, it tried to make an illegal lane change in first time step, so crashed.  This is
+	  repeatable 5 times, but with slightly varying action outputs.
+* Mods for next run:
+	* reset() printing lane selection to verify that it is training in lane 2. Verified it is choosing all 3
+	  lanes randomly, so turned this off again to avoid clutter.
+	* Tuning with choice of random seeds, based on a recent article I read.
+	* Increased max LR quite a bit, since rewards tend to be small (O(1)), and therefore gradient is not large.
+	* Increased noise slightly, from 0.5 to 0.6 magnitude of sigma.
+
+12/7/22:
+* Results of prev run:
+	* Trial 0 had LR = 7.99e-6; it drives lane 2 all the way, but runs off the end rather than change lanes.
+	* Trial 7 had LR = 1.62e-5; make immediate lane chg in lane 2, so goes off road.
+	* Trial 10 had LR = 1.9e-3
+	* I verified that both the raw & scaled obs vectors are correct.
+	* Accel is stubbornly small, positive throughout all runs, regardless of speed & reward.
+* Ideas to try (from reviewing above history):
+	* Reduce size of NN
+	* Play with LR schedule
+	* Turn off random start distance during training (force it to complete full route every time)
+	* Train in only lane 2 to see if it can at least learn that one
+	* Turn off jerk penalty
+	* Play with noise magnitude
+* Mods for next run:
+	* Forcing lane ID to be 2 always (in reset())
+	* Commented out jerk penalty
+	* Results:
+		* 4 trials had mean reward peaks very close to 0 (> -10), but dropped off fast afterward.  These
+		  had LR of 1.4e-4, 1.4e-4 and 5.0e-5.
+		* All had mean reward that stayed at -50 for a long time, then several started climbing fast
+		  around 500k to 600k steps after max reward suddenly jumped from -50 to +10.
+		* No min reward ever exceeded -50.
+		* Running trial 3 inference made it to the end!  It had several lane changes, which is fine.
+		* Accelerations were somewhat sporadic, but much more aggressive at times.
+		* Found a defect in geometry code that repositioned the vehicle backwards one step after making
+		  the lane change.
+* Mods for next run:
+	* Fixed distance calc during lane change. I can't believe this had a significant impact on training,
+	  although it did make the distance signal discontinuous, which could have had some effect.
+	* Added tuning options for NN size.
