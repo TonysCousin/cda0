@@ -134,14 +134,15 @@ class StopLogic(Stopper):
                                 done = True
 
                         # If the mean curve is heading down and the max is not increasing then stop as a failure
-                        if slope_max <= 0.0  and  self._get_slope(self.trials[trial_id]["mean_rewards"]) < 0.0:
+                        slope_mean = self._get_slope(self.trials[trial_id]["mean_rewards"])
+                        if slope_max <= 0.0  and  slope_mean < 0.0:
                             print("\n///// Stopping trial - mean reward bad & getting worse, max is not improving in latest {} iters."
                                     .format(self.most_recent))
                             done = True
 
-                        # If the mean is a lot closer to the min than to the max then stop as failure
+                        # If the mean is a lot closer to the min than to the max and no sign of improving then stop as failure
                         avg_of_min = mean(list(self.trials[trial_id]["min_rewards"]))
-                        if avg_of_mean - avg_of_min < 0.25*(avg_of_max - avg_of_min):
+                        if avg_of_mean - avg_of_min < 0.25*(avg_of_max - avg_of_min)  and  slope_mean <= 0.0:
                             print("\n///// Stopping trial - no improvement and min reward is dominating in latest {} iters."
                                     .format(self.most_recent))
                             done = True
