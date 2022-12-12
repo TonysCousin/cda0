@@ -340,7 +340,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         ego_x = None
         ego_speed = None
         if self.training:
-            ego_lane_id = 2 #int(self.prng.random()*3)
+            ego_lane_id = int(self.prng.random()*3)
             ego_x = 0.0
             if self.randomize_start_dist:
                 m = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0

@@ -527,8 +527,6 @@ LESSONS LEARNED from simple-car:
 	* https://discuss.ray.io/t/correct-way-of-using-tuner-restore/8247
 	* https://discuss.ray.io/t/retraining-a-loaded-checkpoint-using-tuner-fit-with-different-config/7994/7
 
------ time logged to Process Dashboard to here -----
-
 11/19/22:
 * Time recorded directly on dashboard
 * Merged the reward and tuning code from the simple Car code into the cda0 code and ran a tuning run there in
@@ -611,3 +609,24 @@ LESSONS LEARNED from simple-car:
 	* Fixed distance calc during lane change. I can't believe this had a significant impact on training,
 	  although it did make the distance signal discontinuous, which could have had some effect.
 	* Added tuning options for NN size.
+	* Trial 3 performed well, with a mean reward hovering close to +10 for many iterations before finally
+	  tanking.  Inference runs on it, in lane 2, performed ideally, holding the speed limit and changing lane
+	  toward the end of lane 2.  When started in lane 1, it immediately tried to change lanes left too much.
+	  This one had a NN structure of [64, 24] and LR = 7.8e-5.
+	* None of the others achieved a promising mean reward, so I don't feel I'm really finding the sweet spot.
+
+12/11/22:
+* Mods for next run, which is still only training on lane 2 start:
+	* Fixed the NN structure at [64, 24] and tuned for noise magnitude (still decaying to 0.04 at 1M steps).
+	* Two very promising trials were terminated prematurely due to stop criteria taking slopes over way too
+	  many iterations.  I need to reduce this, and also print out more details when it decides to stop.
+	* Three of the first 11 trials peaked between 0 and +10 (mean reward); not great performance, but decent.
+	  Inference on two of these shows good performance.  Their LRs were 7.5e-5, 1.1e-4, 9.5e-4, and they
+	  used noise magnituce (stddev) of 0.61, 0.25, 0.17, respectively. So I believe I have this lane change
+	  nailed.
+* Mods for next run:
+	* Reduced the avg_over_latest param from 300 to 60 iterations, because I believe this is iters, not
+	  steps. I added better output on stop condition to help confirm this.
+	* Zeroing in tuning to LRs in the range of success above, as well as noise magnitudes in the lower end
+	  of that range.  
+	* Reinstate all 3 lanes as candidate initial conditions (mod to reset()).
