@@ -20,7 +20,7 @@ env_config = {}
 env_config["time_step_size"]                = 0.5
 env_config["debug"]                         = 0
 env_config["training"]                      = True
-env_config["randomize_start_dist"]          = True #tune.choice([True, False])
+env_config["randomize_start_dist"]          = False #tune.choice([True, False])
 #env_config["init_ego_lane"]                 = 0
 
 # Algorithm configs
@@ -88,7 +88,7 @@ params["train_batch_size"]                  = 1600 #must be = rollout_fragment_l
 
 # Add dict here for lots of model HPs
 model_config = params["model"]
-model_config["fcnet_hiddens"]               = [64, 24] #tune.choice([[64, 48, 8], [64, 24], [32, 12]])
+model_config["fcnet_hiddens"]               = [64, 40] #tune.choice([[64, 48, 8], [64, 24], [32, 12]])
 model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
 model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
 params["model"] = model_config

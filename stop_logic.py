@@ -150,7 +150,7 @@ class StopLogic(Stopper):
                         if done:
                             print("///// Trial {}, mean avg = {:.1f}, mean slope = {:.2f}, max avg = {:.1f}, max slope = {:.2f}"
                                     .format(trial_id, avg_of_mean, slope_mean, avg_of_max, slope_max))
-                            print("      latest means = ", self.trials[trial_id]["mean_rewards"])
+                            print("      latest means:")
                             for i in range(len(self.trials[trial_id]["mean_rewards"]) // 5):
                                 print("      {:3d}: ".format(5*i), end="")
                                 for j in range(5):

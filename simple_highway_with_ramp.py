@@ -350,9 +350,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # Else, we are doing inference, so limit the randomness of the initial conditions
         else:
-            ego_lane_id = int(self.prng.random()*2) if self.init_ego_lane is None  else  self.init_ego_lane #TODO: change to 3
+            ego_lane_id = int(self.prng.random()*3) if self.init_ego_lane is None  else  self.init_ego_lane
             ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
-            ego_speed = self.prng.random() * 25.0 + 5.0 if self.init_ego_speed is None  else self.init_ego_speed
+            ego_speed = self.prng.random() * 31.0 + 4.0 if self.init_ego_speed is None  else self.init_ego_speed
 
         if ego_lane_id == 1:
             ego_x = max(ego_x, 5.0*SimpleHighwayRamp.VEHICLE_LENGTH) #need to start in front of the neighbor vehicles if in lane 1
@@ -605,12 +605,12 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # If vehicle has been stopped for several time steps, then declare the episode done as a failure
         stopped_vehicle = False
-        if self.vehicles[0].speed < 0.1:
+        if self.vehicles[0].speed < 2.0:
             self.stopped_count += 1
             if self.stopped_count > 3:
                 done = True
                 stopped_vehicle = True
-                return_info["reason"] = "Vehicle chose to stop moving"
+                return_info["reason"] = "Vehicle is crawling to a stop"
         else:
             self.stopped_count = 0
 

@@ -630,3 +630,12 @@ LESSONS LEARNED from simple-car:
 	* Zeroing in tuning to LRs in the range of success above, as well as noise magnitudes in the lower end
 	  of that range.  
 	* Reinstate all 3 lanes as candidate initial conditions (mod to reset()).
+
+12/12/22:
+	* Trials 6 & 8 peaked at mean reward ~5. Inference run shows it is pretty good, but willing to accept a lot
+	  of speed penalty, with only very tiny adjustments to accel.  They both performed extraneous lane change
+	  to lane 0 if starting in 1 or 2, which cost an extra ~0.2 penalty point.
+	* Jerk penalty has been turned off for some time, so it is learning smooth acceleration from other means.
+* Next run:
+	* Increased size of NN from [64, 24] to [64, 40]
+	* Turned off randomized start distance during training (forcing all starts to be at beginning of lane).
