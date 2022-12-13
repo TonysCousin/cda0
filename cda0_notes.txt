@@ -639,3 +639,10 @@ LESSONS LEARNED from simple-car:
 * Next run:
 	* Increased size of NN from [64, 24] to [64, 40]
 	* Turned off randomized start distance during training (forcing all starts to be at beginning of lane).
+	* The first 6 trials here were lousy (one peaked at 0 and one peaked at -5), indicating that maybe
+	  randomized start distance is still needed, so I aborted the run.
+
+* Next run:
+	* Increased num workers from 8 to 12, keeping the rollout fragment length = 200, so train batch size
+	  increased to 2400.  Hoping things will move faster now.
+	* Turned the randomized start distance back on.

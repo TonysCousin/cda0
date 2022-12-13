@@ -20,7 +20,7 @@ env_config = {}
 env_config["time_step_size"]                = 0.5
 env_config["debug"]                         = 0
 env_config["training"]                      = True
-env_config["randomize_start_dist"]          = False #tune.choice([True, False])
+env_config["randomize_start_dist"]          = True #tune.choice([True, False])
 #env_config["init_ego_lane"]                 = 0
 
 # Algorithm configs
@@ -30,7 +30,7 @@ params["framework"]                         = "torch"
 params["num_gpus"]                          = 1 #for the local worker
 params["num_cpus_per_worker"]               = 1 #also applies to the local worker and evaluation workers
 params["num_gpus_per_worker"]               = 0 #this has to allow for evaluation workers also
-params["num_workers"]                       = 8 #num remote workers (remember that there is a local worker also)
+params["num_workers"]                       = 12 #num remote workers (remember that there is a local worker also)
 params["num_envs_per_worker"]               = 1
 params["rollout_fragment_length"]           = 200 #timesteps pulled from a sampler
 params["gamma"]                             = 0.999 #tune.choice([0.99, 0.999])
@@ -82,7 +82,7 @@ params["l2_reg"]                            = 0.0
 
 params["lr"]                                = tune.loguniform(3e-5, 1e-3)
 params["sgd_minibatch_size"]                = 32 #must be <= train_batch_size (and divide into it)
-params["train_batch_size"]                  = 1600 #must be = rollout_fragment_length * num_workers * num_envs_per_worker
+params["train_batch_size"]                  = 2400 #must be = rollout_fragment_length * num_workers * num_envs_per_worker
 #params["grad_clip"]                         = tune.uniform(0.1, 0.5)
 #params["clip_param"]                        = None #tune.choice([0.2, 0.3, 0.6, 1.0])
 
@@ -119,7 +119,7 @@ stopper = StopLogic(max_timesteps           = 400,
                     min_iterations          = 400,
                     avg_over_latest         = 60,
                     success_threshold       = 5.0,
-                    failure_threshold       = 0.0,
+                    failure_threshold       = -5.0,
                     compl_std_dev           = 0.05
                    )
 run_config = air.RunConfig(
