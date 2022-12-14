@@ -819,7 +819,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             elif norm_speed < 0.95:
                 diff = 0.95 - norm_speed
                 penalty = 0.4 * diff*diff
-                explanation += "Low speed penalty {:.4f}. ".format(penalty)
+                explanation += "Low speed pen {:.4f}. ".format(penalty)
             reward -= penalty
 
             """

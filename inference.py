@@ -54,7 +54,7 @@ def main(argv):
 
     # PPO - need to match checkpoint being read!
     model = config["model"]
-    model["fcnet_hiddens"]          = [64, 24]
+    model["fcnet_hiddens"]          = [64, 40]
     #model["fcnet_hiddens"]          = [1024, 128, 16]
     model["fcnet_activation"]       = "relu"
     model["post_fcnet_activation"]  = "linear"

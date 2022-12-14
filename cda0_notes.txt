@@ -545,6 +545,7 @@ LESSONS LEARNED from simple-car:
 	  approached posted limit, then stayed there.  Exactly what I wanted.  This is saved as trial
 	  PPO_SimpleHighwayRampWrapper_1656e_00006 under ray_results/cda0-l01-free, and against code committed
 	  on 11/20, commit fe894d0.
+*****
 * Straight lane performance is now complete.  Time to move on.
 
 11/20/22:
@@ -646,3 +647,12 @@ LESSONS LEARNED from simple-car:
 	* Increased num workers from 8 to 12, keeping the rollout fragment length = 200, so train batch size
 	  increased to 2400.  Hoping things will move faster now.
 	* Turned the randomized start distance back on.
+
+12/13/22:
+	* It doesn't appear that the randomized start distance had any particular effect, which was expected,
+	  since it had already learned to travel the full length of the course.
+	* A couple of the trials peaked above 0, and one got to +10 for mean reward. However, inference on it
+	  showed pretty loose speed control.  It had no problem reaching way into the penalty areas for extended
+	  periods.  Although it did seem to sense it didn't want to be there, the jerk went negative as soon as
+	  it entered the high speed area, but it was so small that the accel took a long time to reverse the
+	  incursion. With jerk penalty off, I don't understand why it won't change accels more quickly.
