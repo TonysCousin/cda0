@@ -88,14 +88,14 @@ params["train_batch_size"]                  = 2400 #must be = rollout_fragment_l
 
 # Add dict here for lots of model HPs
 model_config = params["model"]
-model_config["fcnet_hiddens"]               = [64, 40] #tune.choice([[64, 48, 8], [64, 24], [32, 12]])
+model_config["fcnet_hiddens"]               = [64, 48, 8] #tune.choice([[64, 48, 8], [64, 24], [32, 12]])
 model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
 model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
 params["model"] = model_config
 
 explore_config = params["exploration_config"]
 explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-explore_config["stddev"]                    = tune.uniform(0.1, 0.4) #this param is specific to GaussianNoise
+explore_config["stddev"]                    = tune.uniform(0.2, 0.5) #this param is specific to GaussianNoise
 explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
 explore_config["initial_scale"]             = 1.0
 explore_config["final_scale"]               = 0.04 #tune.choice([1.0, 0.01])

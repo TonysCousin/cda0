@@ -656,3 +656,12 @@ LESSONS LEARNED from simple-car:
 	  periods.  Although it did seem to sense it didn't want to be there, the jerk went negative as soon as
 	  it entered the high speed area, but it was so small that the accel took a long time to reverse the
 	  incursion. With jerk penalty off, I don't understand why it won't change accels more quickly.
+
+* Next run:
+	* Based on successful straight-lane results on 11/19, with the more aggressive jerk performance, I am
+	  going back to that [64, 48, 8] NN structure.
+
+12/14/22:
+	* This run was worse than the previous. Only one trial reached above 0 mean reward, but stayed < 5.
+	  It had LR = 8.8e-5 and noise stddev = 0.28.
+	* I feel like LR annealing is going to be important to get anything better.

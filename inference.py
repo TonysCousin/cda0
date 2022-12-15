@@ -54,7 +54,7 @@ def main(argv):
 
     # PPO - need to match checkpoint being read!
     model = config["model"]
-    model["fcnet_hiddens"]          = [64, 40]
+    model["fcnet_hiddens"]          = [64, 48, 8]
     #model["fcnet_hiddens"]          = [1024, 128, 16]
     model["fcnet_activation"]       = "relu"
     model["post_fcnet_activation"]  = "linear"
@@ -231,7 +231,7 @@ class Graphics:
                action  : list,      #vector of actions for the ego vehicle for the current time step
                obs     : list       #vector of observations of the ego vehicle for the current time step
               ):
-        """Paints the new motion of the ego vehicle on the display screen."""
+        """Paints all updates on the display screen, including the new motion of the ego vehicle and any data plots."""
 
         # Grab the background under where we want the vehicle to appear & erase the old vehicle
         pygame.draw.circle(self.windowSurface, Graphics.BLACK, (self.prev_ego_r, self.prev_ego_s), self.veh_radius, 0)
@@ -292,8 +292,8 @@ class Graphics:
         right_s1 = s1 + ws*cos_a
 
         # Draw the edge lines
-        pygame.draw.line(self.windowSurface, Graphics.WHITE, (left_r0, left_s0), (left_r1, left_s1), 1)
-        pygame.draw.line(self.windowSurface, Graphics.WHITE, (right_r0, right_s0), (right_r1, right_s1), 1)
+        pygame.draw.line(self.windowSurface, Graphics.WHITE, (left_r0, left_s0), (left_r1, left_s1))
+        pygame.draw.line(self.windowSurface, Graphics.WHITE, (right_r0, right_s0), (right_r1, right_s1))
 
 
     def _get_vehicle_coords(self,
@@ -336,6 +336,51 @@ class Graphics:
 ######################################################################################################
 ######################################################################################################
 
+class Plot:
+    """Displays an x-y plot of time series data on the screen."""
+
+    def __init__(self,
+                 surface    : pygame.Surface,   #the Pygame surface to draw on
+                 corner_x   : int,              #X coordinate of the upper-left corner, screen pixels
+                 corner_y   : int,              #Y coordinate of the upper-left corner, screen pixels
+                 height     : int,              #height of the plot, pixels
+                 width      : int,              #width of the plot, pixels
+                 min_y      : float,            #min value of data to be plotted on Y axis
+                 max_y      : float,            #max value of data to be plotted on Y axis
+                 num_steps  : int       = 150,  #num time steps that will be plotted along X axis
+                 color      : tuple     = Graphics.WHITE, #color of the axes
+                 title      : str       = None  #Title above the plot
+                ):
+        """Defines and draws the empty plot on the screen, with axes and title."""
+
+        self.surface = surface
+        self.cx = corner_x
+        self.cy = corner_y
+        self.height = height
+        self.width = width
+        self.min_y = min_y
+        self.max_y = max_y
+        self.num_steps = num_steps
+
+        FONT_SIZE = 12
+
+        # Draw the axes
+        pygame.draw.line(surface, color, (corner_x, corner_y+height), (corner_x+width, corner_y+height))
+        pygame.draw.line(surface, color, (corner_x, corner_y+height), (corner_x, corner_y))
+
+        # Create the plot's text on a separate surface and copy it to the display surface
+        if title is not None:
+            font = pygame.font.Font('freesans.ttf', FONT_SIZE)
+            text = font.render(title, True, color, Graphics.BLACK)
+            text_rect = text.get_rect()
+            text_rect.center = (corner_x + width//2, corner_y - FONT_SIZE//2)
+            surface.blit(text, text_rect)
+
+        pygame.display.update()
+
+
+######################################################################################################
+######################################################################################################
 
 if __name__ == "__main__":
    main(sys.argv)
