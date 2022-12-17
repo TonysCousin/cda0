@@ -340,7 +340,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         ego_x = None
         ego_speed = None
         if self.training:
-            ego_lane_id = int(self.prng.random()*3)
+            ego_lane_id = self._select_init_lane()
             ego_x = 0.0
             if self.randomize_start_dist:
                 m = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
@@ -693,6 +693,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         except KeyError as e:
             pass
 
+
+    def _select_init_lane(self) -> int:
+        """Chooses the initial lane for training runs, which may not be totally random."""
+
+        if self.prng.random() < 0.5:
+            return 2
+        else:
+            return int(self.prng.random()*2) #select 0 or 1
 
 
     def _check_for_collisions(self):

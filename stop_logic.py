@@ -18,6 +18,7 @@ class StopLogic(Stopper):
                  avg_over_latest    : int   = 10,       #num most recent iterations over which statistics will be calculated
                  success_threshold  : float = 1.0,      #reward above which we can call it a win
                  failure_threshold  : float = -1.0,     #reward below which we can early terminate (after min required iters)
+                 degrade_threshold  : float = 0.25,     #fraction of mean reward range below its peak that mean is allowed to degrade
                  compl_std_dev      : float = 0.01      #std deviation of reward below which we can terminate (success or failure)
                 ):
 
@@ -33,6 +34,7 @@ class StopLogic(Stopper):
         self.most_recent = avg_over_latest #num recent trials to consider when deciding to stop
         self.success_avg_threshold = success_threshold
         self.failure_avg_threshold = failure_threshold
+        self.degrade_threshold = degrade_threshold
         self.completion_std_threshold = compl_std_dev
         print("\n///// StopLogic initialized with max_timesteps = {}, max_iterations = {}, min_iterations = {}"
                 .format(self.max_timesteps, self.max_iterations, self.required_min_iters))
@@ -44,6 +46,9 @@ class StopLogic(Stopper):
         #   "num_entries" (int) - num meaningful entries in the deque
         #   "mean_rewards" (deque) - the most recent N mean rewards
         #   "max_rewards" (deque) - the most recent N max rewards
+        #   "min_rewards" (deque) - the most recent N min rewards
+        #   "worst_mean" (float) - the lowest mean reward achieved at any point in the trial so far
+        #   "best_mean" (float) - the highest mean reward achieved at any point in the trial so far
         self.trials = {}
 
         # Other internal variables
@@ -70,9 +75,10 @@ class StopLogic(Stopper):
         if trial_id in self.trials:
 
             # Capture the values of max, min and mean rewards for this iteration
+            ep_mean = result["episode_reward_mean"]
             mean_rew = -100.0
-            if not math.isnan(result["episode_reward_mean"]):
-                mean_rew = result["episode_reward_mean"]
+            if not math.isnan(ep_mean):
+                mean_rew = ep_mean
             self.trials[trial_id]["mean_rewards"].append(mean_rew)
             max_rew = -100.0
             if not math.isnan(result["episode_reward_max"]):
@@ -83,6 +89,10 @@ class StopLogic(Stopper):
                 min_rew = result["episode_reward_min"]
             self.trials[trial_id]["min_rewards"].append(min_rew)
             #print("///// Appending reward ", mean_rew, max_rew)
+            if ep_mean < self.trials[trial_id]["worst_mean"]:
+                self.trials[trial_id]["worst_mean"] = ep_mean
+            if ep_mean > self.trials[trial_id]["best_mean"]:
+                self.trials[trial_id]["best_mean"] = ep_mean
 
             # If the deque of N most recent rewards is not yet full then increment its count
             if self.trials[trial_id]["num_entries"] < self.most_recent:
@@ -135,6 +145,12 @@ class StopLogic(Stopper):
                                 print("\n///// Stopping trial - no improvement in {} iters.\n".format(self.most_recent))
                                 done = True
 
+                        # If the avg mean is well below the best achieved so far, then stop as failure
+                        if avg_of_mean < (self.trials[trial_id]["best_mean"] - self.trials[trial_id]["worst_mean"]) * self.degrade_threshold:
+                            print("\n///// Stopping trial - mean reward is failing and {:.0f} below its peak.".format(100*self.degrade_threshold))
+                            done = True
+
+
                         # If the mean curve is heading down and the max is not increasing then stop as a failure
                         if slope_max <= 0.0  and  slope_mean < 0.0:
                             print("\n///// Stopping trial - mean reward bad & getting worse, max is not improving in latest {} iters."
@@ -167,7 +183,8 @@ class StopLogic(Stopper):
             min_rew = deque(maxlen = self.most_recent)
             min_rew.append(result["episode_reward_min"])
             self.trials[trial_id] = {"stop": False, "num_entries": 1, \
-                                     "mean_rewards": mean_rew, "max_rewards": max_rew, "min_rewards": min_rew}
+                                     "mean_rewards": mean_rew, "max_rewards": max_rew, "min_rewards": min_rew, "worst_mean": math.inf,
+                                     "best_mean": -math.inf}
 
         return False
 

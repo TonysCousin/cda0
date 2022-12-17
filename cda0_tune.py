@@ -80,7 +80,7 @@ params["l2_reg"]                            = 0.0
 """
 # ===== Params for PPO ======================================================================
 
-params["lr"]                                = tune.loguniform(3e-5, 1e-3)
+params["lr_schedule"]                       = [[0, 1.0e-4], [400000, 1.0e-5], [800000, 1.0e-6]]
 params["sgd_minibatch_size"]                = 32 #must be <= train_batch_size (and divide into it)
 params["train_batch_size"]                  = 2400 #must be = rollout_fragment_length * num_workers * num_envs_per_worker
 #params["grad_clip"]                         = tune.uniform(0.1, 0.5)
@@ -88,18 +88,18 @@ params["train_batch_size"]                  = 2400 #must be = rollout_fragment_l
 
 # Add dict here for lots of model HPs
 model_config = params["model"]
-model_config["fcnet_hiddens"]               = [64, 48, 8] #tune.choice([[64, 48, 8], [64, 24], [32, 12]])
+model_config["fcnet_hiddens"]               = [128, 50] #tune.choice([[64, 48, 8], [64, 24], [32, 12]])
 model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
 model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
 params["model"] = model_config
 
 explore_config = params["exploration_config"]
 explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-explore_config["stddev"]                    = tune.uniform(0.2, 0.5) #this param is specific to GaussianNoise
+explore_config["stddev"]                    = tune.uniform(0.4, 0.6) #this param is specific to GaussianNoise
 explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
 explore_config["initial_scale"]             = 1.0
 explore_config["final_scale"]               = 0.04 #tune.choice([1.0, 0.01])
-explore_config["scale_timesteps"]           = 1000000  #tune.choice([100000, 400000]) #was 900k
+explore_config["scale_timesteps"]           = 1600000  #tune.choice([100000, 400000]) #was 900k
 params["exploration_config"] = explore_config
 
 
@@ -120,6 +120,7 @@ stopper = StopLogic(max_timesteps           = 400,
                     avg_over_latest         = 60,
                     success_threshold       = 5.0,
                     failure_threshold       = -5.0,
+                    degrade_threshold       = 0.25,
                     compl_std_dev           = 0.05
                    )
 run_config = air.RunConfig(
@@ -130,7 +131,7 @@ run_config = air.RunConfig(
                 checkpoint_config           = air.CheckpointConfig(
                                                 checkpoint_frequency        = 20,
                                                 checkpoint_score_attribute  = "episode_reward_mean",
-                                                num_to_keep                 = 4,
+                                                num_to_keep                 = 1, #if > 1 hard to tell which one is the best
                                                 checkpoint_at_end           = True
                 )
              )

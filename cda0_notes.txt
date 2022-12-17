@@ -623,8 +623,9 @@ LESSONS LEARNED from simple-car:
 	  many iterations.  I need to reduce this, and also print out more details when it decides to stop.
 	* Three of the first 11 trials peaked between 0 and +10 (mean reward); not great performance, but decent.
 	  Inference on two of these shows good performance.  Their LRs were 7.5e-5, 1.1e-4, 9.5e-4, and they
-	  used noise magnituce (stddev) of 0.61, 0.25, 0.17, respectively. So I believe I have this lane change
+	  used noise magnitude (stddev) of 0.61, 0.25, 0.17, respectively. So I believe I have this lane change
 	  nailed.
+
 * Mods for next run:
 	* Reduced the avg_over_latest param from 300 to 60 iterations, because I believe this is iters, not
 	  steps. I added better output on stop condition to help confirm this.
@@ -664,4 +665,45 @@ LESSONS LEARNED from simple-car:
 12/14/22:
 	* This run was worse than the previous. Only one trial reached above 0 mean reward, but stayed < 5.
 	  It had LR = 8.8e-5 and noise stddev = 0.28.
-	* I feel like LR annealing is going to be important to get anything better.
+	* Like pretty much all trials to date, good or bad, the mean reward tends to climb to some peak,
+	  usually around 400k to 600k steps, then it falls off, sometimes dramatically. I feel like LR
+	  annealing is going to be important to get past this problem and allow things to keep learning.
+
+* Next run:
+	* Figured out how to add LR annealing to the PPO params, so did that, going from 2e-4 to 2e-6 over
+	  the first 800k steps.  Did not try to make this a tuned param at this time.
+
+12/15/22:
+	* The chosen schedule did not perform well at all.  3 trials peaked just below 0, but all exhibited
+	  some amount of pull-back after a fairly short peak.  Trials that tended to stay the most flat
+	  after peaking were 2, 4, 5, 7, 11, 13. There is no correlation here with noise magnitude, as these
+	  span the full range allowed, as do the trials not listed here.
+
+* Next run:
+	* Changed the LR schedule a bit, generally moving it to lower values (about 2x change), with an
+	  extra breakpoint.
+	* AI: I cannot see the exact LR being used in the log for any given time step. It would be good to
+	  add a print statement into the PPO code to make that visible.
+
+12/16/22:
+	* Three trials peaked above 0 but below +10. Inference on 2 of them showed close to constant,
+	  small accel throughout, but got decent rewards in lanes 0 & 1 (~6-9); but when starting in lane 2
+	  it continually either slowed to a stop or drove off the end of the lane. No good! The third trial
+	  performed about the same in lanes 0 & 1, but in lane 2 it always did an illegal lane change in
+	  the first time step.  Clearly, nobody has learned how to drive lane 2 here.  This explains the
+	  persistent plots of -50 to -80 in the min rewards arena. It never exceeds -50.  Two of these
+	  trials had large noise magnitude (0.48 and 0.46), seeming to indicate that larger noise is good.
+
+* Next run:
+	* It appears that lane 2 performance was good when that was the only thing trained, but when the
+	  other lanes were thrown in it never learned well.  Possible solutions:
+		* Force the training to select lane 2 more often that totally random choice.
+		* More iterations
+		* Larger NN to accommodate the additional stuff it needs to learn.
+		* Use more noise
+	* I will try to make the NN wider instead of deep.  Changing from [64, 48, 8] to [128, 50].
+	* Increased noise magnitude to the range of [0.4, 0.6] and stretched out its schedule to fully
+	  decay to 0.04 at 1.6M steps (which is typically where the latest runs have been ending).
+	* Modified reset() to train on lane 2 50% of the time and lanes 0 and 1 25% each.
+	* Added stop condition in the StopLogic class to terminate if the mean reward degrades at least
+	  x (currently using 25%) below its peak in a given trial.
