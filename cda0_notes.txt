@@ -707,3 +707,13 @@ LESSONS LEARNED from simple-car:
 	* Modified reset() to train on lane 2 50% of the time and lanes 0 and 1 25% each.
 	* Added stop condition in the StopLogic class to terminate if the mean reward degrades at least
 	  x (currently using 25%) below its peak in a given trial.
+
+12/17/22:
+	* The 6 trials complete so far are looking like better trends, steadily climbing toward zero,
+	  but some of them are being cut off prematurely by a defective stopper, so I aborted.
+
+* Next run:
+	* Fixed the stopper defect (in the new code I added yesterday).
+	* Adjusted the LR schedule so it doesn't drop off so fast, based on where the reward curve was
+	  starting to flatten out.
+	* Adjusted the long-term noise to be a bit higher, and increased the initial range somewhat.

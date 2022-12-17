@@ -38,8 +38,8 @@ class StopLogic(Stopper):
         self.completion_std_threshold = compl_std_dev
         print("\n///// StopLogic initialized with max_timesteps = {}, max_iterations = {}, min_iterations = {}"
                 .format(self.max_timesteps, self.max_iterations, self.required_min_iters))
-        print("      most_recent = {}, success_avg_thresh = {:.2f}, failure_avg_thresh = {:.2f}, compl_std_thresh ={:.3f}"
-                .format(self.most_recent, self.success_avg_threshold, self.failure_avg_threshold, self.completion_std_threshold))
+        print("      most_recent = {}, success_avg_thresh = {:.2f}, failure_avg_thresh = {:.2f}, degrade_threshold = {:.2f}, compl_std_thresh ={:.3f}"
+                .format(self.most_recent, self.success_avg_threshold, self.failure_avg_threshold, self.degrade_threshold, self.completion_std_threshold))
 
         # Each entry will have key = trial_id and value = dict containing the following:
         #   "stop" (bool) - should this trial be stopped?
@@ -146,8 +146,10 @@ class StopLogic(Stopper):
                                 done = True
 
                         # If the avg mean is well below the best achieved so far, then stop as failure
-                        if avg_of_mean < (self.trials[trial_id]["best_mean"] - self.trials[trial_id]["worst_mean"]) * self.degrade_threshold:
-                            print("\n///// Stopping trial - mean reward is failing and {:.0f} below its peak.".format(100*self.degrade_threshold))
+                        delta = (self.trials[trial_id]["best_mean"] - self.trials[trial_id]["worst_mean"]) * self.degrade_threshold
+                        thresh_value = self.trials[trial_id]["best_mean"] - delta
+                        if avg_of_mean < thresh_value:
+                            print("\n///// Stopping trial - mean reward is failing and {:.0f}% below its peak.".format(100*self.degrade_threshold))
                             done = True
 
 
