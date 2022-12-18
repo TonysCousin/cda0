@@ -21,6 +21,8 @@ env_config["time_step_size"]                = 0.5
 env_config["debug"]                         = 0
 env_config["training"]                      = True
 env_config["randomize_start_dist"]          = True #tune.choice([True, False])
+env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit
+env_config["neighbor_start_loc"]            = 320.0 #dist downtrac from beginning of lane 1 for n3, m
 #env_config["init_ego_lane"]                 = 0
 
 # Algorithm configs

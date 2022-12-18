@@ -354,17 +354,40 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
             ego_speed = self.prng.random() * 31.0 + 4.0 if self.init_ego_speed is None  else self.init_ego_speed
 
+        # Neighbor vehicles always go a constant speed, always travel in lane 1, and always start at the same location
+        self.vehicles[1].lane_id = 1
+        self.vehicles[1].dist_downtrack = self.neighbor_start_loc + 4.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
+        self.vehicles[1].speed = self.neighbor_speed
+        self.vehicles[1].lane_change_status = "none"
+        self.vehicles[2].lane_id = 1
+        self.vehicles[2].dist_downtrack = self.neighbor_start_loc + 2.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
+        self.vehicles[2].speed = self.neighbor_speed
+        self.vehicles[2].lane_change_status = "none"
+        self.vehicles[3].lane_id = 1
+        self.vehicles[3].dist_downtrack = self.neighbor_start_loc + 0.0 #at end of the line of 3 neighbors
+        self.vehicles[3].speed = self.neighbor_speed
+        self.vehicles[3].lane_change_status = "none"
+        if self.debug > 1:
+            print("      in reset: vehicles = ")
+            for i, v in enumerate(self.vehicles):
+                v.print(i)
+
+        # If the ego vehicle is in lane 1 (where the neighbor vehicles are), then we need to initialize its position so that it isn't
+        # going to immediately crash with them (n1 is always the farthest downtrack and n3 is always the farthest uptrack). Give it
+        # more room if going in front of the neighbors, as ego has limited accel and may be starting much slower than they are.
         if ego_lane_id == 1:
-            ego_x = max(ego_x, 5.0*SimpleHighwayRamp.VEHICLE_LENGTH) #need to start in front of the neighbor vehicles if in lane 1
-        if self.debug > 0:
-            print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
+            min_loc = self.vehicles[3].dist_downtrack - 5.0*SimpleHighwayRamp.VEHICLE_LENGTH
+            max_loc = self.vehicles[1].dist_downtrack + 20.0*SimpleHighwayRamp.VEHICLE_LENGTH
+            if min_loc < ego_x < max_loc:
+                ego_x = max_loc
+                if self.debug > 0:
+                    print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
         #print("///// reset: training = {}, ego_lane_id = {}, ego_x = {:.2f}, ego_speed = {:.2f}".format(self.training, ego_lane_id, ego_x, ego_speed))
         self._verify_obs_limits("reset after initializing local vars")
 
         # Reinitialize the whole observation vector
         self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE)
         ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_x)
-        #TODO future (all 3 vehicles): n1_rem, _, _, _, _, _, _ = self._get_current_lane_geom(n1_lane, n1_x)
         self.vehicles[0].lane_id = ego_lane_id
         self.vehicles[0].dist_downtrack = ego_x
         self.vehicles[0].speed = ego_speed
@@ -384,24 +407,6 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.ADJ_LN_RIGHT_REM]     = r_rem
         self.obs[self.STEPS_SINCE_LN_CHG]   = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
         self._verify_obs_limits("reset after populating main obs")
-
-        #neighbor vehicles don't move for initial phase - since these are constant speed, they stay out of the way
-        self.vehicles[1].lane_id = 1
-        self.vehicles[1].dist_downtrack = 4.0 * SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
-        self.vehicles[1].speed = 0.0
-        self.vehicles[1].lane_change_status = "none"
-        self.vehicles[2].lane_id = 1
-        self.vehicles[2].dist_downtrack = 2.0 * SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
-        self.vehicles[2].speed = 0.0
-        self.vehicles[2].lane_change_status = "none"
-        self.vehicles[3].lane_id = 1
-        self.vehicles[3].dist_downtrack = 0.0 #at beginning of lane
-        self.vehicles[3].speed = 0.0
-        self.vehicles[3].lane_change_status = "none"
-        if self.debug > 1:
-            print("      in reset: vehicles = ")
-            for i, v in enumerate(self.vehicles):
-                v.print(i)
 
         self.obs[self.N1_LANE_ID]           = self.vehicles[1].lane_id
         self.obs[self.N1_X]                 = self.vehicles[1].dist_downtrack
@@ -693,6 +698,22 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         except KeyError as e:
             pass
 
+        self.neighbor_speed = 29.1
+        try:
+            ns = config["neighbor_speed"]
+            if 0 <= ns < SimpleHighwayRamp.MAX_SPEED:
+                self.neighbor_speed = ns
+        except KeyError as e:
+            pass
+
+        self.neighbor_start_loc = 0.0
+        try:
+            nsl = config["neighbor_start_loc"]
+            if 0 <= nsl <= 1000.0:
+                self.neighbor_start_loc = nsl
+        except KeyError as e:
+            pass
+
 
     def _select_init_lane(self) -> int:
         """Chooses the initial lane for training runs, which may not be totally random."""
@@ -755,6 +776,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                                 crash = True
                                 break
 
+        #TODO: for early confidence only
+        if crash:
+            print("///// Collision detected between vehicles {} and {} at va lane = {}, va x = {:.1f}"
+                    .format(i, j, va.lane_id, va.dist_downtrack))
+
         if self.debug > 0:
             print("///// _check_for_collisions complete. Returning ", crash)
         return crash
@@ -776,18 +802,20 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # If the episode is done then
         if done:
 
-            # If there was a single- or multi-car crash or then
-            if crash  or  off_road:
-
-                # Subtract a crash penalty
+            # If there was a single- or multi-car crash or then set a penalty, larger for multi-car crash
+            if crash:
                 reward = -50.0
-                explanation = "Crash or ran off road. "
+                explanation = "Crashed into a vehicle. "
+
+            elif off_road:
+                reward = -40.0
+                explanation = "Ran off road. "
 
             # Else if the vehicle just stopped in the middle of the road then
             elif stopped:
 
                 # Subtract a penalty for no movement
-                reward = -50.0
+                reward = -30.0
                 explanation = "Vehicle stopped. "
 
             # Else (episode ended successfully)
@@ -796,8 +824,9 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 # If we are allowed to reward the completion bonus then add amount inversely proportional
                 # to the length of the episode.
                 if self.reward_for_completion:
-                    diff = 600 - self.steps_since_reset
-                    reward = max(47.26e-6 * diff*diff, 0.0)
+                    #diff = 600 - self.steps_since_reset
+                    #reward = max(47.26e-6 * diff*diff, 0.0)
+                    reward = min(max(10.0 - 0.05882*(self.steps_since_reset - 130), 0.0), 10.0)
                     explanation = "Successful episode! {} steps".format(self.steps_since_reset)
                 else:
                     reward = 0.0

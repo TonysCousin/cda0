@@ -17,23 +17,6 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
 
         super().__init__(config)
 
-        self.debug = 0
-        try:
-            db = config["debug"]
-        except KeyError as e:
-            db = None
-        if db is not None  and  db != ""  and  0 <= int(db) <= 2:
-            self.debug = int(db)
-
-        # Look for a flag indicating we are being used for training (vice inference)
-        self.training = False
-        try:
-            tr = config["training"]
-            if tr:
-                self.training = True
-        except KeyError as e:
-            pass
-
         # Redefine the action space here, with properly scaled lower & upper limits (inherited from base class)
         self.action_space.low[0] /= SimpleHighwayRamp.MAX_ACCEL
         self.action_space.high[0] /= SimpleHighwayRamp.MAX_ACCEL
@@ -57,7 +40,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         """Unscales the input actions from NN compliance to the 'raw' scale expected by the environment, then
             passes these actions to the environment to advance it one step and to gather new observations and rewards.
 
-            If the "training" config param is True, then the return obs  scales the resulting observations,
+            If the "training" config param is True, then the return obs needs the resulting observations scaled,
             such that it will be usable as input to a NN.  The rewards, dones and info structures are not modfied.
             However, if the "training" config does not exist or is not True, then the returned obs list is NOT scaled.
             This allows an inference engine to directly interpret the observations.  It will then be responsible for
@@ -72,12 +55,9 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         else:
             o = raw_obs
 
-
-        #TODO debug only
         #print("///// wrapper.step: scaled obs vector =")
         #for j in range(len(o)):
         #    print("      {:2d}:  {}".format(j, o[j]))
-
 
         return o, r, d, i
 
