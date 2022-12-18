@@ -717,3 +717,22 @@ LESSONS LEARNED from simple-car:
 	* Adjusted the LR schedule so it doesn't drop off so fast, based on where the reward curve was
 	  starting to flatten out.
 	* Adjusted the long-term noise to be a bit higher, and increased the initial range somewhat.
+	* Trials 2 and 8 peaked between +8 and +10 on mean rewards, and performed really well in
+	  inference on all lanes.  Noise on these was 0.65 and 0.41, respectively.  Accels were a
+	  little jerky at times, but there is no jerk penalty, so it's to be expected.  Agent tends to
+	  like the lower speeds a bit, so it would be worth increasing that penalty a little and
+	  narrowing its deadband as well, but not a major problem.  Also, the accels were more
+	  aggressive than I've seen in recent past, so I guess the extra neurons made that possible.
+	  If that's the case, then maybe a few more still could be more useful.
+	* AI: tweak the completion reward to drop off a little faster with the number of time steps.
+	  There is hardly a noticeable difference between 130 and 170 time steps, so not much motivation
+	  to speed it up.
+ ****	* I believe I have found what I'm looking for in the solo vehicle department.  Time to move on
+	  and build a version that can handle other traffic on the roadway.
+	* Lesson:  if the NN feels too small, try to add width before adding depth.
+
+
+>>>>>
+
+
+jjj
