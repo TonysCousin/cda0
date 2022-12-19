@@ -35,9 +35,11 @@ def main(argv):
     # Set up the environment
     config = ppo.DEFAULT_CONFIG.copy()
 
-    env_config = {  "time_step_size":   0.5,
-                    "debug":            0,
-                    "init_ego_lane":    start_lane
+    env_config = {  "time_step_size":       0.5,
+                    "debug":                0,
+                    "init_ego_lane":        start_lane,
+                    "neighbor_speed":       29.1,
+                    "neighbor_start_loc":   320.0 #dist downtrac from beginning of lane 1 for n3, m
                 }
 
     # DDPG - These need to be same as in the checkpoint being read!
@@ -91,7 +93,7 @@ def main(argv):
         raw_obs, reward, done, info = env.step(np.ndarray.tolist(action)) #obs returned is UNSCALED
         episode_reward += reward
 
-        # Display current status of the ego vehicle
+        # Display current status of all the vehicles
         graphics.update(action, raw_obs)
 
         # Wait for user to indicate okay to begin animation
@@ -138,18 +140,18 @@ def main(argv):
 class Graphics:
 
     # set up the colors
-    BLACK = (0, 0, 0)
-    WHITE = (255, 255, 255)
-    RED = (255, 0, 0)
-    GREEN = (0, 255, 0)
-    BLUE = (0, 0, 255)
-    YELLOW = (168, 168, 0)
+    BLACK           = (0, 0, 0)
+    WHITE           = (255, 255, 255)
+    LANE_EDGE_COLOR = WHITE
+    NEIGHBOR_COLOR  = (64, 128, 255)
+    EGO_COLOR       = (168, 168, 0) #yellow
+    PLOT_AXES_COLOR = (0, 0, 255)
 
     # Other graphics constants
-    LANE_WIDTH = 30.0 #m (wider than reality for graphics aesthetics)
+    LANE_WIDTH = Roadway.WIDTH
     WINDOW_SIZE_X = 1800
     WINDOW_SIZE_Y = 800
-    REAL_TIME_RATIO = 8.0   #Factor faster than real time
+    REAL_TIME_RATIO = 5.0   #Factor faster than real time
 
 
     def __init__(self,
@@ -210,6 +212,8 @@ class Graphics:
         self.roadway_center_y = y_min + 0.5*(y_max - y_min)
         self.display_center_r = Graphics.WINDOW_SIZE_X // 2
         self.display_center_s = Graphics.WINDOW_SIZE_Y // 2
+        #print("      Graphics init: scale = {}, display center r,s = ({:4d}, {:4d}), roadway center x,y = ({:5.0f}, {:5.0f})"
+        #        .format(self.scale, self.display_center_r, self.display_center_s, self.roadway_center_x, self.roadway_center_y))
 
         # Loop through the lane segments and draw the left and right edge lines of each
         for lane in env.roadway.lanes:
@@ -219,10 +223,17 @@ class Graphics:
         pygame.display.update()
         #time.sleep(20) #debug only
 
-        # Initialize the previous ego vehicle location at the beginning of a lane
-        self.prev_ego_r = self.scale*(self.env.roadway.lanes[0].segments[0][0] - self.roadway_center_x) + self.display_center_r
-        self.prev_ego_s = Graphics.WINDOW_SIZE_Y - \
-                          self.scale*(self.env.roadway.lanes[0].segments[0][1] - self.roadway_center_y) + self.display_center_s
+        # Set up lists of previous screen coords and display colors for each vehicle
+        self.prev_veh_r = [0, 0, 0, 0]
+        self.prev_veh_s = [0, 0, 0, 0]
+        self.veh_colors = [Graphics.EGO_COLOR, Graphics.NEIGHBOR_COLOR, Graphics.NEIGHBOR_COLOR, Graphics.NEIGHBOR_COLOR]
+
+        # Initialize the previous vehicles' locations near the beginning of a lane (doesn't matter which lane for this step)
+        for v_idx in range(4):
+            self.prev_veh_r[v_idx] = int(self.scale*(self.env.roadway.lanes[0].segments[0][0] - self.roadway_center_x)) + self.display_center_r
+            self.prev_veh_s[v_idx] = Graphics.WINDOW_SIZE_Y - \
+                                     int(self.scale*(self.env.roadway.lanes[0].segments[0][1] - self.roadway_center_y)) - self.display_center_s
+        #TODO: draw rectangles instead of circles, with length = vehicle length & width = 0.5*lane width
         self.veh_radius = int(0.25 * Graphics.LANE_WIDTH * self.scale) #radius of icon in pixels
 
 
@@ -230,21 +241,26 @@ class Graphics:
                action  : list,      #vector of actions for the ego vehicle for the current time step
                obs     : list       #vector of observations of the ego vehicle for the current time step
               ):
-        """Paints all updates on the display screen, including the new motion of the ego vehicle and any data plots."""
+        """Paints all updates on the display screen, including the new motion of every vehicle and any data plots."""
 
-        # Grab the background under where we want the vehicle to appear & erase the old vehicle
-        pygame.draw.circle(self.windowSurface, Graphics.BLACK, (self.prev_ego_r, self.prev_ego_s), self.veh_radius, 0)
+        # Loop through each vehicle in the scenario
+        for v_idx in range(4):
 
-        # Display the vehicle in its new location.  Note that the obs vector is scaled for the NN.
-        new_x, new_y = self._get_vehicle_coords(obs)
-        new_r = int(self.scale*(new_x - self.roadway_center_x)) + self.display_center_r
-        new_s = Graphics.WINDOW_SIZE_Y - int(self.scale*(new_y - self.roadway_center_y) + self.display_center_s)
-        pygame.draw.circle(self.windowSurface, Graphics.YELLOW, (new_r, new_s), self.veh_radius, 0)
-        pygame.display.update()
+            # Grab the background under where we want the vehicle to appear & erase the old vehicle
+            pygame.draw.circle(self.windowSurface, Graphics.BLACK, (self.prev_veh_r[v_idx], self.prev_veh_s[v_idx]), self.veh_radius, 0)
 
-        # Update the previous location
-        self.prev_ego_r = new_r
-        self.prev_ego_s = new_s
+            # Display the vehicle in its new location.  Note that the obs vector is not scaled at this point.
+            new_x, new_y = self._get_vehicle_coords(obs, v_idx)
+            new_r = int(self.scale*(new_x - self.roadway_center_x)) + self.display_center_r
+            new_s = Graphics.WINDOW_SIZE_Y - int(self.scale*(new_y - self.roadway_center_y)) - self.display_center_s
+            pygame.draw.circle(self.windowSurface, self.veh_colors[v_idx], (new_r, new_s), self.veh_radius, 0)
+            pygame.display.update()
+            #print("   // Graphics: moving vehicle {} from r,s = ({:4d}, {:4d}) to ({:4d}, {:4d}) and new x,y = ({:5.0f}, {:5.0f})"
+            #        .format(v_idx, self.prev_veh_r[v_idx], self.prev_veh_s[v_idx], new_r, new_s, new_x, new_y))
+
+            # Update the previous location
+            self.prev_veh_r[v_idx] = new_r
+            self.prev_veh_s[v_idx] = new_s
 
         # Pause until the next time step
         self.pgclock.tick(self.display_freq)
@@ -265,7 +281,7 @@ class Graphics:
             ASSUMES that all segments are oriented with headings between 0 and 90 deg for simplicity.
         """
 
-        # Find the scaled end-point pixel locations
+        # Find the scaled lane end-point pixel locations (these is centerline of the lane)
         r0 = self.scale*(x0 - self.roadway_center_x) + self.display_center_r
         r1 = self.scale*(x1 - self.roadway_center_x) + self.display_center_r
         s0 = Graphics.WINDOW_SIZE_Y - (self.scale*(y0 - self.roadway_center_y) + self.display_center_s)
@@ -291,30 +307,34 @@ class Graphics:
         right_s1 = s1 + ws*cos_a
 
         # Draw the edge lines
-        pygame.draw.line(self.windowSurface, Graphics.WHITE, (left_r0, left_s0), (left_r1, left_s1))
-        pygame.draw.line(self.windowSurface, Graphics.WHITE, (right_r0, right_s0), (right_r1, right_s1))
+        pygame.draw.line(self.windowSurface, Graphics.LANE_EDGE_COLOR, (left_r0, left_s0), (left_r1, left_s1))
+        pygame.draw.line(self.windowSurface, Graphics.LANE_EDGE_COLOR, (right_r0, right_s0), (right_r1, right_s1))
 
 
     def _get_vehicle_coords(self,
-                            obs:    list
+                            obs         : list, #the unscaled observation vector
+                            vehicle_id  : int   #ID of the vehicle; 0=ego, 1-3=neighbor vehicles
                            ) -> tuple:
-        """Returns the map coordinates of the ego vehicle based on lane ID and distance downtrack.
+        """Returns the map coordinates of the indicated vehicle based on its lane ID and distance downtrack.
 
             CAUTION: these calcs are hard-coded to the specific roadway geometry in this code,
             it is not a general solution.
         """
+        assert 0 <= vehicle_id <= 3, "///// _get_vehicle_coords: invalid vehicle_id = {}".format(vehicle_id)
+        lane_id_idx = self.env.EGO_LANE_ID  + 4*vehicle_id
+        x_idx = self.env.EGO_X              + 4*vehicle_id
 
         x = None
         y = None
-        lane = obs[self.env.EGO_LANE_ID]
+        lane = obs[lane_id_idx]
         if lane == 0:
-            x = obs[self.env.EGO_X]
+            x = obs[x_idx]
             y = self.env.roadway.lanes[0].segments[0][1]
         elif lane == 1:
-            x = obs[self.env.EGO_X]
+            x = obs[x_idx]
             y = self.env.roadway.lanes[1].segments[0][1]
         else:
-            ddt = obs[self.env.EGO_X]
+            ddt = obs[x_idx]
             if ddt < self.env.roadway.lanes[2].segments[0][4]: #vehicle is in seg 0
                 seg0x0 = self.env.roadway.lanes[2].segments[0][0]
                 seg0y0 = self.env.roadway.lanes[2].segments[0][1]
@@ -347,7 +367,7 @@ class Plot:
                  min_y      : float,            #min value of data to be plotted on Y axis
                  max_y      : float,            #max value of data to be plotted on Y axis
                  num_steps  : int       = 150,  #num time steps that will be plotted along X axis
-                 color      : tuple     = Graphics.WHITE, #color of the axes
+                 color      : tuple     = Graphics.PLOT_AXES_COLOR, #color of the axes
                  title      : str       = None  #Title above the plot
                 ):
         """Defines and draws the empty plot on the screen, with axes and title."""

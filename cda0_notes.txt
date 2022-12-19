@@ -740,8 +740,26 @@ LESSONS LEARNED from simple-car:
 
 DRIVING IN TRAFFIC
 
+The code is essentially already in place to start running 3 neighbor vehicles on the track along with
+the ego vehicle (AI agent).  I made a few small changes, noted below, to turn that code on.  It will
+run 3 vehicles at constant speed in lane 1.  That speed can be varied for each trial by Tune, as can
+their starting downtrack distance.  However, for the first run, I am leaving them constant.  These
+vehicles will always all drive the same speed, so they won't crash into each other.  They will remain
+2 vehicle lengths apart, which leaves a 1-vehicle bumper-to-bumper gap between them, not enough for
+the ego vehicle to slide into without registering a crash.  Hopefully, this will force the ego vehicle
+to either speed up to get in front or slow down to get behind if it is trying to change lanes while
+they are in the way.  For now the ego vehicle will be started randomly, as before, in any lane and
+at any location and speed.  Therefore, it will often never see a conflict with the neighbors.
 	* Changed completion reward from parabolic to linear, and made it degrade to 0 sooner (300
 	  steps vice the previous 600 steps).
 	* Changed penalties for failed episodes to give a little less weight to those that endedd in
 	  an off-road (-40) or stopping in the road (-30), while a crash with another vehicle is still
 	  worth -50 points.
+	* Modified reset() to give the neighbor vehicles a non-zero starting speed and location, which
+	  can be configured.
+
+* First run, set neighbor speed constant at 29.1 m/s and neighbor location constant at 320 m, which
+gives n3 the same travel distance to the merge point as a vehicle would have if starting at the
+beginning of lane 2.  This feels like reasonably good chances of forcing a merge crash situation.
+I am staying with the same NN structure and other tuning params that were successful yesterday in the
+solo vehicle training.

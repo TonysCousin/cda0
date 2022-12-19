@@ -478,6 +478,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                 new_accel_cmd = action[0]
                 prev_accel_cmd = self.obs[self.EGO_ACCEL_CMD_CUR]
             new_speed, new_x = v.advance_vehicle(new_accel_cmd, prev_accel_cmd)
+            if new_x > SimpleHighwayRamp.SCENARIO_LENGTH:
+                new_x = SimpleHighwayRamp.SCENARIO_LENGTH #limit it to avoid exceeding NN input validation rules
+                if i == 0: #the ego vehicle has crossed the finish line; episode is now complete
+                    done = True
+                    return_info["reason"] = "Success; end of scenario"
             if self.debug > 1:
                 print("      Vehicle {} advanced with new_accel_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}"
                         .format(i, new_accel_cmd, new_speed, new_x))
@@ -486,15 +491,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             self.obs[obs_idx + 2] = new_speed
             self.obs[obs_idx + 3] = new_rem
 
+        # Pull out the ego vehicle stuff separately
         new_ego_speed = self.obs[self.EGO_SPEED]
         new_ego_x = self.obs[self.EGO_X]
         new_ego_rem = self.obs[self.EGO_LANE_REM]
-
-        # If the ego vehicle has run off the end of the scenario, consider the episode successfully complete
-        if new_ego_x >= SimpleHighwayRamp.SCENARIO_LENGTH:
-            new_ego_x = SimpleHighwayRamp.SCENARIO_LENGTH #clip it so it doesn't violate obs bounds
-            done = True
-            return_info["reason"] = "Success; end of scenario"
 
         # Determine if we are beginning or continuing a lane change maneuver.
         # Accept a lane change command that lasts for several time steps or only one time step.  Once the first
@@ -941,11 +941,14 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
 
 class Roadway:
-    """Defines the geometry of the roadway lanes and their drivable connections.
+    """Defines the geometry of the roadway lanes and their drivable connections.  All dimensions are
+        physical quantities, measured in meters from an arbitrary map origin.
 
         CAUTION: This is not a general container.  This class code defines the exact geometry of the
         scenario being used by this version of the code.
     """
+
+    WIDTH = 20.0 #lane width, m; using a crazy large number so that grapics are pleasing
 
     def __init__(self,
                  debug      : int   #debug printing level
@@ -960,21 +963,24 @@ class Roadway:
         really_long = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
 
         # Lane 0 - single segment as the left through lane
-        segs = [(0.0, 300.0, 2200.0, 300.0, 2200.0)]
+        L0_Y = 300.0 #arbitrary y value for the east-bound lane
+        segs = [(0.0, L0_Y, 2200.0, L0_Y, 2200.0)]
         lane = Lane(0, really_long, segs,
                     right_id = 1, right_join = 0.0, right_sep = really_long)
         self.lanes.append(lane)
 
         # Lane 1 - single segment as the right through lane
-        segs = [(0.0, 270.0, 2200.0, 270.0, 2200.0)]
+        L1_Y = L0_Y - Roadway.WIDTH
+        segs = [(0.0, L1_Y, 2200.0, L1_Y, 2200.0)]
         lane = Lane(1, really_long, segs,
                     left_id = 0, left_join = 0.0, left_sep = really_long,
                     right_id = 2, right_join = 800.0, right_sep = 1320.0)
         self.lanes.append(lane)
 
         # Lane 2 - two segments as the merge ramp; first seg is separate; second it adjacent to L1
-        segs = [(384.3, 0.0,    800.0,  240.0, 480.0),
-                (800.0, 240.0,  1320.0, 240.0, 520.0)]
+        L2_Y = L1_Y - Roadway.WIDTH
+        segs = [(384.3, L2_Y-240.0,  800.0, L2_Y, 480.0),
+                (800.0, L2_Y,       1320.0, L2_Y, 520.0)]
         lane = Lane(2, 1000.0, segs, left_id = 1, left_join = 480.0, left_sep = 1000.0)
         self.lanes.append(lane)
 
