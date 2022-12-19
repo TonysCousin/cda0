@@ -763,3 +763,28 @@ gives n3 the same travel distance to the merge point as a vehicle would have if 
 beginning of lane 2.  This feels like reasonably good chances of forcing a merge crash situation.
 I am staying with the same NN structure and other tuning params that were successful yesterday in the
 solo vehicle training.
+	* First several trials did decently, peaking between -20 and -10.
+	* Five of the first trials died with an error.
+	* During this run I enhanced the inference program to display the neighbor vehicles as well.
+	  It became obvious through this that they form a tiny target, so training episodes will
+	  probably normally miss them altogether, thus the agent won't have much opportunity to learn
+	  anything about deconfliction.
+
+* Next run:
+	* Made the vehicles much longer (40 m, which is about 2x the lenth of a semi), and started
+	  them farther apart, so that they will present a much larger barrier to lane change from
+	  lane 2.
+	* I adjusted the long end of the noise schedule so that it doesn't die off so soon (now goes
+	  to 0.1 at 2M steps).
+	* All trials progressed well, and all leveled out without any big drops.  But their plateau
+	  was around -18 to -8, so no successes.  Some inference runs with the new graphics show that
+	  40 m is too long for the vehicles in this scenario, as the 3 neighbors can completely
+	  block the merge area.
+
+* Next run:
+	* Reduced vehicle length to 20 m.  Also reduced the neighbor initial spacing in reset()
+	  from 4 lengths to 3.  At this length & spacing they can block about half of the merge area.
+	* Realized that the randomized start distance is being limited on a schedule that expires
+	  after 400k episodes.  This is going to increase more slowly than the time step count, but
+	  I increased the limit to 800k episodes to see what will happen.
+	* Fixed a defect in the crash detection logic.

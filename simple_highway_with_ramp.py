@@ -114,7 +114,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
     #metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     OBS_SIZE                = 29
-    VEHICLE_LENGTH          = 5.0       #m
+    VEHICLE_LENGTH          = 20.0       #m
     MAX_SPEED               = 35.0      #vehicle's max achievable speed, m/s
     MAX_ACCEL               = 3.0       #vehicle's max achievable acceleration (fwd or backward), m/s^2
     MAX_JERK                = 4.0       #max desirable jerk for occupant comfort, m/s^3
@@ -344,7 +344,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             ego_x = 0.0
             if self.randomize_start_dist:
                 m = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
-                max_distance = max(self.episode_count * (10.0 - m)/400000.0 + m, 10.0) #decreases over episodes
+                max_distance = max(self.episode_count * (10.0 - m)/800000.0 + m, 10.0) #decreases over episodes
+                print("///// reset: episode_count = {}, max_distance = {:4.0f}".format(self.episode_count, max_distance))
                 ego_x = self.prng.random() * max_distance
             ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
 
@@ -356,11 +357,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1, and always start at the same location
         self.vehicles[1].lane_id = 1
-        self.vehicles[1].dist_downtrack = self.neighbor_start_loc + 4.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
+        self.vehicles[1].dist_downtrack = self.neighbor_start_loc + 6.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
         self.vehicles[1].speed = self.neighbor_speed
         self.vehicles[1].lane_change_status = "none"
         self.vehicles[2].lane_id = 1
-        self.vehicles[2].dist_downtrack = self.neighbor_start_loc + 2.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
+        self.vehicles[2].dist_downtrack = self.neighbor_start_loc + 3.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
         self.vehicles[2].speed = self.neighbor_speed
         self.vehicles[2].lane_change_status = "none"
         self.vehicles[3].lane_id = 1
@@ -376,8 +377,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # going to immediately crash with them (n1 is always the farthest downtrack and n3 is always the farthest uptrack). Give it
         # more room if going in front of the neighbors, as ego has limited accel and may be starting much slower than they are.
         if ego_lane_id == 1:
-            min_loc = self.vehicles[3].dist_downtrack - 5.0*SimpleHighwayRamp.VEHICLE_LENGTH
-            max_loc = self.vehicles[1].dist_downtrack + 20.0*SimpleHighwayRamp.VEHICLE_LENGTH
+            min_loc = self.vehicles[3].dist_downtrack - 4.0*SimpleHighwayRamp.VEHICLE_LENGTH
+            max_loc = self.vehicles[1].dist_downtrack + 10.0*SimpleHighwayRamp.VEHICLE_LENGTH
             if min_loc < ego_x < max_loc:
                 ego_x = max_loc
                 if self.debug > 0:
@@ -736,6 +737,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         crash = False
 
         # Loop through all vehicles to get vehicle A
+        va = None #TODO: all these initializations are only for the printing at bottom
+        vb = None
+        i = 0
+        j = 0
         for i in range(len(self.vehicles) - 1):
             va = self.vehicles[i]
 
@@ -776,10 +781,15 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
                                 crash = True
                                 break
 
+            if crash: #the previous break stmts only break out of the inner loop, so we need to break again
+                print("      Breaking from outer loop with i = {}, j = {}".format(i, j))
+                break
+
         #TODO: for early confidence only
         if crash:
-            print("///// Collision detected between vehicles {} and {} at va lane = {}, va x = {:.1f}"
-                    .format(i, j, va.lane_id, va.dist_downtrack))
+            print("///// Collision detected between vehicles {} and {}. Vehicle info is:".format(i, j))
+            for vi, vv in enumerate(self.vehicles):
+                vv.print(vi)
 
         if self.debug > 0:
             print("///// _check_for_collisions complete. Returning ", crash)

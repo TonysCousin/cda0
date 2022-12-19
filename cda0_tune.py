@@ -101,7 +101,7 @@ explore_config["stddev"]                    = tune.uniform(0.4, 0.7) #this param
 explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
 explore_config["initial_scale"]             = 1.0
 explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-explore_config["scale_timesteps"]           = 1600000  #tune.choice([100000, 400000]) #was 900k
+explore_config["scale_timesteps"]           = 2000000  #tune.choice([100000, 400000]) #was 900k
 params["exploration_config"] = explore_config
 
 
