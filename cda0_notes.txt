@@ -788,3 +788,54 @@ solo vehicle training.
 	  after 400k episodes.  This is going to increase more slowly than the time step count, but
 	  I increased the limit to 800k episodes to see what will happen.
 	* Fixed a defect in the crash detection logic.
+
+12/20/22:
+	* Results here are similar to the previous run, with all trials ending in the -20 to -10
+	  range.
+
+* Next run:
+	* Increased NN size to [256, 64]
+
+12/21/22:
+	* No improvement in performance. Most trials ended with mean reward between -20 and -10.
+	  Two of them peaked around -7.
+
+* Next run:
+	* Changed reset() calc of max_distance for randomized start distance.  I confirmed that it
+	  is based on episode counts, which seldom exceed 3000, but it was stretching it out over
+	  800k episodes.  I pulled that back in to schedule the reduction over 2000 episodes, so
+	  that my later episodes will be forced to run virtually the whole track.
+	* Reduced the initial LR somewhat.
+	* Trying some 3-layer NN structures as a tuning variable.
+	* One trial reached -22 for mean reward, but the others slowly crept upwards in the low
+	  -30s before being terminated after ~1.2M steps due to the max reward falling to -30.  It
+	  would be interesting to see one of these left to run for several million steps since it
+	  is improving.
+	* I noticed that these trials are running beyond 8000 episodes, so the max_distance param
+	  is getting shortened too fast.
+
+* Next run:
+	* Changed the max_distance schedule to reduce over 8000 episodes.
+
+12/22/22:
+	* A few trials did the typical plateau between -20 and -10. One peaked slightly above -10
+	  but couldn't hold it.  Several stayed in the -35 region the whole way, with max rewards
+	  rapidly dropping down to -30.  These tended to be the 3-layer models.
+
+* Next run:
+	* Made a few adjustments to the stop logic to help struggling borderline cases continue.
+	* Changed tuner to select from larger 2-layer models.
+	* AI: I think what is really needed is some curriculum training where the model first gets
+	  trained to navigate the track without traffic, then introduce traffic.  I haven't yet
+	  figured out how to save a checkpoint from a tuning run, which would be maybe needed to
+	  do that.
+
+12/23/22:
+	* Process died during trial 5.  Of the ones complete, only one peaked above -15 and one
+	  reached above -20.
+
+* Next run:
+	* Added some rudimentary curriculum learning by using a new environment config param
+	  to specify at what point neighbor vehicles will start being used (episode #).  Prior
+	  to that episode, they will stay in their initial positions like before I started using
+	  them.

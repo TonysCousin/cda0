@@ -106,7 +106,7 @@ class StopLogic(Stopper):
                 std_of_mean = stdev(self.trials[trial_id]["mean_rewards"])
                 #print("///// StopLogic: iter #{}, avg reward = {:.2f}, std of mean = {:.3f}".format(total_iters, avg, std_of_mean))
                 if avg_of_mean >= self.success_avg_threshold  and  std_of_mean <= self.completion_std_threshold:
-                    print("\n///// Stopping trial due to success!\n")
+                    print("\n///// Stopping trial - SUCCESS!\n")
                     return True
 
                 # If we have seen more iterations than the min required for failure then
@@ -127,7 +127,8 @@ class StopLogic(Stopper):
                     std_of_max  = stdev(self.trials[trial_id]["max_rewards"])
                     if std_of_mean <= self.completion_std_threshold  and  std_of_max <= self.completion_std_threshold \
                        and  avg_of_mean >= self.success_avg_threshold:
-                        print("\n///// Stopping trial due to winner with no further change")
+                        print("\n///// Stopping trial - winner with no further change. Mean avg = {:.1f}, mean std = {:.2f}"
+                                .format(avg_of_mean, std_of_mean))
                         return True
 
                     # If the avg mean reward over recent history is below the failure threshold then
@@ -141,15 +142,16 @@ class StopLogic(Stopper):
                         avg_of_max = mean(dq_max)
                         slope_max = self._get_slope(dq_max)
                         if avg_of_max < self.success_avg_threshold:
-                            if slope_max <= 0.0:
-                                print("\n///// Stopping trial - no improvement in {} iters.\n".format(self.most_recent))
+                            if avg_of_max <= self.failure_avg_threshold  or  (slope_max < 0.0  and  slope_mean < 0.04):
+                                print("\n///// Stopping trial - max is toast in {} iters with little hope of turnaround.\n".format(self.most_recent))
                                 done = True
 
-                        # If the avg mean is well below the best achieved so far, then stop as failure
-                        delta = (self.trials[trial_id]["best_mean"] - self.trials[trial_id]["worst_mean"]) * self.degrade_threshold
+                        # If the avg mean is well below the best achieved so far and going south, then stop as failure
+                        delta = max((self.trials[trial_id]["best_mean"] - self.trials[trial_id]["worst_mean"]) * self.degrade_threshold, 10.0)
                         thresh_value = self.trials[trial_id]["best_mean"] - delta
-                        if avg_of_mean < thresh_value:
-                            print("\n///// Stopping trial - mean reward is failing and {:.0f}% below its peak.".format(100*self.degrade_threshold))
+                        if avg_of_mean < thresh_value  and  slope_mean < 0.0:
+                            print("\n///// Stopping trial - mean reward is failing and {:.0f}% below its peak of {:.1f}."
+                                    .format(100*self.degrade_threshold, self.trials[trial_id]["best_mean"]))
                             done = True
 
 

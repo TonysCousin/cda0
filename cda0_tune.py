@@ -23,6 +23,7 @@ env_config["training"]                      = True
 env_config["randomize_start_dist"]          = True #tune.choice([True, False])
 env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit
 env_config["neighbor_start_loc"]            = 320.0 #dist downtrac from beginning of lane 1 for n3, m
+env_config["neighbor_first_episode"]        = 5000  #first episode that neighbors are put into motion (curriculum learning)
 #env_config["init_ego_lane"]                 = 0
 
 # Algorithm configs
@@ -82,7 +83,7 @@ params["l2_reg"]                            = 0.0
 """
 # ===== Params for PPO ======================================================================
 
-params["lr_schedule"]                       = [[0, 1.0e-4], [800000, 1.0e-5], [1400000, 2.0e-6]]
+params["lr_schedule"]                       = [[0, 1.0e-4], [800000, 1.0e-5], [1400000, 1.0e-5], [3000000, 1.0e-6]]
 params["sgd_minibatch_size"]                = 32 #must be <= train_batch_size (and divide into it)
 params["train_batch_size"]                  = 2400 #must be = rollout_fragment_length * num_workers * num_envs_per_worker
 #params["grad_clip"]                         = tune.uniform(0.1, 0.5)
@@ -90,7 +91,7 @@ params["train_batch_size"]                  = 2400 #must be = rollout_fragment_l
 
 # Add dict here for lots of model HPs
 model_config = params["model"]
-model_config["fcnet_hiddens"]               = [128, 50] #tune.choice([[64, 48, 8], [64, 24], [32, 12]])
+model_config["fcnet_hiddens"]               = tune.choice([[256, 64], [256, 128]])
 model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
 model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
 params["model"] = model_config
@@ -100,8 +101,8 @@ explore_config["type"]                      = "GaussianNoise" #default OrnsteinU
 explore_config["stddev"]                    = tune.uniform(0.4, 0.7) #this param is specific to GaussianNoise
 explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
 explore_config["initial_scale"]             = 1.0
-explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-explore_config["scale_timesteps"]           = 2000000  #tune.choice([100000, 400000]) #was 900k
+explore_config["final_scale"]               = 0.2 #tune.choice([1.0, 0.01])
+explore_config["scale_timesteps"]           = 4000000  #tune.choice([100000, 400000]) #was 900k
 params["exploration_config"] = explore_config
 
 
@@ -114,11 +115,11 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric                      = "episode_reward_mean",
                 mode                        = "max",
-                num_samples                 = 15 #number of HP trials
+                num_samples                 = 14 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 400,
                     max_iterations          = 1500,
-                    min_iterations          = 400,
+                    min_iterations          = 800,  #allows for curriculum training by adding neighbor vehicles in part-way through
                     avg_over_latest         = 70,
                     success_threshold       = 5.0,
                     failure_threshold       = -10.0,
