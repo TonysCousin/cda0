@@ -23,7 +23,7 @@ env_config["training"]                      = True
 env_config["randomize_start_dist"]          = True #tune.choice([True, False])
 env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit
 env_config["neighbor_start_loc"]            = 320.0 #dist downtrac from beginning of lane 1 for n3, m
-env_config["neighbor_first_episode"]        = 5000  #first episode that neighbors are put into motion (curriculum learning)
+env_config["neighbor_first_timestep"]       = 1200000  #first total time step that neighbors are put into motion (curriculum learning)
 #env_config["init_ego_lane"]                 = 0
 
 # Algorithm configs
@@ -118,11 +118,11 @@ tune_config = tune.TuneConfig(
                 num_samples                 = 14 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 400,
-                    max_iterations          = 1500,
-                    min_iterations          = 800,  #allows for curriculum training by adding neighbor vehicles in part-way through
+                    max_iterations          = 1800,
+                    min_timesteps           = [1200000, 2000000], #phase 0 ends when env neighbor_first_timestep is triggered
                     avg_over_latest         = 70,
-                    success_threshold       = 5.0,
-                    failure_threshold       = -10.0,
+                    success_threshold       = [5.0, 1.0],
+                    failure_threshold       = [0.0, -10.0],
                     degrade_threshold       = 0.25,
                     compl_std_dev           = 0.05
                    )

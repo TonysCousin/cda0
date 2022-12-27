@@ -281,11 +281,12 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         # Other persistent data
         self.lane_change_underway = "none" #possible values: "left", "right", "none"
-        self.lane_change_count = 0 #num consecutive time steps since a lane change was begun
-        self.steps_since_reset = 0 #length of the current episode in time steps
-        self.stopped_count = 0 #num consecutive time steps in an episode where vehicle speed is zero
+        self.lane_change_count = 0  #num consecutive time steps since a lane change was begun
+        self.total_steps = 0        #num time steps for this trial, across all episodes
+        self.steps_since_reset = 0  #length of the current episode in time steps
+        self.stopped_count = 0      #num consecutive time steps in an episode where vehicle speed is zero
         self.reward_for_completion = True #should we award the episode completion bonus?
-        self.episode_count = 0 #number of training episodes (number of calls to reset())
+        self.episode_count = 0      #number of training episodes (number of calls to reset())
         self.accel_hist = deque(maxlen = 4)
         self.speed_hist = deque(maxlen = 4)
 
@@ -344,8 +345,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             ego_x = 0.0
             if self.randomize_start_dist:
                 m = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
-                max_distance = max(self.episode_count * (10.0 - m)/8000.0 + m, 10.0) #decreases over episodes
-                #print("///// reset: episode_count = {}, max_distance = {:4.0f}".format(self.episode_count, max_distance))
+                max_distance = max(self.total_steps * (10.0 - m)/800000.0 + m, 10.0) #decreases over time steps
+                #print("///// reset: step count = {}, max_distance = {:4.0f}".format(self.total_steps, max_distance))
                 ego_x = self.prng.random() * max_distance
             ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
 
@@ -358,11 +359,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # If we are beyond the neighbor starting episode (for curriculum learning) then initialize their speed and starting point
         n_loc = 0.0
         n_speed = 0.0
-        if self.episode_count > self.neigbor_first_episode:
+        if self.total_steps >= self.neighbor_first_timestep:
             n_loc = self.neighbor_start_loc
             n_speed = self.neighbor_speed
-            print("///// reset: Neighbor vehicles on the move. Episode {}, loc = {:.1f}, speed = {:.1f}"
-                    .format(self.episode_count, n_loc, n_speed))
+            print("///// reset: Neighbor vehicles on the move. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
+                    .format(self.episode_count, self.total_steps, n_loc, n_speed))
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1, and always start at the same location
         self.vehicles[1].lane_id = 1
@@ -466,6 +467,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         assert -SimpleHighwayRamp.MAX_ACCEL <= action[0] <= SimpleHighwayRamp.MAX_ACCEL, "Input accel cmd invalid: {:.2f}".format(action[0])
         assert -1.0 <= action[1] <= 1.0, "Input lane change cmd is invalid: {:.2f}".format(action[1])
 
+        self.total_steps += 1
         self.steps_since_reset += 1
 
         #
@@ -708,11 +710,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         except KeyError as e:
             pass
 
-        self.neighbor_first_episode = 0
+        self.neighbor_first_timestep = 0
         try:
-            nfi = config["neighbor_first_episode"]
+            nfi = config["neighbor_first_timestep"]
             if nfi >= 0:
-                self.neighbor_first_episode = nfi
+                self.neighbor_first_timestep = nfi
         except KeyError as e:
             pass
 

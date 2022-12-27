@@ -11,35 +11,49 @@ from ray.tune import Stopper
 
 # Trial stopping decision
 class StopLogic(Stopper):
+    """Determines when to stop a trial, either for success or failure.  It allows some rudimentary curriculum learning
+        by defining multiple phases, where each phase can have its own duration (in time steps) and reward thresholds
+        for success and failure.  If only a single phase is desired (no curriculum), then these quantities can be
+        specified as scalars.  If a multi-phase curriculum is desired, then these three quantities must be specified
+        with lists (each list containing an entry for each phase).
+    """
+
     def __init__(self,
                  max_timesteps      : int   = None,
-                 max_iterations     : int   = None,
-                 min_iterations     : int   = 0,        #num iterations that must be completed before considering a stop
+                 max_iterations     : int   = None,     #max total iterations alloweed over all phases combined
+                 min_timesteps      : int   = 0,        #num timesteps that must be completed before considering a stop;
+                                                        # use a list for multi-phase; list values are cumulative
                  avg_over_latest    : int   = 10,       #num most recent iterations over which statistics will be calculated
-                 success_threshold  : float = 1.0,      #reward above which we can call it a win
-                 failure_threshold  : float = -1.0,     #reward below which we can early terminate (after min required iters)
+                 success_threshold  : float = 1.0,      #reward above which we can call it a win; use a list for multi-phase
+                 failure_threshold  : float = -1.0,     #reward below which we can early terminate (after min required timesteps);
+                                                        # use a list for multi-phase
                  degrade_threshold  : float = 0.25,     #fraction of mean reward range below its peak that mean is allowed to degrade
                  compl_std_dev      : float = 0.01      #std deviation of reward below which we can terminate (success or failure)
                 ):
 
-        self.max_iterations = None
-        if max_iterations is not None:
-            if max_iterations > 1.2*min_iterations:
-                self.max_iterations = max_iterations
-            else:
-                self.max_iterations = 1.2*min_iterations
+        # Check for proper multi-phase inputs
+        self.num_phases = 1
+        self.cur_phase = 0
+        if type(min_timesteps) == list:
+            self.num_phases = len(min_timesteps)
+            assert type(success_threshold) == list, "///// StopLogic: success_threshold needs to be a list but is a scalar."
+            assert type(failure_threshold) == list, "///// StopLogic: failure_threshold needs to be a list but is a scalar."
+            assert len(success_threshold) == self.num_phases, "///// StopLogic: success_threshold list is different length from min_timesteps."
+            assert len(failure_threshold) == self.num_phases, "///// StopLogic: failure_threshold list is different length from min_timesteps."
 
         self.max_timesteps = max_timesteps
-        self.required_min_iters = min_iterations #num required before declaring failure
+        self.max_iterations = max_iterations
+        self.required_min_timesteps = min_timesteps #num required before declaring failure
         self.most_recent = avg_over_latest #num recent trials to consider when deciding to stop
         self.success_avg_threshold = success_threshold
         self.failure_avg_threshold = failure_threshold
         self.degrade_threshold = degrade_threshold
         self.completion_std_threshold = compl_std_dev
-        print("\n///// StopLogic initialized with max_timesteps = {}, max_iterations = {}, min_iterations = {}"
-                .format(self.max_timesteps, self.max_iterations, self.required_min_iters))
-        print("      most_recent = {}, success_avg_thresh = {:.2f}, failure_avg_thresh = {:.2f}, degrade_threshold = {:.2f}, compl_std_thresh ={:.3f}"
-                .format(self.most_recent, self.success_avg_threshold, self.failure_avg_threshold, self.degrade_threshold, self.completion_std_threshold))
+        print("\n///// StopLogic initialized with max_timesteps = {}, max_iterations = {}, {} phases, min_iterations = {}"
+                .format(self.max_timesteps, self.max_iterations, self.num_phases, self.required_min_timesteps))
+        print("      most_recent = {}, degrade_threshold = {:.2f}, compl_std_thresh ={:.3f}"
+                .format(self.most_recent, self.degrade_threshold, self.completion_std_threshold))
+        print("      success_avg_thresh = {}, failure_avg_thresh = {}".format(self.success_avg_threshold, self.failure_avg_threshold))
 
         # Each entry will have key = trial_id and value = dict containing the following:
         #   "stop" (bool) - should this trial be stopped?
@@ -67,8 +81,33 @@ class StopLogic(Stopper):
         #    print("{}: {}".format(item, result[item]))
         #print("///// - end of result\n")
         total_iters = result["iterations_since_restore"]
+        total_steps = result["timesteps_total"]
+
+        # Determine if this is a multi-phase trial and what phase we are in, then assign local variables for the phase-dependet items
+        phase = 0
+        min_timesteps = 0
+        success_avg_thresh = -math.inf
+        failure_avg_thresh = -math.inf
+        if self.num_phases == 1:
+            min_timesteps = self.required_min_timesteps
+            success_avg_thresh = self.success_avg_threshold
+            failure_avg_thresh = self.failure_avg_threshold
+        else:
+            for item in self.required_min_timesteps:
+                if total_steps <= item:
+                    break
+                phase += 1
+            phase = min(phase, len(self.required_min_timesteps) - 1)
+            min_timesteps = self.required_min_timesteps[phase]
+            success_avg_thresh = self.success_avg_threshold[phase]
+            failure_avg_thresh = self.failure_avg_threshold[phase]
+
+        # If we see a respectable reward at any point, then extend the guaranteed min timesteps for all phases (need to do this after
+        # the phase counter has been evaluated so that we don't bounce back to a previous value)
         if result["episode_reward_max"] > -0.4  and   not self.threshold_latch: #TODO: make this a config var or input arg
-            self.required_min_iters *= 1.2
+            min_timesteps *= 1.2
+            if self.num_phases > 1:
+                self.required_min_timesteps = [1.2*item for item in self.required_min_timesteps]
             self.threshold_latch = True
 
         # If this trial is already underway and being tracked, then
@@ -109,8 +148,8 @@ class StopLogic(Stopper):
                     print("\n///// Stopping trial - SUCCESS!\n")
                     return True
 
-                # If we have seen more iterations than the min required for failure then
-                if total_iters > self.required_min_iters:
+                # If we have seen more timesteps than the min required for failure then
+                if total_steps > min_timesteps:
 
                     # Stop if max iterations reached
                     if self.max_iterations is not None  and  total_iters >= self.max_iterations:
@@ -126,13 +165,13 @@ class StopLogic(Stopper):
                     # Stop if mean and max rewards haven't significantly changed in recent history
                     std_of_max  = stdev(self.trials[trial_id]["max_rewards"])
                     if std_of_mean <= self.completion_std_threshold  and  std_of_max <= self.completion_std_threshold \
-                       and  avg_of_mean >= self.success_avg_threshold:
+                       and  avg_of_mean >= success_avg_thresh:
                         print("\n///// Stopping trial - winner with no further change. Mean avg = {:.1f}, mean std = {:.2f}"
                                 .format(avg_of_mean, std_of_mean))
                         return True
 
                     # If the avg mean reward over recent history is below the failure threshold then
-                    if avg_of_mean < self.failure_avg_threshold:
+                    if avg_of_mean < failure_avg_thresh:
                         done = False
                         slope_mean = self._get_slope(self.trials[trial_id]["mean_rewards"])
                         avg_of_min = mean(list(self.trials[trial_id]["min_rewards"]))
@@ -141,8 +180,8 @@ class StopLogic(Stopper):
                         dq_max = self.trials[trial_id]["max_rewards"]
                         avg_of_max = mean(dq_max)
                         slope_max = self._get_slope(dq_max)
-                        if avg_of_max < self.success_avg_threshold:
-                            if avg_of_max <= self.failure_avg_threshold  or  (slope_max < 0.0  and  slope_mean < 0.04):
+                        if avg_of_max < success_avg_thresh:
+                            if avg_of_max <= failure_avg_thresh  or  (slope_max < 0.0  and  slope_mean < 0.04):
                                 print("\n///// Stopping trial - max is toast in {} iters with little hope of turnaround.\n".format(self.most_recent))
                                 done = True
 
@@ -170,6 +209,8 @@ class StopLogic(Stopper):
                         if done:
                             print("///// Trial {}, mean avg = {:.1f}, mean slope = {:.2f}, max avg = {:.1f}, max slope = {:.2f}"
                                     .format(trial_id, avg_of_mean, slope_mean, avg_of_max, slope_max))
+                            print("      Phase = {}, steps complete = {}, min timesteps = {}, success threshold = {:.2f}, failure threshold = {:.2f}"
+                                    .format(phase, total_steps, min_timesteps, success_avg_thresh, failure_avg_thresh))
                             print("      latest means:")
                             for i in range(len(self.trials[trial_id]["mean_rewards"]) // 5):
                                 print("      {:3d}: ".format(5*i), end="")

@@ -836,6 +836,16 @@ solo vehicle training.
 
 * Next run:
 	* Added some rudimentary curriculum learning by using a new environment config param
-	  to specify at what point neighbor vehicles will start being used (episode #).  Prior
+	  to specify at what point neighbor vehicles will start being used (time step #).  Prior
 	  to that episode, they will stay in their initial positions like before I started using
 	  them.
+
+12/26/22:
+	* The best trial plateaued between -15 and -10.  In inference, its best checkpoint showed
+	  a LOT of lane changing.
+
+* Next run
+	* Fixed a defect in reset() that was not turning on the neighbor vehicles for phase 2 of
+	  the curriculum learning, so the agent never experienced neighbors in the previous run.
+	* Improved curriculum training capability by allowing definition of multiple phases in
+	  the StopLogic class.
