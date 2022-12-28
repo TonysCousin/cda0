@@ -289,6 +289,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.episode_count = 0      #number of training episodes (number of calls to reset())
         self.accel_hist = deque(maxlen = 4)
         self.speed_hist = deque(maxlen = 4)
+        self.num_crashes = 0        #num crashes with a neighbor vehicle since reset
 
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -340,6 +341,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         ego_lane_id = None
         ego_x = None
         ego_speed = None
+        max_distance = 1.0
         if self.training:
             ego_lane_id = self._select_init_lane()
             ego_x = 0.0
@@ -441,6 +443,12 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.episode_count += 1
         self.accel_hist.clear()
         self.speed_hist.clear()
+        self.num_crashes = 0
+
+        if self.total_steps % 10000 == 0:
+            print("///// reset: total_steps = {}, steps_since_reset = {}, episodes = {}"
+                    .format(self.total_steps, self.steps_since_reset, self.episode_count))
+            print("      max_distance = {:.1f}, n_speed = {:.1f}, num_crashes = {}".format(max_distance, n_speed, self.num_crashes))
 
         self._verify_obs_limits("end of reset")
 
@@ -618,6 +626,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             crash = self._check_for_collisions()
             done = crash
             if done:
+                self.num_crashes += 1
                 return_info["reason"] = "Crashed into neighbor vehicle"
 
         # If vehicle has been stopped for several time steps, then declare the episode done as a failure

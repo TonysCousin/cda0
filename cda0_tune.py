@@ -115,7 +115,7 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric                      = "episode_reward_mean",
                 mode                        = "max",
-                num_samples                 = 14 #number of HP trials
+                num_samples                 = 2 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 400,
                     max_iterations          = 1800,
@@ -124,7 +124,8 @@ stopper = StopLogic(max_timesteps           = 400,
                     success_threshold       = [5.0, 1.0],
                     failure_threshold       = [0.0, -10.0],
                     degrade_threshold       = 0.25,
-                    compl_std_dev           = 0.05
+                    compl_std_dev           = 0.05,
+                    let_it_run              = True
                    )
 run_config = air.RunConfig(
                 name                        = "cda0",

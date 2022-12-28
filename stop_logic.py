@@ -28,7 +28,8 @@ class StopLogic(Stopper):
                  failure_threshold  : float = -1.0,     #reward below which we can early terminate (after min required timesteps);
                                                         # use a list for multi-phase
                  degrade_threshold  : float = 0.25,     #fraction of mean reward range below its peak that mean is allowed to degrade
-                 compl_std_dev      : float = 0.01      #std deviation of reward below which we can terminate (success or failure)
+                 compl_std_dev      : float = 0.01,     #std deviation of reward below which we can terminate (success or failure)
+                 let_it_run         : bool = False      #should we allow the trial to run to the max iterations, regardless of rewards?
                 ):
 
         # Check for proper multi-phase inputs
@@ -49,11 +50,13 @@ class StopLogic(Stopper):
         self.failure_avg_threshold = failure_threshold
         self.degrade_threshold = degrade_threshold
         self.completion_std_threshold = compl_std_dev
+        self.let_it_run = let_it_run
         print("\n///// StopLogic initialized with max_timesteps = {}, max_iterations = {}, {} phases, min_iterations = {}"
                 .format(self.max_timesteps, self.max_iterations, self.num_phases, self.required_min_timesteps))
         print("      most_recent = {}, degrade_threshold = {:.2f}, compl_std_thresh ={:.3f}"
                 .format(self.most_recent, self.degrade_threshold, self.completion_std_threshold))
-        print("      success_avg_thresh = {}, failure_avg_thresh = {}".format(self.success_avg_threshold, self.failure_avg_threshold))
+        print("      success_avg_thresh = {}, failure_avg_thresh = {}, let_it_run = {}"
+                .format(self.success_avg_threshold, self.failure_avg_threshold, self.let_it_run))
 
         # Each entry will have key = trial_id and value = dict containing the following:
         #   "stop" (bool) - should this trial be stopped?
@@ -144,7 +147,7 @@ class StopLogic(Stopper):
                 avg_of_mean = mean(self.trials[trial_id]["mean_rewards"])
                 std_of_mean = stdev(self.trials[trial_id]["mean_rewards"])
                 #print("///// StopLogic: iter #{}, avg reward = {:.2f}, std of mean = {:.3f}".format(total_iters, avg, std_of_mean))
-                if avg_of_mean >= self.success_avg_threshold  and  std_of_mean <= self.completion_std_threshold:
+                if avg_of_mean >= success_avg_thresh  and  std_of_mean <= self.completion_std_threshold:
                     print("\n///// Stopping trial - SUCCESS!\n")
                     return True
 
@@ -170,6 +173,10 @@ class StopLogic(Stopper):
                                 .format(avg_of_mean, std_of_mean))
                         return True
 
+                    # If user chooses to let it run, regardless of reward trends, then let it run
+                    if self.let_it_run:
+                        return False
+
                     # If the avg mean reward over recent history is below the failure threshold then
                     if avg_of_mean < failure_avg_thresh:
                         done = False
@@ -193,9 +200,8 @@ class StopLogic(Stopper):
                                     .format(100*self.degrade_threshold, self.trials[trial_id]["best_mean"]))
                             done = True
 
-
                         # If the mean curve is heading down and the max is not increasing then stop as a failure
-                        if slope_max <= 0.0  and  slope_mean < 0.0:
+                        if slope_max < -0.04  and  slope_mean < -0.04:
                             print("\n///// Stopping trial - mean reward bad & getting worse, max is not improving in latest {} iters."
                                     .format(self.most_recent))
                             done = True
