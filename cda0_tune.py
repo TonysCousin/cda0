@@ -118,7 +118,7 @@ tune_config = tune.TuneConfig(
                 num_samples                 = 2 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 400,
-                    max_iterations          = 1800,
+                    max_iterations          = 2400,
                     min_timesteps           = [1200000, 2000000], #phase 0 ends when env neighbor_first_timestep is triggered
                     avg_over_latest         = 70,
                     success_threshold       = [5.0, 1.0],

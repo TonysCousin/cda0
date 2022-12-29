@@ -849,3 +849,16 @@ solo vehicle training.
 	  the curriculum learning, so the agent never experienced neighbors in the previous run.
 	* Improved curriculum training capability by allowing definition of multiple phases in
 	  the StopLogic class.
+
+12/29/22:
+	* Didn't get any notably different results.
+
+* Next run
+	* Added an arg to StopLogic to let a trial run to max iterations unless it is a winner.
+	  Ran two trials like this.
+	* Early max rewards took a smooth slope downward from 10 to ~4, as before, but between
+	  3M and 4M steps it suddenl spiked up to +10 and stayed near there. Also about that
+	  point the mean reward started getting less smooth.  In one of the trials it had long
+	  bursts up above -5.  These ran to 1800 iterations (~5.5M steps).
+	* Inference on the best checkpoint (training mean reward ~0) showed decent performance
+	  in the straight lanes, but it kept doing illegal lane changes early in lane 2.

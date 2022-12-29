@@ -434,6 +434,12 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.N3_SPEED]             = self.vehicles[3].speed
         self.obs[self.N3_LANE_REM]          = self.roadway.get_total_lane_length(self.vehicles[3].lane_id) - self.vehicles[3].dist_downtrack
 
+        if self.total_steps % 10000 == 0:
+            print("///// reset: total_steps = {}, steps_since_reset = {}, episodes = {}"
+                    .format(self.total_steps, self.steps_since_reset, self.episode_count))
+            print("      ego_lane_id = {}, max_distance = {:.1f}, n_speed = {:.1f}, num_crashes = {}"
+                    .format(ego_lane_id, max_distance, n_speed, self.num_crashes))
+
         # Other persistent data
         self.lane_change_underway = "none"
         self.lane_change_count = 0
@@ -444,11 +450,6 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.accel_hist.clear()
         self.speed_hist.clear()
         self.num_crashes = 0
-
-        if self.total_steps % 10000 == 0:
-            print("///// reset: total_steps = {}, steps_since_reset = {}, episodes = {}"
-                    .format(self.total_steps, self.steps_since_reset, self.episode_count))
-            print("      max_distance = {:.1f}, n_speed = {:.1f}, num_crashes = {}".format(max_distance, n_speed, self.num_crashes))
 
         self._verify_obs_limits("end of reset")
 
