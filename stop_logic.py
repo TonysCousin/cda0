@@ -21,6 +21,9 @@ class StopLogic(Stopper):
     def __init__(self,
                  max_timesteps      : int   = None,
                  max_iterations     : int   = None,     #max total iterations alloweed over all phases combined
+                 phase_end_steps    : int   = 0,        #can be a scalar, indicating no phases are being used (value ignored),
+                                                        # or a list with each entry being the num (cumulative) time steps till
+                                                        # the end of that phase. Final entry is ignored and assumed to be infinity.
                  min_timesteps      : int   = 0,        #num timesteps that must be completed before considering a stop;
                                                         # use a list for multi-phase; list values are cumulative
                  avg_over_latest    : int   = 10,       #num most recent iterations over which statistics will be calculated
@@ -29,27 +32,32 @@ class StopLogic(Stopper):
                                                         # use a list for multi-phase
                  degrade_threshold  : float = 0.25,     #fraction of mean reward range below its peak that mean is allowed to degrade
                  compl_std_dev      : float = 0.01,     #std deviation of reward below which we can terminate (success or failure)
-                 let_it_run         : bool = False      #should we allow the trial to run to the max iterations, regardless of rewards?
+                 let_it_run         : bool  = False     #should we allow the trial to run to the max iterations, regardless of rewards?
                                                         # use a list for multi-phase or default for all phases is False
                 ):
 
         # Check for proper multi-phase inputs
         self.num_phases = 1
         self.cur_phase = 0
-        if type(min_timesteps) == list:
-            self.num_phases = len(min_timesteps)
+        if type(phase_end_steps) == list:
+            self.num_phases = len(phase_end_steps)
+            assert type(min_timesteps) == list, "///// StopLogic: min_timesteps needs to be a list but is a scalar."
             assert type(success_threshold) == list, "///// StopLogic: success_threshold needs to be a list but is a scalar."
             assert type(failure_threshold) == list, "///// StopLogic: failure_threshold needs to be a list but is a scalar."
-            assert len(success_threshold) == self.num_phases, "///// StopLogic: success_threshold list is different length from min_timesteps."
-            assert len(failure_threshold) == self.num_phases, "///// StopLogic: failure_threshold list is different length from min_timesteps."
+            assert len(min_timesteps) == self.num_phases, "///// StopLogic: min_timesteps list is different length from phase_end_steps."
+            assert len(success_threshold) == self.num_phases, "///// StopLogic: success_threshold list is different length from phase_end_steps."
+            assert len(failure_threshold) == self.num_phases, "///// StopLogic: failure_threshold list is different length from phase_end_steps."
             if type(let_it_run) == list:
-                assert len(let_it_run) == self.num_phases, "///// StopLogic: let_it_run list is different length from min_timesteps."
+                assert len(let_it_run) == self.num_phases, "///// StopLogic: let_it_run list is different length from phase_end_steps."
             else:
                 let_it_run = [] * let_it_run
+        else:
+            phase_end_steps = math.inf
 
 
         self.max_timesteps = max_timesteps
         self.max_iterations = max_iterations
+        self.phase_end_steps = phase_end_steps
         self.required_min_timesteps = min_timesteps #num required before declaring failure
         self.most_recent = avg_over_latest #num recent trials to consider when deciding to stop
         self.success_avg_threshold = success_threshold
@@ -57,9 +65,11 @@ class StopLogic(Stopper):
         self.degrade_threshold = degrade_threshold
         self.completion_std_threshold = compl_std_dev
         self.let_it_run = let_it_run
-        print("\n///// StopLogic initialized with max_timesteps = {}, max_iterations = {}, {} phases, min_iterations = {}"
-                .format(self.max_timesteps, self.max_iterations, self.num_phases, self.required_min_timesteps))
-        print("      most_recent = {}, degrade_threshold = {:.2f}, compl_std_thresh ={:.3f}"
+        print("\n///// StopLogic initialized with max_timesteps = {}, max_iterations = {}, {} phases."
+                .format(self.max_timesteps, self.max_iterations, self.num_phases))
+        print("      phase_end_steps = {}".format(self.phase_end_steps))
+        print("      min_timesteps   = {}".format(self.required_min_timesteps))
+        print("      most_recent = {}, degrade_threshold = {:.2f}, compl_std_thresh = {:.3f}"
                 .format(self.most_recent, self.degrade_threshold, self.completion_std_threshold))
         print("      success_avg_thresh = {}, failure_avg_thresh = {}, let_it_run = {}"
                 .format(self.success_avg_threshold, self.failure_avg_threshold, self.let_it_run))
@@ -76,6 +86,8 @@ class StopLogic(Stopper):
 
         # Other internal variables
         self.threshold_latch = False
+        self.prev_phase = 0
+        self.crossed_min_timesteps = False
 
 
     def __call__(self,
@@ -104,11 +116,15 @@ class StopLogic(Stopper):
             failure_avg_thresh = self.failure_avg_threshold
             let_it_run = self.let_it_run
         else:
-            for item in self.required_min_timesteps:
+            for item in self.phase_end_steps:
                 if total_steps <= item:
                     break
                 phase += 1
-            phase = min(phase, len(self.required_min_timesteps) - 1)
+            phase = min(phase, len(self.phase_end_steps) - 1)
+            if phase != self.prev_phase:
+                print("///// StopLogic: Beginning phase {}".format(phase))
+                self.crossed_min_timesteps = False
+            self.prev_phase = phase
             min_timesteps = self.required_min_timesteps[phase]
             success_avg_thresh = self.success_avg_threshold[phase]
             failure_avg_thresh = self.failure_avg_threshold[phase]
@@ -162,6 +178,9 @@ class StopLogic(Stopper):
 
                 # If we have seen more timesteps than the min required for failure then
                 if total_steps > min_timesteps:
+                    if not self.crossed_min_timesteps:
+                        print("///// StopLogic: Beyond min time steps for phase {}".format(phase))
+                        self.crossed_min_timesteps = True
 
                     # Stop if max iterations reached
                     if self.max_iterations is not None  and  total_iters >= self.max_iterations:
@@ -170,8 +189,7 @@ class StopLogic(Stopper):
 
                     # Stop if max timesteps reached
                     if self.max_timesteps is not None  and  result["timesteps_since_restore"] >= self.max_timesteps:
-                        print("\n///// Stopping trial - reached max timesteps.")
-                        print("")
+                        print("\n///// Stopping trial - reached max timesteps of {}.".format(self.max_timesteps))
                         return True
 
                     # Stop if mean and max rewards haven't significantly changed in recent history

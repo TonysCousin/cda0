@@ -30,9 +30,9 @@ env_config["neighbor_first_timestep"]       = 1200000  #first total time step th
 params["env"]                               = SimpleHighwayRampWrapper
 params["env_config"]                        = env_config
 params["framework"]                         = "torch"
-params["num_gpus"]                          = 0.25 #for the local worker, which does the evaluation runs
+params["num_gpus"]                          = 1 #for the local worker, which does the evaluation runs
 params["num_cpus_per_worker"]               = 1 #also applies to the local worker and evaluation workers
-params["num_gpus_per_worker"]               = 0.5 #this has to allow for evaluation workers also
+params["num_gpus_per_worker"]               = 0 #this has to allow for evaluation workers also
 params["num_workers"]                       = 1 #num remote workers (remember that there is a local worker also)
 params["num_envs_per_worker"]               = 1
 params["rollout_fragment_length"]           = 200 #timesteps pulled from a sampler
@@ -91,7 +91,7 @@ params["train_batch_size"]                  = 2400 #must be = rollout_fragment_l
 
 # Add dict here for lots of model HPs
 model_config = params["model"]
-model_config["fcnet_hiddens"]               = tune.choice([[256, 64], [256, 128], [512, 64], [512, 64]])
+model_config["fcnet_hiddens"]               = tune.choice([[256, 64], [256, 128], [512, 64]])
 model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
 model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
 params["model"] = model_config
@@ -115,17 +115,18 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric                      = "episode_reward_mean",
                 mode                        = "max",
-                num_samples                 = 4 #number of HP trials
+                num_samples                 = 10 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 400,
                     max_iterations          = 3000,
-                    min_timesteps           = [1000000, 1200000, 2000000], #phase 1 ends when env neighbor_first_timestep is triggered
+                    phase_end_steps         = [1200000, 10e6], #defines the phases; last entry needs to be >= num steps achievable in max_iterations
+                    min_timesteps           = [1000000,  2e6], #phase 0 ends when env neighbor_first_timestep is triggered
                     avg_over_latest         = 70,
-                    success_threshold       = [5.0, 5.0, 1.0],
-                    failure_threshold       = [0.0, 0.0, -10.0],
+                    success_threshold       = [5.0, 1.0],
+                    failure_threshold       = [0.0, -10.0],
                     degrade_threshold       = 0.25,
                     compl_std_dev           = 0.05,
-                    let_it_run              = [False, False, True] #stop in phase 1 if it can't drive solo by the end of phase 0
+                    let_it_run              = [False, True] #stop in phase 0 if it can't drive solo by its end
                    )
 run_config = air.RunConfig(
                 name                        = "cda0",

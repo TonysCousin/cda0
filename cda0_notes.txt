@@ -914,4 +914,6 @@ solo vehicle training.
 		2 = xM more steps with neighbors in motion to learn driving in traffic.
 	* Moved from 1 gpu on local worker and 0 on rollout workers to 0.25 on local
 	  workers and 0.5 on the rollout worker to see if it changes overall trial time
-	  (current pace is close to 1M steps/hr).
+	  (current pace is close to 1M steps/hr).  I immediately found this doesn't work, as
+	  Ray hung before any trials ever started.  So I moved these configs back to the way
+	  they were before.
