@@ -290,6 +290,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.accel_hist = deque(maxlen = 4)
         self.speed_hist = deque(maxlen = 4)
         self.num_crashes = 0        #num crashes with a neighbor vehicle since reset
+        self.neighbor_print_latch = True #should the neighbor vehicle info be printed when initiated?
 
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -364,8 +365,10 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         if self.total_steps >= self.neighbor_first_timestep:
             n_loc = self.neighbor_start_loc
             n_speed = self.neighbor_speed
-            print("///// reset: Neighbor vehicles on the move. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
-                    .format(self.episode_count, self.total_steps, n_loc, n_speed))
+            if self.neighbor_print_latch:
+                print("///// reset: Neighbor vehicles on the move. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
+                        .format(self.episode_count, self.total_steps, n_loc, n_speed))
+                self.neighbor_print_latch = False
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1, and always start at the same location
         self.vehicles[1].lane_id = 1
@@ -449,7 +452,6 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.episode_count += 1
         self.accel_hist.clear()
         self.speed_hist.clear()
-        self.num_crashes = 0
 
         self._verify_obs_limits("end of reset")
 

@@ -12,10 +12,10 @@ from ray.tune import Stopper
 # Trial stopping decision
 class StopLogic(Stopper):
     """Determines when to stop a trial, either for success or failure.  It allows some rudimentary curriculum learning
-        by defining multiple phases, where each phase can have its own duration (in time steps) and reward thresholds
-        for success and failure.  If only a single phase is desired (no curriculum), then these quantities can be
-        specified as scalars.  If a multi-phase curriculum is desired, then these three quantities must be specified
-        with lists (each list containing an entry for each phase).
+        by defining multiple phases, where each phase can have its own duration (in time steps), reward thresholds
+        for success and failure, and stopping criteria.  If only a single phase is desired (no curriculum), then these
+        quantities can bevspecified as scalars.  If a multi-phase curriculum is desired, then these 4 quantities must
+        be specified with lists (each list containing an entry for each phase).
     """
 
     def __init__(self,
@@ -30,6 +30,7 @@ class StopLogic(Stopper):
                  degrade_threshold  : float = 0.25,     #fraction of mean reward range below its peak that mean is allowed to degrade
                  compl_std_dev      : float = 0.01,     #std deviation of reward below which we can terminate (success or failure)
                  let_it_run         : bool = False      #should we allow the trial to run to the max iterations, regardless of rewards?
+                                                        # use a list for multi-phase or default for all phases is False
                 ):
 
         # Check for proper multi-phase inputs
@@ -41,6 +42,11 @@ class StopLogic(Stopper):
             assert type(failure_threshold) == list, "///// StopLogic: failure_threshold needs to be a list but is a scalar."
             assert len(success_threshold) == self.num_phases, "///// StopLogic: success_threshold list is different length from min_timesteps."
             assert len(failure_threshold) == self.num_phases, "///// StopLogic: failure_threshold list is different length from min_timesteps."
+            if type(let_it_run) == list:
+                assert len(let_it_run) == self.num_phases, "///// StopLogic: let_it_run list is different length from min_timesteps."
+            else:
+                let_it_run = [] * let_it_run
+
 
         self.max_timesteps = max_timesteps
         self.max_iterations = max_iterations
@@ -86,15 +92,17 @@ class StopLogic(Stopper):
         total_iters = result["iterations_since_restore"]
         total_steps = result["timesteps_total"]
 
-        # Determine if this is a multi-phase trial and what phase we are in, then assign local variables for the phase-dependet items
+        # Determine if this is a multi-phase trial and what phase we are in, then assign local variables for the phase-dependent items
         phase = 0
         min_timesteps = 0
         success_avg_thresh = -math.inf
         failure_avg_thresh = -math.inf
+        let_it_run = False
         if self.num_phases == 1:
             min_timesteps = self.required_min_timesteps
             success_avg_thresh = self.success_avg_threshold
             failure_avg_thresh = self.failure_avg_threshold
+            let_it_run = self.let_it_run
         else:
             for item in self.required_min_timesteps:
                 if total_steps <= item:
@@ -104,6 +112,7 @@ class StopLogic(Stopper):
             min_timesteps = self.required_min_timesteps[phase]
             success_avg_thresh = self.success_avg_threshold[phase]
             failure_avg_thresh = self.failure_avg_threshold[phase]
+            let_it_run = self.let_it_run[phase]
 
         # If we see a respectable reward at any point, then extend the guaranteed min timesteps for all phases (need to do this after
         # the phase counter has been evaluated so that we don't bounce back to a previous value)
@@ -174,7 +183,7 @@ class StopLogic(Stopper):
                         return True
 
                     # If user chooses to let it run, regardless of reward trends, then let it run
-                    if self.let_it_run:
+                    if let_it_run:
                         return False
 
                     # If the avg mean reward over recent history is below the failure threshold then

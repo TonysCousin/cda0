@@ -725,12 +725,12 @@ LESSONS LEARNED from simple-car:
 	  aggressive than I've seen in recent past, so I guess the extra neurons made that possible.
 	  If that's the case, then maybe a few more still could be more useful.
 	* This is run 53a0c, and I am leaving it stored in ~/ray_results/cda0-solo.
-	* AI: tweak the completion reward to drop off a little faster with the number of time steps.
+ **	* AI: tweak the completion reward to drop off a little faster with the number of time steps.
 	  There is hardly a noticeable difference between 130 and 170 time steps, so not much motivation
 	  to speed it up.
  ****	* I believe I have found what I'm looking for in the solo vehicle department.  Time to move on
 	  and build a version that can handle other traffic on the roadway.
-	* Lesson:  if the NN feels too small, try to add width before adding depth.
+ **	* Lesson:  if the NN feels too small, try to add width before adding depth.
 
 
 >>>>>
@@ -853,7 +853,7 @@ solo vehicle training.
 12/29/22:
 	* Didn't get any notably different results.
 
-* Next run
+* Next run (96415)
 	* Added an arg to StopLogic to let a trial run to max iterations unless it is a winner.
 	  Ran two trials like this.
 	* Early max rewards took a smooth slope downward from 10 to ~4, as before, but between
@@ -862,3 +862,56 @@ solo vehicle training.
 	  bursts up above -5.  These ran to 1800 iterations (~5.5M steps).
 	* Inference on the best checkpoint (training mean reward ~0) showed decent performance
 	  in the straight lanes, but it kept doing illegal lane changes early in lane 2.
+
+* Next run (a0c3c)
+	* Fixed a minor defect in reset() where it printed some statuses after they were cleared.
+	* Extended the max iterations from 1800 to 2400, since it still looked like there was
+	  some progress being made at that point.
+
+12/30/22:
+	* One of these two runs performed similarly to the "good" one previous, in that it peaked
+	  at mean reward = 0, but its fluctuations looked like it could have benefitted from
+	  more iterations.
+	* In the log file I notice that each trial stopped after a few 100k time steps (400k
+	  and 580k, respectively), due to reaching iteration limit.  This never triggered the
+	  neighbor vehicles to turn on!  Therefore, all this training was for solo driving. I
+	  suspect that having 12 jobs running in parallel caused this problem.  Ray is summing
+	  all time steps from all workers to get the 7M or so on the plot, but each worker is
+	  only contributing 1/12 of that.  But the threshold to turn on the neighbors is
+	  assuming each env object goes all the way to 7M time steps.
+ **	* AI - if all I've been training is solo driving, why is it so hard to get good rewards?
+	  Need to compare to successful solo training for HPs.
+
+* Next run (2784c)
+	* Changed tuning program to only use 1 worker (was 12).
+	* Extended iteration limit from 2400 to 3000.
+	* Now that all time steps are happending on 1 worker, it is transitioning to using
+	  neighbor vehicles as expected, beginning at 1.2M steps.
+	* In both trials the max reward took a huge step down at 1.2M steps (to around -30); in
+	  one of them it quickly recovered to  around -5, but in the other it stayed at -30 for
+	  the remainder.
+	* My num crash tracker was being reinitialized wrong, but there is reason to believe
+	  that no crashes have been detected, which is bothersome.
+ **	* It really bugs me that a trial progresses at virtually the same speed whether it is
+	  using 12 workers or 1.  Each worker is assigned 1 cpu, 1 env and 0 gpu.  The eval
+	  worker has 1 cpu, 2 env and 1 gpu (the full enchilada).  I need to spend time
+	  playing with various combinations to understand how to improve performance.
+
+* Next run
+	* Increased terminal LR (1e-6) to apply at 7M steps instead of 3M to be a little more
+	  like the solo vehicle success on 12/17.
+	* Added a new tuning option to use a NN of [512, 64] as one of the options.
+	* Changed the final noise magnitude from 0.2 to 0.1 (still ocurring at 4M steps) to
+	  be more like the solo vehicle success.
+ 	* The first litmus test needs to be that the rewards look acceptable at the 1.2M step
+	  mark, indicating that it has learned to drive solo before adding the neighbors.
+	* Enhanced StopLogic to use a let_it_run flag for each phase, so that we don't waste
+	  time if a trial can't achieve good solo driving first.  I now have 3 curriculum
+	  phases:
+		0 = 1M steps to learn solo driving without aborting
+		1 = 200k steps to allow stop logic to evaluate rewards and abort while
+		    still driving solo
+		2 = xM more steps with neighbors in motion to learn driving in traffic.
+	* Moved from 1 gpu on local worker and 0 on rollout workers to 0.25 on local
+	  workers and 0.5 on the rollout worker to see if it changes overall trial time
+	  (current pace is close to 1M steps/hr).
