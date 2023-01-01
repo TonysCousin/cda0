@@ -917,3 +917,30 @@ solo vehicle training.
 	  (current pace is close to 1M steps/hr).  I immediately found this doesn't work, as
 	  Ray hung before any trials ever started.  So I moved these configs back to the way
 	  they were before.
+	* Realized a defect in the phase management design, where the min timesteps is doing
+	  double duty as also defining the phase boundaries, so it will never exceed the current
+	  phase's min timesteps, so never trigger an early stop.
+
+* Next run (10 trials, ID 3db63)
+	* Fixed StopLogic defect by adding phase_end_steps input to define the phases separately
+	  from definition of the min timesteps in each phase.
+	* StopLogic had a section that multiplies the min timesteps by 1.2 if max reaches above
+	  the success threshold, which pushes it up to the phase 0 boundary.  I removed this
+	  logic and increased the phase boundary a bit in case I want to bring that logic back.
+
+1/1/23:
+
+	* All trials failed badly, with max reward going steadily down from 10 to -2 at about
+	  600k steps then staying there (70% did this, the others had bigger drops). The max
+	  starting distance gradually drops over the first 800k steps, which explains most of
+	  this behavior.  Mean rewards were all over between -40 and -28, but generally climbed
+	  well until 300k steps; some continued climbing (or dropped then came back) until 700k
+	  steps. Mins stayed clustered around -55.  All trials stopped at 1M steps.
+
+* Next run
+	* Added a tuning choice for NN size of [128, 50], which was used on 12/17 for successful
+	  solo driving.
+	* Changed noise schedule to end (magnitude 0.1) at 1.6M instead of 4M, which is what gave
+	  success for solo driving.
+	* Enhanced the reset() max_distance calc to allow an initial period with the full track
+	  length before ramping it down.  Initially set it at 200k steps before ramping begins.

@@ -23,7 +23,7 @@ env_config["training"]                      = True
 env_config["randomize_start_dist"]          = True #tune.choice([True, False])
 env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit
 env_config["neighbor_start_loc"]            = 320.0 #dist downtrac from beginning of lane 1 for n3, m
-env_config["neighbor_first_timestep"]       = 1200000  #first total time step that neighbors are put into motion (curriculum learning)
+env_config["neighbor_first_timestep"]       = 1300000  #first total time step that neighbors are put into motion (curriculum learning)
 #env_config["init_ego_lane"]                 = 0
 
 # Algorithm configs
@@ -91,7 +91,7 @@ params["train_batch_size"]                  = 2400 #must be = rollout_fragment_l
 
 # Add dict here for lots of model HPs
 model_config = params["model"]
-model_config["fcnet_hiddens"]               = tune.choice([[256, 64], [256, 128], [512, 64]])
+model_config["fcnet_hiddens"]               = tune.choice([[128, 50], [256, 64], [512, 64]])
 model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
 model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
 params["model"] = model_config
@@ -102,7 +102,7 @@ explore_config["stddev"]                    = tune.uniform(0.4, 0.7) #this param
 explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
 explore_config["initial_scale"]             = 1.0
 explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-explore_config["scale_timesteps"]           = 4000000  #tune.choice([100000, 400000]) #was 900k
+explore_config["scale_timesteps"]           = 1600000  #tune.choice([100000, 400000]) #was 900k
 params["exploration_config"] = explore_config
 
 
@@ -115,12 +115,12 @@ for item in params:
 tune_config = tune.TuneConfig(
                 metric                      = "episode_reward_mean",
                 mode                        = "max",
-                num_samples                 = 10 #number of HP trials
+                num_samples                 = 14 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 400,
                     max_iterations          = 3000,
-                    phase_end_steps         = [1200000, 10e6], #defines the phases; last entry needs to be >= num steps achievable in max_iterations
-                    min_timesteps           = [1000000,  2e6], #phase 0 ends when env neighbor_first_timestep is triggered
+                    phase_end_steps         = [1300000, 10e6], #defines the phases; last entry needs to be >= num steps achievable in max_iterations
+                    min_timesteps           = [ 800000,  2e6], #phase 0 ends when env neighbor_first_timestep is triggered
                     avg_over_latest         = 70,
                     success_threshold       = [5.0, 1.0],
                     failure_threshold       = [0.0, -10.0],

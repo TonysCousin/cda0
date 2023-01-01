@@ -132,11 +132,11 @@ class StopLogic(Stopper):
 
         # If we see a respectable reward at any point, then extend the guaranteed min timesteps for all phases (need to do this after
         # the phase counter has been evaluated so that we don't bounce back to a previous value)
-        if result["episode_reward_max"] > -0.4  and   not self.threshold_latch: #TODO: make this a config var or input arg
-            min_timesteps *= 1.2
-            if self.num_phases > 1:
-                self.required_min_timesteps = [1.2*item for item in self.required_min_timesteps]
-            self.threshold_latch = True
+        #if result["episode_reward_max"] > -0.4  and   not self.threshold_latch: #TODO: make this a config var or input arg
+        #    min_timesteps *= 1.2
+        #    if self.num_phases > 1:
+        #        self.required_min_timesteps = [1.2*item for item in self.required_min_timesteps]
+        #    self.threshold_latch = True
 
         # If this trial is already underway and being tracked, then
         if trial_id in self.trials:
@@ -177,6 +177,9 @@ class StopLogic(Stopper):
                     return True
 
                 # If we have seen more timesteps than the min required for failure then
+                if 1199980 < total_steps < 1200020:
+                    print("///// StopLogic: total_steps = {}, min_timesteps = {}, crossed_min = {}"
+                            .format(total_steps, min_timesteps, self.crossed_min_timesteps))   #TODO debug only
                 if total_steps > min_timesteps:
                     if not self.crossed_min_timesteps:
                         print("///// StopLogic: Beyond min time steps for phase {}".format(phase))

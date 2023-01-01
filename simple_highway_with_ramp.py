@@ -348,8 +348,11 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             ego_x = 0.0
             if self.randomize_start_dist:
                 m = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
-                max_distance = max(self.total_steps * (10.0 - m)/800000.0 + m, 10.0) #decreases over time steps
-                #print("///// reset: step count = {}, max_distance = {:4.0f}".format(self.total_steps, max_distance))
+                initial_steps = 200000 #num steps to wait before starting to shrink the max distance
+                if self.total_steps <= initial_steps:
+                    max_distance = m
+                else:
+                    max_distance = max((self.total_steps - initial_steps) * (10.0 - m)/(800000.0 - initial_steps) + m, 10.0) #decreases over time steps
                 ego_x = self.prng.random() * max_distance
             ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
 
