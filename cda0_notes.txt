@@ -944,3 +944,14 @@ solo vehicle training.
 	  success for solo driving.
 	* Enhanced the reset() max_distance calc to allow an initial period with the full track
 	  length before ramping it down.  Initially set it at 200k steps before ramping begins.
+	* One trial had a max reward that stayed above 0, and continued past 1.2M steps, then
+	  suddenly tanked. So it never reached phase 1, which begins at 1.3M. This trial used
+	  a NN of [512, 64].
+	* All other trials stopped at 800k steps, showing mean reward growth through 200k then
+	  gradually decreasing; max rewards stayed at 10 until 200k then gradually headed to
+	  negative.  Peak mean reward was as high as -20.
+
+* Next run
+	* Changed randomized start distance calc so that it doesn't begin to ramp down until
+	  700k steps, then takes until 1M steps to completely disappear.  Hoping this will give
+	  the reward enough time to become positive before the situations become more difficult.

@@ -98,7 +98,7 @@ params["model"] = model_config
 
 explore_config = params["exploration_config"]
 explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-explore_config["stddev"]                    = tune.uniform(0.4, 0.7) #this param is specific to GaussianNoise
+explore_config["stddev"]                    = tune.uniform(0.4, 0.8) #this param is specific to GaussianNoise
 explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
 explore_config["initial_scale"]             = 1.0
 explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
@@ -119,8 +119,8 @@ tune_config = tune.TuneConfig(
               )
 stopper = StopLogic(max_timesteps           = 400,
                     max_iterations          = 3000,
-                    phase_end_steps         = [1300000, 10e6], #defines the phases; last entry needs to be >= num steps achievable in max_iterations
-                    min_timesteps           = [ 800000,  2e6], #phase 0 ends when env neighbor_first_timestep is triggered
+                    phase_end_steps         = [1300000, 10000000], #defines the phases; last entry needs to be >= num steps achievable in max_iterations
+                    min_timesteps           = [ 800000,  3000000], #phase 0 ends when env neighbor_first_timestep is triggered
                     avg_over_latest         = 70,
                     success_threshold       = [5.0, 1.0],
                     failure_threshold       = [0.0, -10.0],
