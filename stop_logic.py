@@ -168,11 +168,12 @@ class StopLogic(Stopper):
 
             # Else the deque is full so we can start analyzing stop criteria
             else:
-                # Stop if avg of mean rewards over recent history is above the succcess threshold and its standard deviation is small
+                # Stop if we are in the final phase, avg of mean rewards over recent history is above the succcess threshold and
+                # its standard deviation is small.
                 avg_of_mean = mean(self.trials[trial_id]["mean_rewards"])
                 std_of_mean = stdev(self.trials[trial_id]["mean_rewards"])
                 #print("///// StopLogic: iter #{}, avg reward = {:.2f}, std of mean = {:.3f}".format(total_iters, avg, std_of_mean))
-                if avg_of_mean >= success_avg_thresh  and  std_of_mean <= self.completion_std_threshold:
+                if phase == self.num_phases-1  and  avg_of_mean >= success_avg_thresh  and  std_of_mean <= self.completion_std_threshold:
                     print("\n///// Stopping trial - SUCCESS!\n")
                     return True
 

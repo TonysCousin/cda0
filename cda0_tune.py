@@ -91,14 +91,14 @@ params["train_batch_size"]                  = 2400 #must be = rollout_fragment_l
 
 # Add dict here for lots of model HPs
 model_config = params["model"]
-model_config["fcnet_hiddens"]               = tune.choice([[128, 50], [256, 64], [512, 64]])
+model_config["fcnet_hiddens"]               = tune.choice([[128, 50], [128, 50], [256, 64], [512, 64]])
 model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
 model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
 params["model"] = model_config
 
 explore_config = params["exploration_config"]
 explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-explore_config["stddev"]                    = tune.uniform(0.4, 0.8) #this param is specific to GaussianNoise
+explore_config["stddev"]                    = tune.uniform(0.4, 0.75) #this param is specific to GaussianNoise
 explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
 explore_config["initial_scale"]             = 1.0
 explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
@@ -118,15 +118,15 @@ tune_config = tune.TuneConfig(
                 num_samples                 = 14 #number of HP trials
               )
 stopper = StopLogic(max_timesteps           = 400,
-                    max_iterations          = 3000,
-                    phase_end_steps         = [1300000, 10000000], #defines the phases; last entry needs to be >= num steps achievable in max_iterations
-                    min_timesteps           = [ 800000,  3000000], #phase 0 ends when env neighbor_first_timestep is triggered
+                    max_iterations          = 4000,
+                    phase_end_steps         = [1020000, 1720000, 10000000], #defines the phases; last entry needs to be >= num steps achievable in max_iterations
+                    min_timesteps           = [1000000, 1700000,  3000000], #phase 1 ends when env neighbor_first_timestep is triggered
                     avg_over_latest         = 70,
-                    success_threshold       = [5.0, 1.0],
-                    failure_threshold       = [0.0, -10.0],
+                    success_threshold       = [5.0,  5.0,   1.0],
+                    failure_threshold       = [0.0, -5.0, -10.0],
                     degrade_threshold       = 0.25,
                     compl_std_dev           = 0.05,
-                    let_it_run              = [False, True] #stop in phase 0 if it can't drive solo by its end
+                    let_it_run              = [False, False, True] #stop in phase 0, 1 if it can't drive solo by its end
                    )
 run_config = air.RunConfig(
                 name                        = "cda0",

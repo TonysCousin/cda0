@@ -955,3 +955,18 @@ solo vehicle training.
 	* Changed randomized start distance calc so that it doesn't begin to ramp down until
 	  700k steps, then takes until 1M steps to completely disappear.  Hoping this will give
 	  the reward enough time to become positive before the situations become more difficult.
+
+1/2/23:
+
+	* All trials stopped at 800k steps. Their mean rewards were climbing until 700k, then
+	  headed down, while max rewards stayed at 10 until that point, then went down very
+	  quickly. There were two groups, with the first group achieving a peak between -20 and
+	  -10 (mean), and the second group running distinctly lower and peaking just below -20.
+	  In the first group, the best 3 trials were all [128, 50] networks and had noise
+	  magnitude between 0.48 and 0.65. The second group all had noise magnitude > 0.70.
+
+* Next run
+	* Giving more chance of choosing a [128, 50] NN.
+	* Redefining phase 0 to be just random starting point, and extending it to 1M steps.
+	  Then phase 1 will be gradually ramping down the starting distance, to 1.6M steps and
+	  end at 1.7M steps. Then phase 2 will be neighbor vehicles for remainder of 4M steps.
