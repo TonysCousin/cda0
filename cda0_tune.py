@@ -23,7 +23,7 @@ env_config["training"]                      = True
 env_config["randomize_start_dist"]          = True #tune.choice([True, False])
 env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit
 env_config["neighbor_start_loc"]            = 320.0 #dist downtrac from beginning of lane 1 for n3, m
-env_config["neighbor_first_timestep"]       = 1300000  #first total time step that neighbors are put into motion (curriculum learning)
+env_config["neighbor_first_timestep"]       = 1720000  #first total time step that neighbors are put into motion (curriculum learning)
 #env_config["init_ego_lane"]                 = 0
 
 # Algorithm configs
@@ -43,7 +43,7 @@ params["evaluation_duration_unit"]          = "episodes"
 params["evaluation_parallel_to_training"]   = True #True requires evaluation_num_workers > 0
 params["evaluation_num_workers"]            = 2
 params["log_level"]                         = "WARN"
-params["seed"]                              = tune.choice([2, 17, 666, 4334, 10003, 29771, 38710, 50848, 81199])
+params["seed"]                              = 17 #tune.choice([2, 17, 666, 4334, 10003, 29771, 38710, 50848, 81199])
 params["batch_mode"]                        = "complete_episodes"
 
 # ===== Params for DDPG =====================================================================
@@ -83,7 +83,7 @@ params["l2_reg"]                            = 0.0
 """
 # ===== Params for PPO ======================================================================
 
-params["lr_schedule"]                       = [[0, 1.0e-4], [800000, 1.0e-5], [1400000, 1.0e-5], [7000000, 1.0e-6]]
+params["lr_schedule"]                       = [[0, 1.0e-4], [1600000, 1.0e-5], [1700000, 1.0e-5], [7000000, 1.0e-6]]
 params["sgd_minibatch_size"]                = 32 #must be <= train_batch_size (and divide into it)
 params["train_batch_size"]                  = 2400 #must be = rollout_fragment_length * num_workers * num_envs_per_worker
 #params["grad_clip"]                         = tune.uniform(0.1, 0.5)

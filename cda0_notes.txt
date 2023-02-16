@@ -965,8 +965,30 @@ solo vehicle training.
 	  In the first group, the best 3 trials were all [128, 50] networks and had noise
 	  magnitude between 0.48 and 0.65. The second group all had noise magnitude > 0.70.
 
-* Next run
+* Next run (c8a85, 14 trials)
 	* Giving more chance of choosing a [128, 50] NN.
 	* Redefining phase 0 to be just random starting point, and extending it to 1M steps.
 	  Then phase 1 will be gradually ramping down the starting distance, to 1.6M steps and
-	  end at 1.7M steps. Then phase 2 will be neighbor vehicles for remainder of 4M steps.
+	  the phase will end at 1.7M steps. Then phase 2 will be neighbor vehicles for remainder
+	  of 4M steps.
+	* In the first 3 trials (all [128, 50]) there is some indication of a major step change
+	  at 1.6M steps, causing the trail to go very badly and terminate at 1.7M.
+	* Had to kill this run in middle of trial 5 due to shutdown for vacation.  Results are
+	  still available - run the tensorboard server again.
+
+ **	* AI: considerations for next runs:
+		* the reward curve gradually flattens out as it progresses. I wonder if this is
+		  due to the LR reduction.  Maybe leave LR higher for longer to see if it helps.
+		  LR tapers from 1e-4 to 1e-5 over first 800k steps, where the reward slope is
+		  pretty steep. Then it stays at 1e-5 between 800k and 1.6M, where the reward
+		  slope is nearly flat and even starts to go a little negative. Then LR starts
+		  to drop again to 1e-6 over the next several million steps.
+		* consider extending the noise out longer
+
+2/15/23:
+
+* Next run
+	* Set seed to a constant value, since varying it just creates an additional variable that
+	  may be clouding the story of what works & doesn't.
+	* Stretched out the LR schedule, per above, so it doesn't hit 1e-5 until 1.6M steps.
+	  After that it is the same as before.

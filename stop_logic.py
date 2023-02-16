@@ -177,10 +177,6 @@ class StopLogic(Stopper):
                     print("\n///// Stopping trial - SUCCESS!\n")
                     return True
 
-                # If we have seen more timesteps than the min required for failure then
-                if 1199980 < total_steps < 1200020:
-                    print("///// StopLogic: total_steps = {}, min_timesteps = {}, crossed_min = {}"
-                            .format(total_steps, min_timesteps, self.crossed_min_timesteps))   #TODO debug only
                 if total_steps > min_timesteps:
                     if not self.crossed_min_timesteps:
                         print("///// StopLogic: Beyond min time steps for phase {}".format(phase))
