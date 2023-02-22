@@ -992,3 +992,18 @@ solo vehicle training.
 	  may be clouding the story of what works & doesn't.
 	* Stretched out the LR schedule, per above, so it doesn't hit 1e-5 until 1.6M steps.
 	  After that it is the same as before.
+	* All trials looked similar to recent previous runs, where the reward curve slope gradually
+	  decreases after a few hundred k steps, so that it is pretty flat after 1M, and nothing
+	  reaches above mean reward of -10.
+
+2/19/23:
+* Compared code between current branch (3-neighbors) and master, which was last committed around
+  mid-Dec with successful solo driving performance.  There is not a significant change that
+  should affect agent capability.
+* Next run
+	* Modified LR schedule so it holds 1e-4 all the way until 1.6M steps instead of gradually
+	  decreasing it, in the hopes of encouraging the same growth rate in mean rewards
+	  throughout the trial.
+	* No good results. Two runs peaked above mean reward of 0, one reaching ~5. But their
+	  inference was terrible. All trials fell off to mean reward ~-40 between 1.6M and 1.7M
+	  steps, so none saw any beneficial training with neighbor vehicles.

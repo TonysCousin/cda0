@@ -83,7 +83,7 @@ params["l2_reg"]                            = 0.0
 """
 # ===== Params for PPO ======================================================================
 
-params["lr_schedule"]                       = [[0, 1.0e-4], [1600000, 1.0e-5], [1700000, 1.0e-5], [7000000, 1.0e-6]]
+params["lr_schedule"]                       = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]]
 params["sgd_minibatch_size"]                = 32 #must be <= train_batch_size (and divide into it)
 params["train_batch_size"]                  = 2400 #must be = rollout_fragment_length * num_workers * num_envs_per_worker
 #params["grad_clip"]                         = tune.uniform(0.1, 0.5)
@@ -119,8 +119,8 @@ tune_config = tune.TuneConfig(
               )
 stopper = StopLogic(max_timesteps           = 400,
                     max_iterations          = 4000,
-                    phase_end_steps         = [1020000, 1720000, 10000000], #defines the phases; last entry needs to be >= num steps achievable in max_iterations
-                    min_timesteps           = [1000000, 1700000,  3000000], #phase 1 ends when env neighbor_first_timestep is triggered
+                    phase_end_steps         = [1020000, 1720000, 5000000], #defines the phases; last entry needs to be >= num steps achievable in max_iterations
+                    min_timesteps           = [1000000, 1700000, 2000000], #phase 1 ends when env neighbor_first_timestep is triggered
                     avg_over_latest         = 70,
                     success_threshold       = [5.0,  5.0,   1.0],
                     failure_threshold       = [0.0, -5.0, -10.0],
