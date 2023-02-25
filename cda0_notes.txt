@@ -1007,3 +1007,23 @@ solo vehicle training.
 	* No good results. Two runs peaked above mean reward of 0, one reaching ~5. But their
 	  inference was terrible. All trials fell off to mean reward ~-40 between 1.6M and 1.7M
 	  steps, so none saw any beneficial training with neighbor vehicles.
+
+===== UPGRADED TO RAY 2.2.0 =====
+
+2/22/23
+
+Created a new conda env cda0, based upon the new env rllib22, which includes Ray 2.2.0 and several
+other updated packages.  I then installed pygame 2.1.3 (with pip).  Tried running the cda0_tune
+program as a system test.
+	* It died immediately, complaining that tensorflow_probability package doesn't exist, so
+	  I installed it (v0.19.0).  The tune program now runs, as does the plots program using
+	  tensorboard.
+	* Confirmed the gpu tester is working properly also.
+	* The inference program didn't work at first because the config params code needed to be
+	  rewritten.  Once I did that it works fine.
+	* Updated the rllib22 env to include tensorflow_probability as well.
+	* Updated the tune program to use the new config objects of Ray 2.2.
+
+
+AI: play with reading in a tune checkpoint at the beginning of a new tune run. Look at get_policy()
+and maybe a complementary save_policy()? to make bare bones checkpoints.

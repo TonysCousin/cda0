@@ -6,11 +6,11 @@ import gym
 import ray
 import ray.rllib.algorithms.ppo as ppo
 #import ray.rllib.algorithms.ddpg as ddpg
-import ray.rllib.algorithms.td3  as td3
+#import ray.rllib.algorithms.td3  as td3
 import pygame
 from pygame.locals import *
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
-from simple_highway_with_ramp    import SimpleHighwayRamp, Roadway, Lane
+from simple_highway_with_ramp    import Roadway
 
 """This program runs the selected policy checkpoint for one episode and captures key state variables throughout."""
 
@@ -33,14 +33,15 @@ def main(argv):
     ray.init()
 
     # Set up the environment
-    config = ppo.DEFAULT_CONFIG.copy()
-
     env_config = {  "time_step_size":       0.5,
                     "debug":                0,
                     "init_ego_lane":        start_lane,
                     "neighbor_speed":       29.1,
-                    "neighbor_start_loc":   320.0 #dist downtrac from beginning of lane 1 for n3, m
+                    "neighbor_start_loc":   320.0 #dist downtrack from beginning of lane 1 for n3, m
                 }
+
+    cfg = ppo.PPOConfig()
+    cfg.framework("torch").exploration(explore = False)
 
     # DDPG - These need to be same as in the checkpoint being read!
     """
@@ -55,27 +56,27 @@ def main(argv):
     """
 
     # PPO - need to match checkpoint being read!
-    model = config["model"]
-    model["fcnet_hiddens"]          = [128, 50]
-    model["fcnet_activation"]       = "relu"
-    model["post_fcnet_activation"]  = "linear"
-    config["model"] = model
+    model = cfg.to_dict()["model"]
+    model["fcnet_hiddens"]                  = [128, 50]
+    model["fcnet_activation"]               = "relu"
+    model["post_fcnet_activation"]          = "linear"
+    cfg.training(model = model)
+    #print("///// Model specified.  It is now...", cfg.to_dict()["model"])
 
-    config["env_config"] = env_config
-    config["explore"] = False
-    config["framework"] = "torch"
-    config["num_gpus"] = 0
-    config["num_workers"] = 1
-    #config["seed"] = 17
+    cfg.environment(env = SimpleHighwayRampWrapper,
+                    env_config = env_config
+                   )
+
     env = SimpleHighwayRampWrapper(env_config)
     print("///// Environment configured.")
 
     # Restore the selected checkpoint file
     # Note that the raw environment class is passed to the algo, but we are only using the algo to run the NN model,
-    # not to run the environment, so any environment info we pass to the algo is irrelevant for this program.  The
-    # algo doesn't recognize the config key "env_configs", so need to remove it here.
-    #config.pop("env_configs")
-    algo = ppo.PPO(config = config, env = SimpleHighwayRampWrapper) #needs the env class, not the object created above
+    # not to run the environment, so any environment info we pass to the algo is irrelevant for this program.
+    algo = cfg.build()
+    #algo = ppo.PPO(config = config, env = SimpleHighwayRampWrapper) #needs the env class, not the object created above
+    print("///// algo object built.")
+
     algo.restore(checkpoint)
     print("///// Checkpoint {} successfully loaded.".format(checkpoint))
 

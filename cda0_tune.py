@@ -11,9 +11,11 @@ from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 
 ray.init()
 
-# Define which learning algorithm we will use
+# Define which learning algorithm we will use and set up is default config params
 algo = "PPO"
-params = ppo.DEFAULT_CONFIG.copy() #a2c & td3 don't have defaults (td3 builds on ddpg)
+cfg = ppo.PPOConfig()
+cfg.framework("torch")
+cfg_dict = cfg.to_dict()
 
 # Define the custom environment for Ray
 env_config = {}
@@ -25,26 +27,61 @@ env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed lim
 env_config["neighbor_start_loc"]            = 320.0 #dist downtrac from beginning of lane 1 for n3, m
 env_config["neighbor_first_timestep"]       = 1720000  #first total time step that neighbors are put into motion (curriculum learning)
 #env_config["init_ego_lane"]                 = 0
+cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config)
 
-# Algorithm configs
-params["env"]                               = SimpleHighwayRampWrapper
-params["env_config"]                        = env_config
-params["framework"]                         = "torch"
-params["num_gpus"]                          = 1 #for the local worker, which does the evaluation runs
-params["num_cpus_per_worker"]               = 1 #also applies to the local worker and evaluation workers
-params["num_gpus_per_worker"]               = 0 #this has to allow for evaluation workers also
-params["num_workers"]                       = 1 #num remote workers (remember that there is a local worker also)
-params["num_envs_per_worker"]               = 1
-params["rollout_fragment_length"]           = 200 #timesteps pulled from a sampler
-params["gamma"]                             = 0.999 #tune.choice([0.99, 0.999])
-params["evaluation_interval"]               = 6
-params["evaluation_duration"]               = 6
-params["evaluation_duration_unit"]          = "episodes"
-params["evaluation_parallel_to_training"]   = True #True requires evaluation_num_workers > 0
-params["evaluation_num_workers"]            = 2
-params["log_level"]                         = "WARN"
-params["seed"]                              = 17 #tune.choice([2, 17, 666, 4334, 10003, 29771, 38710, 50848, 81199])
-params["batch_mode"]                        = "complete_episodes"
+# Add dict for model structure
+model_config = cfg_dict["model"]
+model_config["fcnet_hiddens"]               = tune.choice([[128, 50], [128, 50], [256, 64], [512, 64]])
+model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
+model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
+cfg.training(model = model_config)
+
+# Add exploration noise params
+explore_config = cfg_dict["exploration_config"]
+explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
+explore_config["stddev"]                    = tune.uniform(0.4, 0.75) #this param is specific to GaussianNoise
+explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
+explore_config["initial_scale"]             = 1.0
+explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
+explore_config["scale_timesteps"]           = 1600000  #tune.choice([100000, 400000]) #was 900k
+cfg.exploration(explore = True, exploration_config = explore_config)
+
+# Computing resources
+cfg.resources(  num_gpus                    = 1, #for the local worker, which does the evaluation runs
+                num_cpus_for_local_worker   = 4,
+                num_cpus_per_worker         = 1, #also applies to the local worker and evaluation workers
+                num_gpus_per_worker         = 0  #this has to allow gpu left over for local worker & evaluation workers also
+)
+
+cfg.rollouts(   num_rollout_workers         = 4, #num remote workers (remember that there is a local worker also)
+                num_envs_per_worker         = 1,
+                rollout_fragment_length     = 200, #timesteps pulled from a sampler
+                batch_mode                  = "complete_episodes",
+)
+
+# Training algorithm HPs
+# NOTE: lr_schedule is only defined for policy gradient algos
+# NOTE: all items below lr_schedule are PPO-specific
+cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999])
+                train_batch_size            = 2400, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
+                lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
+                sgd_minibatch_size          = 32, #must be <= train_batch_size (and divide into it)
+                #grad_clip                  = tune.uniform(0.1, 0.5),
+                #clip_param                 = None #tune.choice([0.2, 0.3, 0.6, 1.0]),
+)
+
+# Evaluation process
+cfg.evaluation( evaluation_interval         = 6, #iterations
+                evaluation_duration         = 6, #units specified next
+                evaluation_duration_unit    = "episodes",
+                evaluation_parallel_to_training = True, #True requires evaluation_num_workers > 0
+                evaluation_num_workers      = 2,
+)
+
+# Debugging assistance
+cfg.debugging(  log_level                   = "WARN",
+                seed                        = 17, #tune.choice([2, 17, 666, 4334, 10003, 29771, 38710, 50848, 81199])
+)
 
 # ===== Params for DDPG =====================================================================
 """
@@ -81,36 +118,13 @@ params["policy_delay"]                      = 2
 params["smooth_target_policy"]              = True
 params["l2_reg"]                            = 0.0
 """
-# ===== Params for PPO ======================================================================
-
-params["lr_schedule"]                       = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]]
-params["sgd_minibatch_size"]                = 32 #must be <= train_batch_size (and divide into it)
-params["train_batch_size"]                  = 2400 #must be = rollout_fragment_length * num_workers * num_envs_per_worker
-#params["grad_clip"]                         = tune.uniform(0.1, 0.5)
-#params["clip_param"]                        = None #tune.choice([0.2, 0.3, 0.6, 1.0])
-
-# Add dict here for lots of model HPs
-model_config = params["model"]
-model_config["fcnet_hiddens"]               = tune.choice([[128, 50], [128, 50], [256, 64], [512, 64]])
-model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
-model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
-params["model"] = model_config
-
-explore_config = params["exploration_config"]
-explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-explore_config["stddev"]                    = tune.uniform(0.4, 0.75) #this param is specific to GaussianNoise
-explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
-explore_config["initial_scale"]             = 1.0
-explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-explore_config["scale_timesteps"]           = 1600000  #tune.choice([100000, 400000]) #was 900k
-params["exploration_config"] = explore_config
-
 
 # ===== Final setup =========================================================================
 
 print("\n///// {} training params are:\n".format(algo))
-for item in params:
-    print("{}:  {}".format(item, params[item]))
+p = cfg.to_dict()
+for item in p:
+    print("{}:  {}".format(item, p[item]))
 
 tune_config = tune.TuneConfig(
                 metric                      = "episode_reward_mean",
@@ -143,7 +157,7 @@ run_config = air.RunConfig(
 
 #checkpoint criteria: checkpoint_config=air.CheckpointConfig()
 
-tuner = tune.Tuner(algo, param_space=params, tune_config=tune_config, run_config=run_config)
+tuner = tune.Tuner(algo, param_space=cfg.to_dict(), tune_config=tune_config, run_config=run_config)
 print("\n///// Tuner created.\n")
 
 result = tuner.fit()
