@@ -282,7 +282,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         # Other persistent data
         self.lane_change_underway = "none" #possible values: "left", "right", "none"
         self.lane_change_count = 0  #num consecutive time steps since a lane change was begun
-        self.total_steps = 0        #num time steps for this trial, across all episodes
+        self.total_steps = 0        #num time steps for this trial (worker), across all episodes; NOTE that this is different from the
+                                    # total steps reported by Ray tune, which is accumulated over all rollout workers
         self.steps_since_reset = 0  #length of the current episode in time steps
         self.stopped_count = 0      #num consecutive time steps in an episode where vehicle speed is zero
         self.reward_for_completion = True #should we award the episode completion bonus?
@@ -291,7 +292,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.speed_hist = deque(maxlen = 4)
         self.num_crashes = 0        #num crashes with a neighbor vehicle since reset
         self.neighbor_print_latch = True #should the neighbor vehicle info be printed when initiated?
-
+        self.rollout_id = hex(int(self.prng.random() * 256))[2:].zfill(2) #random int to ID this env object in debug logging
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
         #self.render_mode = render_mode
@@ -369,8 +370,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             n_loc = self.neighbor_start_loc
             n_speed = self.neighbor_speed
             if self.neighbor_print_latch:
-                print("///// reset: Neighbor vehicles on the move. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
-                        .format(self.episode_count, self.total_steps, n_loc, n_speed))
+                print("///// reset worker {}: Neighbor vehicles on the move. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
+                        .format(self.rollout_id, self.episode_count, self.total_steps, n_loc, n_speed))
                 self.neighbor_print_latch = False
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1, and always start at the same location
@@ -441,8 +442,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.N3_LANE_REM]          = self.roadway.get_total_lane_length(self.vehicles[3].lane_id) - self.vehicles[3].dist_downtrack
 
         if self.total_steps % 10000 == 0:
-            print("///// reset: total_steps = {}, steps_since_reset = {}, episodes = {}"
-                    .format(self.total_steps, self.steps_since_reset, self.episode_count))
+            print("///// reset on worker {}: total_steps = {}, steps_since_reset = {}, episodes = {}"
+                    .format(self.rollout_id, self.total_steps, self.steps_since_reset, self.episode_count))
             print("      ego_lane_id = {}, max_distance = {:.1f}, n_speed = {:.1f}, num_crashes = {}"
                     .format(ego_lane_id, max_distance, n_speed, self.num_crashes))
 

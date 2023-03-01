@@ -1022,8 +1022,32 @@ program as a system test.
 	* The inference program didn't work at first because the config params code needed to be
 	  rewritten.  Once I did that it works fine.
 	* Updated the rllib22 env to include tensorflow_probability as well.
-	* Updated the tune program to use the new config objects of Ray 2.2.
+**	* Updated the tune program to use the new config objects of Ray 2.2. Best reference for this
+	  is to look at the source code under ray/rllib/algorithms/algorithm_config.py (the base
+	  class), and also in the derived classes algorithms/pg/pg_config.py and
+	  algorithms/ppo/ppo.py (derived from pg).
 
 
 AI: play with reading in a tune checkpoint at the beginning of a new tune run. Look at get_policy()
-and maybe a complementary save_policy()? to make bare bones checkpoints.
+    and maybe a complementary save_policy()? to make bare bones checkpoints.
+
+2/24/23
+
+***	Created new Git branch tune-checkpointing off of 3-neighbors, specifically to build a raw
+	checkpointing capability to support better curriculum learning.
+
+2/25/23
+	* rllib/policy/torch/torch_policy_v2 has methods get_weights() -> ModelWeights and set_weights(weights)
+	* Same class also has export_model(export_dir), and will create a checkpoint named model.pt, also
+	  import_model_from_h5(import_file), and loads it into self.model apparently. But a model's state
+	  includes network weights, optimizer state dict, exploration state, timestep info, etc. I only
+	  want to keep the weights, I think.
+	* self.model is created with internal method _init_model_and_dist_class(), which allows use
+	  of an overridden method self.make_model(). It appears I can subclass TorchPolicyV2 (or without V2)
+	  and create my own make_model() method, as this one doesn't do anything.
+	* If make_model() isn't overridden, then it calls its own get_model_V2() method with several params.
+	* Air Checkpoint class manages everything about checkpoints, which contain states of both algorithms
+	  and policies.
+	* Instead, use AlgorithmConfig class's checkpointing() method to define behavior with param
+	  export_native_model_files = True, then after training use Algorithm.get_policy().
+	* Consider using the ray/rllib/models/ModelV2 class (actually, classes derived from it).
