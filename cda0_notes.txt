@@ -1027,16 +1027,23 @@ program as a system test.
 	  class), and also in the derived classes algorithms/pg/pg_config.py and
 	  algorithms/ppo/ppo.py (derived from pg).
 
-
-AI: play with reading in a tune checkpoint at the beginning of a new tune run. Look at get_policy()
-    and maybe a complementary save_policy()? to make bare bones checkpoints.
-
 2/24/23
 
 ***	Created new Git branch tune-checkpointing off of 3-neighbors, specifically to build a raw
 	checkpointing capability to support better curriculum learning.
 
-2/25/23
+3/1/23
+
+===== UPGRADED TO RAY 2.3.0 =====
+
+* Created a new conda env cda0 based on a copy of the new rllib23 env, but with upgrade to torchvision 0.14.1.
+  I then installed pygame 2.2.0 with pip to complete the env.
+	* The GPU tester program passes in this new env.
+	* Ran the existing cda0_tune program, which did a lot more environment model checking and gave me lots
+	  of error messages, indicating a need to make it compatible with the gym 0.26 API.
+
+
+* Notes from my research in how to use checkpoints and do some real curriculum learning.
 	* rllib/policy/torch/torch_policy_v2 has methods get_weights() -> ModelWeights and set_weights(weights)
 	* Same class also has export_model(export_dir), and will create a checkpoint named model.pt, also
 	  import_model_from_h5(import_file), and loads it into self.model apparently. But a model's state
@@ -1051,3 +1058,9 @@ AI: play with reading in a tune checkpoint at the beginning of a new tune run. L
 	* Instead, use AlgorithmConfig class's checkpointing() method to define behavior with param
 	  export_native_model_files = True, then after training use Algorithm.get_policy().
 	* Consider using the ray/rllib/models/ModelV2 class (actually, classes derived from it).
+	* Tune checkpoints include full experiment data, so are specified with the experiment top level dir
+	  (e.g. in my recent use it is ~/ray_results/cda0).  Of course, if there are multiple runs in here it
+	  could get confused.  Starting with a clean dir, I made a run, saved a couple checkpoints, then killed
+	  it.  I then started a new run specifying the experiment checkpoint.  It said the checkpoint was
+	  successfully loaded, but the run started over with iteration 1 and a different selection of HPs than
+	  was used on the previous run.  Not sure it really worked.

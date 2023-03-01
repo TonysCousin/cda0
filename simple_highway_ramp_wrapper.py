@@ -1,6 +1,5 @@
 import numpy as np
 from typing import Tuple
-import gym
 from ray.rllib.env.env_context import EnvContext
 
 from simple_highway_with_ramp import SimpleHighwayRamp

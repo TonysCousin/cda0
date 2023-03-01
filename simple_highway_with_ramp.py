@@ -1,7 +1,7 @@
 from collections import deque
 from statistics import mean
-import gym
-from gym.spaces import Discrete, Box
+import gymnasium
+from gymnasium.spaces import Discrete, Box
 import numpy as np
 from ray.rllib.env.env_context import EnvContext
 
@@ -317,7 +317,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         #super().seed(seed)
 
 
-    def reset(self,
+    def reset(self, *,
               seed:         int             = None,
               options:      dict            = None
              ) -> list:
@@ -461,7 +461,7 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
 
         if self.debug > 0:
             print("///// End of reset().")
-        return self.obs
+        return self.obs, {}
 
 
     def step(self,
@@ -670,7 +670,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
             print("      reason = {}".format(return_info["reason"]))
             print("      reward_detail = {}".format(return_info["reward_detail"]))
 
-        return self.obs, reward, done, return_info
+        truncated = done #intended to indicate if the episode ended prematurely due to step/time limit
+        return self.obs, reward, done, truncated, return_info
 
 
     def close(self):
