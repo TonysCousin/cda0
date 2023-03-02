@@ -1073,4 +1073,4 @@ program as a system test.
 		* Suggestion 1 - use a single env that swaps tasks (training levels or lessons)
 			* Set up the API compliance and tested it.
 			* Updated the environment code to handle levels 0-3 with two additional reserved for
-			  future.  Not yet tested.
+			  future. Did short test with level 0.

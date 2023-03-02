@@ -37,8 +37,28 @@ def main(argv):
     cfg.framework("torch")
     cfg_dict = cfg.to_dict()
 
+    # Define the stopper object that decides when to terminate training.
+    # All list objects (min_timesteps, success_threshold, failure_threshold) must be of length equal to num phases in use.
+    # let_it_run can be a single value if it applies to all phases.
+    # Phase...............0             1           2           3
+    min_timesteps       = [1500000,     1000000,    1500000,    2000000]
+    success_threshold   = [5.0,         5.0,        5.0,        1.0]
+    failure_threshold   = [0.0,         0.0,        -5.0,       -10.0]
+    let_it_run          = False #can be a scalar or list of same size as above lists
+    stopper = StopLogic(max_ep_timesteps        = 400,
+                        max_iterations          = 10,
+                        min_timesteps           = min_timesteps,
+                        avg_over_latest         = 70,
+                        success_threshold       = success_threshold,
+                        failure_threshold       = failure_threshold,
+                        degrade_threshold       = 0.25,
+                        compl_std_dev           = 0.05,
+                        let_it_run              = let_it_run,
+                    )
+
     # Define the custom environment for Ray
     env_config = {}
+    env_config["stopper"]                       = stopper #object must be instantiated above
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 0
     env_config["training"]                      = True
@@ -151,17 +171,7 @@ def main(argv):
                     mode                        = "max",
                     num_samples                 = 2 #number of HP trials
                 )
-    stopper = StopLogic(max_timesteps           = 400,
-                        max_iterations          = 10,
-                        phase_end_steps         = [1020000, 1720000, 5000000], #defines the phases; last entry needs to be >= num steps achievable in max_iterations
-                        min_timesteps           = [1000000, 1700000, 2000000], #phase 1 ends when env neighbor_first_timestep is triggered
-                        avg_over_latest         = 70,
-                        success_threshold       = [5.0,  5.0,   1.0],
-                        failure_threshold       = [0.0, -5.0, -10.0],
-                        degrade_threshold       = 0.25,
-                        compl_std_dev           = 0.05,
-                        let_it_run              = [False, False, False] #stop in phase 0, 1 if it can't drive solo by its end
-                    )
+
     run_config = air.RunConfig(
                     name                        = "cda0",
                     local_dir                   = "~/ray_results",

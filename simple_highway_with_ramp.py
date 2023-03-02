@@ -6,6 +6,7 @@ from gymnasium.spaces import Discrete, Box
 import numpy as np
 from ray.rllib.env.env_context import EnvContext
 from ray.rllib.env.apis.task_settable_env import TaskSettableEnv
+from ray.tune.logger import pretty_print
 
 class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
@@ -110,7 +111,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         + If there is no crash, but all vehicles exit the indefinite end of a lane, then the episode is complete (success).
         + The environment supports curriculum learning with multiple levels of difficulty. The levels are:
             0 = solo agent drives a (possibly short) straight lane to the end without departing the roadway with limited init spd
-            1 = level 0 plus always start near beginning of track with full possible initial speeds
+            1 = level 0 but always start near beginning of track with full possible initial speeds
             2 = level 1 plus solo agent driving on entry ramp, and forced to change lanes to complete the course
             3 = level 2 plus 3 sequential, constant-speed vehicles in lane 1
             4 = level 2 plus 3 randomly located, constant-speed vehicles anywhere on the track
@@ -134,7 +135,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     HALF_LANE_CHANGE_STEPS  = 3.0 / 0.5 // 2    #num steps to get half way across the lane (equally straddling both)
     TOTAL_LANE_CHANGE_STEPS = 2 * HALF_LANE_CHANGE_STEPS
     MAX_STEPS_SINCE_LC      = 60        #largest num time steps we will track since previous lane change
-    NUM_DIFFICULTY_LEVELS   = 6         #num levels of environment difficulty for the agent to learn; see descrip above
+    NUM_DIFFICULTY_LEVELS   = 4         #num levels of environment difficulty for the agent to learn; see descrip above
 
 
     def __init__(self,
@@ -158,22 +159,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         #TODO: try calling self.seed() without storing it as an instance attribute
         self.prng = np.random.default_rng(seed = seed)
         self.render_mode = render_mode
-
-        self.time_step_size = 0.5 #seconds
-        try:
-            ts = config["time_step_size"]
-        except KeyError as e:
-            ts = None
-        if ts is not None  and  ts != ""  and  float(ts) > 0.0:
-            self.time_step_size = float(ts)
-
-        self.debug = 0
-        try:
-            db = config["debug"]
-        except KeyError as e:
-            db = None
-        if db is not None  and  db != ""  and  0 <= int(db) <= 2:
-            self.debug = int(db)
 
         self._set_initial_conditions(config)
 
@@ -333,9 +318,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 ) -> None:
         """Defines the difficulty level of the environment, which can be used for curriculum learning."""
 
-        assert(0 <= task < self.NUM_DIFFICULTY_LEVELS)
-
-        self.difficulty_level = int(task)
+        self.difficulty_level = min(max(int(task), 0, self.NUM_DIFFICULTY_LEVELS))
         print("///// Environment difficulty set to {}".format(self.difficulty_level))
 
 
@@ -721,6 +704,11 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         return self.obs, reward, done, truncated, return_info
 
 
+    def get_stopper(self):
+        """Returns the stopper object."""
+        return self.stopper
+
+
     def close(self):
         """Closes any resources that may have been used during the simulation."""
         pass #this method not needed for this version
@@ -733,6 +721,22 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                                 config:     EnvContext
                                ):
         """Sets the initial conditions of the ego vehicle in member variables (lane ID, speed, downtrack position)."""
+
+        self.time_step_size = 0.5 #seconds
+        try:
+            ts = config["time_step_size"]
+        except KeyError as e:
+            ts = None
+        if ts is not None  and  ts != ""  and  float(ts) > 0.0:
+            self.time_step_size = float(ts)
+
+        self.debug = 0
+        try:
+            db = config["debug"]
+        except KeyError as e:
+            db = None
+        if db is not None  and  db != ""  and  0 <= int(db) <= 2:
+            self.debug = int(db)
 
         self.training = False
         try:
@@ -789,6 +793,16 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 self.neighbor_start_loc = nsl
         except KeyError as e:
             pass
+
+        # Store the stopper, but also let the stopper know how to reach this object
+        self.stopper = None
+        try:
+            s = config["stopper"]
+            print("///// Environment connecting to stopper object... ", s)
+            s.set_environment_model(self)
+            self.stopper = s
+        except KeyError as e:
+            print("///// Stopper not specified in environment config.")
 
 
     def _select_init_lane(self) -> int:
@@ -1022,15 +1036,22 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 ######################################################################################################
 
 
-def curriculum_fn(train_results:        Any,     #current status of training progress #TODO should be ResultGrid?
+def curriculum_fn(train_results:        dict,           #current status of training progress
                   task_settable_env:    TaskSettableEnv,#the env model that difficulties will be applied to
                   env_ctx,                              #???
                  ) -> int:                              #returns the new difficulty level
     """Callback that allows Ray.Tune to increase the difficulty level, based on the current training results."""
 
-    # For now, always keep it at level 0 until I get comfortable with how to use the results.
-    print("\n///// curriculum_callback_fn entry.")
-    return 0
+    #print(pretty_print(train_results))
+
+    # If the mean reward is above the success threshold for the current phase then advance the phase
+    phase = task_settable_env.get_task()
+    stopper = task_settable_env.get_stopper()
+    assert stopper is not None, "///// Unable to access the stopper object in curriculum_fn."
+    if train_results["episode_reward_mean"] >= stopper.get_success_thresholds()[phase]:
+        task_settable_env.set_task(phase+1)
+
+    return task_settable_env.get_task() #don't return the local one, since the env may override it
 
 
 ######################################################################################################
