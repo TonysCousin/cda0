@@ -24,12 +24,12 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
     def reset(self,
                 seed    :   int = None,     #seed value for the PRNG
                 options :   object = None   #currently not recognized by the Env, but appears for syntactic compliance
-             ) -> np.array:                 #returns a scaled vector of observations usable by a NN
+             ) -> Tuple[np.array, dict]:    #returns a scaled vector of observations usable by a NN plus an info dict
 
         """Invokes the environment's reset method, then scales the resulting observations to be usable by a NN."""
 
-        obs = super().reset(seed, options)
-        return self.scale_obs(obs)
+        obs, info = super().reset(seed = seed, options = options)
+        return self.scale_obs(obs), info
 
 
     def step(self,
@@ -44,11 +44,11 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
             However, if the "training" config does not exist or is not True, then the returned obs list is NOT scaled.
             This allows an inference engine to directly interpret the observations.  It will then be responsible for
             passing that unscaled obs structure into the scale_obs() method to transform it into values that can be
-            sent back to the NN for the next time step.
+            sent back to the NN for the next time step, if that action is to be taken.
         """
 
         a = self._unscale_actions(action)
-        raw_obs, r, d, i = super().step(a)
+        raw_obs, r, d, t, i = super().step(a)
         if self.training:
             o = self.scale_obs(raw_obs)
         else:
@@ -58,7 +58,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         #for j in range(len(o)):
         #    print("      {:2d}:  {}".format(j, o[j]))
 
-        return o, r, d, i
+        return o, r, d, t, i
 
 
     def scale_obs(self,
@@ -75,7 +75,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
 
         # Determine relative lane indexes for the neighbor vehicles (-1 is left of agent, 0 is same as agent, +1 is right of
         # agent; neighbors are always in lane 1)
-        ego_lane_id = obs[self.EGO_LANE_ID]
+        ego_lane_id = int(obs[self.EGO_LANE_ID])
         if ego_lane_id == 0:
             neighbor_lane = 1
         elif ego_lane_id == 1:
@@ -120,7 +120,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         # Return the obs as an ndarray
         vec = np.array(scaled, dtype=np.float32)
         if self.debug > 1:
-            print("_scale_obs returning vec size = ", vec.shape)
+            print("scale_obs returning vec size = ", vec.shape)
             print(vec)
 
         return vec

@@ -72,7 +72,7 @@ def main(argv):
                     num_gpus_per_worker         = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
-    cfg.rollouts(   num_rollout_workers         = 4, #num remote workers (remember that there is a local worker also)
+    cfg.rollouts(   num_rollout_workers         = 1, #num remote workers (remember that there is a local worker also)
                     num_envs_per_worker         = 1,
                     rollout_fragment_length     = 200, #timesteps pulled from a sampler
                     batch_mode                  = "complete_episodes",

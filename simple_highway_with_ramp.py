@@ -1,11 +1,12 @@
 from collections import deque
 from statistics import mean
+from typing import Tuple
 import gymnasium
 from gymnasium.spaces import Discrete, Box
 import numpy as np
 from ray.rllib.env.env_context import EnvContext
 
-class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
+class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
 
     """This is a 2-lane highway with a single on-ramp on the right side.  It is called "simple" because it does not use
         lanelets, but has a fixed (understood) geometry that is not flexible nor extensible.  It is only
@@ -320,9 +321,12 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
     def reset(self, *,
               seed:         int             = None,
               options:      dict            = None
-             ) -> list:
+             ) -> Tuple[np.array, dict]:
         """Reinitializes the environment to prepare for a new episode.  This must be called before
             making any calls to step().
+
+            Return tuple includes an array of observation values, plus a dict of additional key-value
+            info pairs.
 
             CAUTION: the returned observation vector is at actual world scale and needs to be
                      preprocessed before going into a NN!
@@ -336,7 +340,8 @@ class SimpleHighwayRamp(gym.Env):  #Based on OpenAI gym 0.26.1 API
         #self.seed = seed #okay to pass it to the parent class, but don't store a local member copy!
 
         # options may be a dict that can specify additional configurations - unique to each particular env
-        if options is not None:
+        if options is not None and len(options) > 0:
+            print("\n///// SimpleHighwayRamp.reset: incoming options is: ", options)
             raise ValueError("reset() called with options, but options are not used in this environment.")
 
         # If we are in a training run, then choose widely randomized initial conditions

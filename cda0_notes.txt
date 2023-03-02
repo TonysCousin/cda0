@@ -1040,7 +1040,11 @@ program as a system test.
   I then installed pygame 2.2.0 with pip to complete the env.
 	* The GPU tester program passes in this new env.
 	* Ran the existing cda0_tune program, which did a lot more environment model checking and gave me lots
-	  of error messages, indicating a need to make it compatible with the gym 0.26 API.
+	  of error messages, indicating a need to make it compatible with the gym 0.26 API (now called
+	  gymnasium).
+	* Reinstalled gym 0.26.1 in addition to gymnasium 0.26, to cover some legacy RLlib code that still uses it.
+	* Modified some of my code to use more strong typing in environment reset method. The tune program now
+	  runs fine.
 
 
 * Notes from my research in how to use checkpoints and do some real curriculum learning.
