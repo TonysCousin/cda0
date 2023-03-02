@@ -1,12 +1,13 @@
 from collections import deque
 from statistics import mean
-from typing import Tuple
+from typing import Tuple, Any
 import gymnasium
 from gymnasium.spaces import Discrete, Box
 import numpy as np
 from ray.rllib.env.env_context import EnvContext
+from ray.rllib.env.apis.task_settable_env import TaskSettableEnv
 
-class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
+class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
     """This is a 2-lane highway with a single on-ramp on the right side.  It is called "simple" because it does not use
         lanelets, but has a fixed (understood) geometry that is not flexible nor extensible.  It is only
@@ -107,6 +108,13 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
         + If any vehicle drives off the end of a lane, it is a crash and ends the episode.
         + If a lane change is requested where no target lane exists, it is considered a crash and ends the episode.
         + If there is no crash, but all vehicles exit the indefinite end of a lane, then the episode is complete (success).
+        + The environment supports curriculum learning with multiple levels of difficulty. The levels are:
+            0 = solo agent drives a (possibly short) straight lane to the end without departing the roadway with limited init spd
+            1 = level 0 plus always start near beginning of track with full possible initial speeds
+            2 = level 1 plus solo agent driving on entry ramp, and forced to change lanes to complete the course
+            3 = level 2 plus 3 sequential, constant-speed vehicles in lane 1
+            4 = level 2 plus 3 randomly located, constant-speed vehicles anywhere on the track
+            5 = level 2 plus 3 randomly located, variable-speed vehicles anywhere on the track
 
         Agent rewards are provided by a separate reward function.  The reward logic is documented there.
     """
@@ -115,7 +123,7 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
     #metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     OBS_SIZE                = 29
-    VEHICLE_LENGTH          = 20.0       #m
+    VEHICLE_LENGTH          = 20.0      #m
     MAX_SPEED               = 35.0      #vehicle's max achievable speed, m/s
     MAX_ACCEL               = 3.0       #vehicle's max achievable acceleration (fwd or backward), m/s^2
     MAX_JERK                = 4.0       #max desirable jerk for occupant comfort, m/s^3
@@ -126,6 +134,7 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
     HALF_LANE_CHANGE_STEPS  = 3.0 / 0.5 // 2    #num steps to get half way across the lane (equally straddling both)
     TOTAL_LANE_CHANGE_STEPS = 2 * HALF_LANE_CHANGE_STEPS
     MAX_STEPS_SINCE_LC      = 60        #largest num time steps we will track since previous lane change
+    NUM_DIFFICULTY_LEVELS   = 6         #num levels of environment difficulty for the agent to learn; see descrip above
 
 
     def __init__(self,
@@ -281,6 +290,7 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
         self.roadway = Roadway(self.debug)
 
         # Other persistent data
+        self.difficulty_level = 0   #environment difficulty for the agent; int in [0, NUM_DIFFICULTY_LEVELS], where 0 is simplest
         self.lane_change_underway = "none" #possible values: "left", "right", "none"
         self.lane_change_count = 0  #num consecutive time steps since a lane change was begun
         self.total_steps = 0        #num time steps for this trial (worker), across all episodes; NOTE that this is different from the
@@ -318,6 +328,23 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
         #super().seed(seed)
 
 
+    def set_task(self,
+                 task:      int         #ID of the task (lesson difficulty) to simulate, in [0, n]
+                ) -> None:
+        """Defines the difficulty level of the environment, which can be used for curriculum learning."""
+
+        assert(0 <= task < self.NUM_DIFFICULTY_LEVELS)
+
+        self.difficulty_level = int(task)
+        print("///// Environment difficulty set to {}".format(self.difficulty_level))
+
+
+    def get_task(self) -> int:
+        """Returns the environment difficulty level currently in use."""
+
+        return self.difficulty_level
+
+
     def reset(self, *,
               seed:         int             = None,
               options:      dict            = None
@@ -344,42 +371,56 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
             print("\n///// SimpleHighwayRamp.reset: incoming options is: ", options)
             raise ValueError("reset() called with options, but options are not used in this environment.")
 
-        # If we are in a training run, then choose widely randomized initial conditions
+        # If we are in a training run at difficulty level 0, then choose widely randomized initial conditions
         ego_lane_id = None
         ego_x = None
         ego_speed = None
         max_distance = 1.0
         if self.training:
-            ego_lane_id = self._select_init_lane()
-            ego_x = 0.0
-            if self.randomize_start_dist:
-                m = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
-                initial_steps = 1000000 #num steps to wait before starting to shrink the max distance
-                if self.total_steps <= initial_steps:
-                    max_distance = m
-                else:
-                    max_distance = max((self.total_steps - initial_steps) * (10.0 - m)/(1.6e6 - initial_steps) + m, 10.0) #decreases over time steps
-                ego_x = self.prng.random() * max_distance
-            ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED
+            ego_lane_id = self._select_init_lane() #covers all difficulty levels
 
-        # Else, we are doing inference, so limit the randomness of the initial conditions
+            if self.difficulty_level == 0:
+                ego_x = 0.0
+                if self.randomize_start_dist:
+                    physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
+                    initial_steps = 1000000 #num steps to wait before starting to shrink the max distance
+                    if self.total_steps <= initial_steps:
+                        max_distance = physical_limit
+                    else:
+                        max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(1.6e6 - initial_steps) + physical_limit,
+                                        10.0) #decreases over time steps
+                    ego_x = self.prng.random() * max_distance
+                ego_speed = self.prng.random() * 10.0 + 20.0 #value in [10, 30] m/s
+
+            elif self.difficulty_level < 3: #levels 1 and 2
+                ego_x = self.prng.random() * 500.0
+                ego_speed = self.prng.rangom() * SimpleHighwayRamp.MAX_SPEED #any physically possible value
+
+            else: #levels 3 and up
+                ego_x = self.prng.random() * 500.0
+                ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
+
+        # Else, we are doing inference, so allow coonfigrable overrides if present
         else:
             ego_lane_id = int(self.prng.random()*3) if self.init_ego_lane is None  else  self.init_ego_lane
             ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
             ego_speed = self.prng.random() * 31.0 + 4.0 if self.init_ego_speed is None  else self.init_ego_speed
 
-        # If we are beyond the neighbor starting episode (for curriculum learning) then initialize their speed and starting point
+        # If this difficulty level uses neighbor vehicles then initialize their speed and starting point
         n_loc = 0.0
         n_speed = 0.0
-        if self.total_steps >= self.neighbor_first_timestep:
+        if self.difficulty_level == 3: #steady speed vehicles in lane 1
             n_loc = self.neighbor_start_loc
             n_speed = self.neighbor_speed
             if self.neighbor_print_latch:
-                print("///// reset worker {}: Neighbor vehicles on the move. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
+                print("///// reset worker {}: Neighbor vehicles on the move in level 3. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
                         .format(self.rollout_id, self.episode_count, self.total_steps, n_loc, n_speed))
                 self.neighbor_print_latch = False
+        elif self.difficulty_level > 3:
+            raise NotImplementedError("///// Neighbor vehicle motion not defined for difficulty level {}".format(self.difficulty_level))
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1, and always start at the same location
+        #TODO: revise this for levels 4+
         self.vehicles[1].lane_id = 1
         self.vehicles[1].dist_downtrack = n_loc + 6.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
         self.vehicles[1].speed = n_speed
@@ -400,6 +441,7 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
         # If the ego vehicle is in lane 1 (where the neighbor vehicles are), then we need to initialize its position so that it isn't
         # going to immediately crash with them (n1 is always the farthest downtrack and n3 is always the farthest uptrack). Give it
         # more room if going in front of the neighbors, as ego has limited accel and may be starting much slower than they are.
+        #TODO: when difficulty levels > 3 are implemented, this needs to account for vehicles in other lanes also.
         if ego_lane_id == 1:
             min_loc = self.vehicles[3].dist_downtrack - 4.0*SimpleHighwayRamp.VEHICLE_LENGTH
             max_loc = self.vehicles[1].dist_downtrack + 10.0*SimpleHighwayRamp.VEHICLE_LENGTH
@@ -449,8 +491,8 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
         if self.total_steps % 10000 == 0:
             print("///// reset on worker {}: total_steps = {}, steps_since_reset = {}, episodes = {}"
                     .format(self.rollout_id, self.total_steps, self.steps_since_reset, self.episode_count))
-            print("      ego_lane_id = {}, max_distance = {:.1f}, n_speed = {:.1f}, num_crashes = {}"
-                    .format(ego_lane_id, max_distance, n_speed, self.num_crashes))
+            print("      level = {}, ego_lane_id = {}, max_distance = {:.1f}, n_speed = {:.1f}, num_crashes = {}"
+                    .format(self.difficulty_level, ego_lane_id, max_distance, n_speed, self.num_crashes))
 
         # Other persistent data
         self.lane_change_underway = "none"
@@ -732,14 +774,6 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
         except KeyError as e:
             pass
 
-        self.neighbor_first_timestep = 0
-        try:
-            nfi = config["neighbor_first_timestep"]
-            if nfi >= 0:
-                self.neighbor_first_timestep = nfi
-        except KeyError as e:
-            pass
-
         self.neighbor_speed = 29.1
         try:
             ns = config["neighbor_speed"]
@@ -760,10 +794,20 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
     def _select_init_lane(self) -> int:
         """Chooses the initial lane for training runs, which may not be totally random."""
 
-        if self.prng.random() < 0.5:
-            return 2
-        else:
+        # Levels 0 & 1 are restricted to lanes 0 & 1 (the full-length lanes)
+        if self.difficulty_level < 2:
             return int(self.prng.random()*2) #select 0 or 1
+
+        # Levels 2 & 3 need to emphasizes lots of experience in lane 2
+        elif self.difficulty_level < 4:
+            if self.prng.random() < 0.7:
+                return 2
+            else:
+                return int(self.prng.random()*2) #select 0 or 1
+
+        # Levels 4 and up should choose any lane equally
+        else:
+            return int(self.prng.random()*3)
 
 
     def _check_for_collisions(self):
@@ -973,6 +1017,20 @@ class SimpleHighwayRamp(gymnasium.Env):  #Based on OpenAI gym 0.26.1 API
             for j in range(SimpleHighwayRamp.OBS_SIZE):
                 print("      {:2d}: {}".format(j, self.obs[j]))
 
+
+######################################################################################################
+######################################################################################################
+
+
+def curriculum_fn(train_results:        Any,     #current status of training progress #TODO should be ResultGrid?
+                  task_settable_env:    TaskSettableEnv,#the env model that difficulties will be applied to
+                  env_ctx,                              #???
+                 ) -> int:                              #returns the new difficulty level
+    """Callback that allows Ray.Tune to increase the difficulty level, based on the current training results."""
+
+    # For now, always keep it at level 0 until I get comfortable with how to use the results.
+    print("\n///// curriculum_callback_fn entry.")
+    return 0
 
 
 ######################################################################################################

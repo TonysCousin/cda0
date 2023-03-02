@@ -10,6 +10,7 @@ from ray.tune.logger import pretty_print
 from stop_logic import StopLogic
 #from stop_long  import StopLong
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
+from simple_highway_with_ramp import curriculum_fn
 
 """This program tunes (explores) hyperparameters to find a good set suitable for training.
     Usage is:
@@ -43,10 +44,9 @@ def main(argv):
     env_config["training"]                      = True
     env_config["randomize_start_dist"]          = True #tune.choice([True, False])
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit
-    env_config["neighbor_start_loc"]            = 320.0 #dist downtrac from beginning of lane 1 for n3, m
-    env_config["neighbor_first_timestep"]       = 1720000  #first total time step that neighbors are put into motion (curriculum learning)
+    env_config["neighbor_start_loc"]            = 320.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
-    cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config)
+    cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config, env_task_fn = curriculum_fn)
 
     # Add dict for model structure
     model_config = cfg_dict["model"]

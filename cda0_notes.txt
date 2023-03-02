@@ -1068,3 +1068,9 @@ program as a system test.
 	  it.  I then started a new run specifying the experiment checkpoint.  It said the checkpoint was
 	  successfully loaded, but the run started over with iteration 1 and a different selection of HPs than
 	  was used on the previous run.  Not sure it really worked.
+
+	* Got some help on Ray discuss from @justinvyu on 2/28. I plan to implement his 3 suggestions:
+		* Suggestion 1 - use a single env that swaps tasks (training levels or lessons)
+			* Set up the API compliance and tested it.
+			* Updated the environment code to handle levels 0-3 with two additional reserved for
+			  future.  Not yet tested.
