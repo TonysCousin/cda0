@@ -1046,8 +1046,7 @@ program as a system test.
 	* Modified some of my code to use more strong typing in environment reset method. The tune program now
 	  runs fine.
 
-
-* Notes from my research in how to use checkpoints and do some real curriculum learning.
+*** Notes from my research in how to use checkpoints and do some real curriculum learning.
 	* rllib/policy/torch/torch_policy_v2 has methods get_weights() -> ModelWeights and set_weights(weights)
 	* Same class also has export_model(export_dir), and will create a checkpoint named model.pt, also
 	  import_model_from_h5(import_file), and loads it into self.model apparently. But a model's state
@@ -1074,3 +1073,24 @@ program as a system test.
 			* Set up the API compliance and tested it.
 			* Updated the environment code to handle levels 0-3 with two additional reserved for
 			  future. Did short test with level 0.
+
+		* Suggestion 2 - add PBT scheduler with this new environment.
+			* Modified cda0_tune to incorporate code analogous to the examples provided.
+				* Initial run - first perturbation it modified gamma outside of the range I
+				  expected. I gave the schedule a mutation range of loguniform(0.95, 0.9999), but
+				  rather than sampling from there it just multiplied the previous value by 0.8.
+				  It seems it sometimes chooses to resample from the config values given, and
+				  sometimes chooses to multiply by either 0.8 or 1.2.
+
+3/2/23
+
+* Updated my environment model (SimpleRoadwayRamp) to provide multiple learning levels (tasks), per the Ray 
+  curriculum training guidance (see notes above, including advice from a Ray Discuss contributor).  Also updated
+  the wrapper class, tuner program and stop logic to accommodate these changes.
+
+3/3/23
+
+* Updated the tuning program to implement population based training (PBT), per various Ray documentation and hints
+  from my Ray Discuss thread.
+	* Made a new run with 24 trials using HPs and tuning HPs that I think have a good chance for success over
+	  all 4 defined learning levels.

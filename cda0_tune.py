@@ -2,7 +2,11 @@ import sys
 import ray
 from ray import air, tune
 import ray.rllib.algorithms.ppo as ppo
+from ray.tune import Tuner
+from ray.tune.schedulers import PopulationBasedTraining
+from ray.tune.tune_config import TuneConfig
 from ray.tune.logger import pretty_print
+from ray.air import RunConfig
 #import ray.rllib.algorithms.a2c as a2c
 #import ray.rllib.algorithms.sac as sac
 #import ray.rllib.algorithms.ddpg as ddpg
@@ -46,7 +50,7 @@ def main(argv):
     failure_threshold   = [0.0,         0.0,        -5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     stopper = StopLogic(max_ep_timesteps        = 400,
-                        max_iterations          = 10,
+                        max_iterations          = 3000,
                         min_timesteps           = min_timesteps,
                         avg_over_latest         = 70,
                         success_threshold       = success_threshold,
@@ -70,24 +74,24 @@ def main(argv):
 
     # Add dict for model structure
     model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = tune.choice([[128, 50], [128, 50], [256, 64], [512, 64]])
-    model_config["fcnet_activation"]            = "relu" #tune.choice(["relu", "relu", "tanh"])
-    model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
+    model_config["fcnet_hiddens"]               = [128, 50]
+    model_config["fcnet_activation"]            = tune.choice(["relu", "tanh"])
+    model_config["post_fcnet_activation"]       = tune.choice(["linear", "tanh"])
     cfg.training(model = model_config)
 
     # Add exploration noise params
     explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.4, 0.75) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = tune.uniform(0.2, 0.75) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = 1600000  #tune.choice([100000, 400000]) #was 900k
+    explore_config["scale_timesteps"]           = 5000000  #tune.choice([100000, 400000]) #was 900k
     cfg.exploration(explore = True, exploration_config = explore_config)
 
     # Computing resources
-    cfg.resources(  num_gpus                    = 1, #for the local worker, which does the evaluation runs
-                    num_cpus_for_local_worker   = 4,
+    cfg.resources(  num_gpus                    = 0, #for the local worker, which does the evaluation runs
+                    num_cpus_for_local_worker   = 1,
                     num_cpus_per_worker         = 1, #also applies to the local worker and evaluation workers
                     num_gpus_per_worker         = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
@@ -101,9 +105,10 @@ def main(argv):
     # Training algorithm HPs
     # NOTE: lr_schedule is only defined for policy gradient algos
     # NOTE: all items below lr_schedule are PPO-specific
-    cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999])
+    cfg.training(   gamma                       = tune.choice([0.99, 0.999]),
                     train_batch_size            = 2400, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
+                    lr                          = tune.loguniform(1e-6, 1e-3),
+                    #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 32, #must be <= train_batch_size (and divide into it)
                     #grad_clip                  = tune.uniform(0.1, 0.5),
                     #clip_param                 = None #tune.choice([0.2, 0.3, 0.6, 1.0]),
@@ -113,8 +118,8 @@ def main(argv):
     cfg.evaluation( evaluation_interval         = 6, #iterations
                     evaluation_duration         = 6, #units specified next
                     evaluation_duration_unit    = "episodes",
-                    evaluation_parallel_to_training = True, #True requires evaluation_num_workers > 0
-                    evaluation_num_workers      = 2,
+                    evaluation_parallel_to_training = False, #True requires evaluation_num_workers > 0
+                    evaluation_num_workers      = 0,
     )
 
     # Debugging assistance
@@ -166,19 +171,38 @@ def main(argv):
     print("\n///// {} training params are:\n".format(algo))
     print(pretty_print(cfg.to_dict()))
 
-    tune_config = tune.TuneConfig(
+    chkpt_int                                   = 10                    #num iters between checkpoints
+    perturb_int                                 = 20                   #num iters between policy perturbations (must be a multiple of chkpt period)
+
+    scheduler = PopulationBasedTraining(
+                    time_attr                   = "training_iteration", #type of interval for considering trial continuation
+                    perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
+                    quantile_fraction           = 0.6,                  #fraction of trials to keep
+                    resample_probability        = 0.5,                  #resampling and mutation probability at each decision point
+                    synch                       = True,                 #True:  all trials must finish before a checkpoint/perturbation decision is made
+                                                                        #False:  each trial finishes & decides based on available info at that time,
+                                                                        # then immediately moves on
+                    hyperparam_mutations={                              #resample distributions
+                        "lr"                        :   tune.loguniform(1e-6, 1e-3),
+                        "gamma"                     :   tune.loguniform(0.95, 0.9999),
+                        "exploration_config/stddev" :   tune.uniform(0.2, 0.75),
+                    },
+    )
+
+    tune_config = TuneConfig(
                     metric                      = "episode_reward_mean",
                     mode                        = "max",
-                    num_samples                 = 2 #number of HP trials
+                    scheduler                   = scheduler,
+                    num_samples                 = 24 #number of HP trials
                 )
 
-    run_config = air.RunConfig(
+    run_config = RunConfig(
                     name                        = "cda0",
                     local_dir                   = "~/ray_results",
                     stop                        = stopper,
                     sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
                     checkpoint_config           = air.CheckpointConfig(
-                                                    checkpoint_frequency        = 5,
+                                                    checkpoint_frequency        = chkpt_int,
                                                     checkpoint_score_attribute  = "episode_reward_mean",
                                                     num_to_keep                 = 1, #if > 1 hard to tell which one is the best
                                                     checkpoint_at_end           = True
@@ -186,7 +210,7 @@ def main(argv):
                 )
 
     # Execute the HP tuning job, beginning with a previous checkpoint, if one was specified
-    tuner = tune.Tuner(algo, param_space=cfg.to_dict(), tune_config=tune_config, run_config=run_config)
+    tuner = Tuner(algo, param_space = cfg.to_dict(), tune_config = tune_config, run_config = run_config)
     print("\n///// Tuner created.\n")
 
     if checkpoint != None:
