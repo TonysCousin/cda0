@@ -1081,6 +1081,23 @@ program as a system test.
 				  rather than sampling from there it just multiplied the previous value by 0.8.
 				  It seems it sometimes chooses to resample from the config values given, and
 				  sometimes chooses to multiply by either 0.8 or 1.2.
+				* However, in one mutation, it multiplied gamma by 1.2 and ended up with gamma > 1,
+				  which is illegal, but it continued to run.  If I can't find a way to limit this,
+				  then gamma is not a good candidate for perturbation!
+**				AI: getting a lot of warning from Ray about my env setup that I really should resolve soon.
+				* When I specified num_cpus_per_worker = 1 and num_rollout_workers = 1, it set up
+				  8 rollout workers, each with its own cpu. So it evaluated the 24 trials 8 at a
+				  time for 20 iters, then perturbed them all and started another round of 20 iters.
+				* Changing the train_batch_size to 200 (according to what it should be) still resulted
+				  in 8 cpus being used at a time.
+				* Specifying num_cpus_per_worker = 0 doesn't work.
+				* Specifying num_cpus_for_local_worker = 0 is acceptable. However, not it runs
+				  12 trials in parallel.
+				* Specifying num_rollout_workers = 13, train_batch_size = 2600, I see only one trial
+				  running at a time.
+				* Posted a question about resource allocation to Ray Discuss.
+
+		* Suggestion 3 - implement your own CurriculumScheduler
 
 3/2/23
 
@@ -1094,3 +1111,9 @@ program as a system test.
   from my Ray Discuss thread.
 	* Made a new run with 24 trials using HPs and tuning HPs that I think have a good chance for success over
 	  all 4 defined learning levels.
+		* The mean rewards all moved up asymptotically to 0 but never crossed it, and the min rewards never
+		  exceeded -45 for any significant amount. The network structure was [128, 50], so maybe just not big
+		  enough? I killed it at 220 iterations (~600k steps).
+		* PBT had built a consensus that hidden layer activation should be relu and output activation should
+		  be tanh. It didn't seem to settle on a good gamma; in fact, several trials still have gamma > 1.
+		  Noise values (stddev) are still all over the place, as well, as are LR values.

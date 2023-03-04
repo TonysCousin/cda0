@@ -75,7 +75,7 @@ def main(argv):
     # Add dict for model structure
     model_config = cfg_dict["model"]
     model_config["fcnet_hiddens"]               = [128, 50]
-    model_config["fcnet_activation"]            = tune.choice(["relu", "tanh"])
+    model_config["fcnet_activation"]            = "relu"
     model_config["post_fcnet_activation"]       = tune.choice(["linear", "tanh"])
     cfg.training(model = model_config)
 
@@ -105,8 +105,8 @@ def main(argv):
     # Training algorithm HPs
     # NOTE: lr_schedule is only defined for policy gradient algos
     # NOTE: all items below lr_schedule are PPO-specific
-    cfg.training(   gamma                       = tune.choice([0.99, 0.999]),
-                    train_batch_size            = 2400, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
+    cfg.training(   gamma                       = tune.choice([0.99, 0.999, 0.9999]),
+                    train_batch_size            = 200, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
                     lr                          = tune.loguniform(1e-6, 1e-3),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 32, #must be <= train_batch_size (and divide into it)
@@ -177,15 +177,14 @@ def main(argv):
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation
                     perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
-                    quantile_fraction           = 0.6,                  #fraction of trials to keep
+                    quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
                     resample_probability        = 0.5,                  #resampling and mutation probability at each decision point
                     synch                       = True,                 #True:  all trials must finish before a checkpoint/perturbation decision is made
                                                                         #False:  each trial finishes & decides based on available info at that time,
                                                                         # then immediately moves on
                     hyperparam_mutations={                              #resample distributions
                         "lr"                        :   tune.loguniform(1e-6, 1e-3),
-                        "gamma"                     :   tune.loguniform(0.95, 0.9999),
-                        "exploration_config/stddev" :   tune.uniform(0.2, 0.75),
+                        "exploration_config/stddev" :   tune.uniform(0.2, 0.7),
                     },
     )
 
@@ -193,7 +192,7 @@ def main(argv):
                     metric                      = "episode_reward_mean",
                     mode                        = "max",
                     scheduler                   = scheduler,
-                    num_samples                 = 24 #number of HP trials
+                    num_samples                 = 16 #number of HP trials
                 )
 
     run_config = RunConfig(

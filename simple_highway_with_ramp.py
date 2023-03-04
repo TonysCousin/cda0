@@ -318,7 +318,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 ) -> None:
         """Defines the difficulty level of the environment, which can be used for curriculum learning."""
 
-        self.difficulty_level = min(max(int(task), 0, self.NUM_DIFFICULTY_LEVELS))
+        self.difficulty_level = min(max(task, 0, self.NUM_DIFFICULTY_LEVELS))
         print("///// Environment difficulty set to {}".format(self.difficulty_level))
 
 
@@ -471,11 +471,11 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.N3_SPEED]             = self.vehicles[3].speed
         self.obs[self.N3_LANE_REM]          = self.roadway.get_total_lane_length(self.vehicles[3].lane_id) - self.vehicles[3].dist_downtrack
 
-        if self.total_steps % 10000 == 0:
-            print("///// reset on worker {}: total_steps = {}, steps_since_reset = {}, episodes = {}"
-                    .format(self.rollout_id, self.total_steps, self.steps_since_reset, self.episode_count))
-            print("      level = {}, ego_lane_id = {}, max_distance = {:.1f}, n_speed = {:.1f}, num_crashes = {}"
-                    .format(self.difficulty_level, ego_lane_id, max_distance, n_speed, self.num_crashes))
+        #if self.total_steps % 10000 == 0:
+        #   print("///// reset on worker {}: total_steps = {}, steps_since_reset = {}, episodes = {}"
+        #           .format(self.rollout_id, self.total_steps, self.steps_since_reset, self.episode_count))
+        #   print("      level = {}, ego_lane_id = {}, max_distance = {:.1f}, n_speed = {:.1f}, num_crashes = {}"
+        #           .format(self.difficulty_level, ego_lane_id, max_distance, n_speed, self.num_crashes))
 
         # Other persistent data
         self.lane_change_underway = "none"
@@ -798,7 +798,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.stopper = None
         try:
             s = config["stopper"]
-            print("///// Environment connecting to stopper object... ", s)
             s.set_environment_model(self)
             self.stopper = s
         except KeyError as e:
