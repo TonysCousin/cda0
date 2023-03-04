@@ -50,7 +50,7 @@ def main(argv):
     failure_threshold   = [0.0,         0.0,        -5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     stopper = StopLogic(max_ep_timesteps        = 400,
-                        max_iterations          = 3000,
+                        max_iterations          = 400,
                         min_timesteps           = min_timesteps,
                         avg_over_latest         = 70,
                         success_threshold       = success_threshold,
@@ -66,7 +66,7 @@ def main(argv):
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 0
     env_config["training"]                      = True
-    env_config["randomize_start_dist"]          = True #tune.choice([True, False])
+    env_config["randomize_start_dist"]          = True
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit
     env_config["neighbor_start_loc"]            = 320.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
@@ -74,7 +74,7 @@ def main(argv):
 
     # Add dict for model structure
     model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = [128, 50]
+    model_config["fcnet_hiddens"]               = [256, 256]
     model_config["fcnet_activation"]            = "relu"
     model_config["post_fcnet_activation"]       = tune.choice(["linear", "tanh"])
     cfg.training(model = model_config)
@@ -172,7 +172,7 @@ def main(argv):
     print(pretty_print(cfg.to_dict()))
 
     chkpt_int                                   = 10                    #num iters between checkpoints
-    perturb_int                                 = 20                   #num iters between policy perturbations (must be a multiple of chkpt period)
+    perturb_int                                 = 30                    #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation

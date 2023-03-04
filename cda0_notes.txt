@@ -1117,3 +1117,8 @@ program as a system test.
 		* PBT had built a consensus that hidden layer activation should be relu and output activation should
 		  be tanh. It didn't seem to settle on a good gamma; in fact, several trials still have gamma > 1.
 		  Noise values (stddev) are still all over the place, as well, as are LR values.
+
+* New run without gamma variation, but with network [256, 256] and perturb_int increased to 30 iters. 16 trials.
+
+AI: try tuning/mutating kl_coeff (default is 0.2) try uniform(0.24, 0.8). Set clip_actions = True and tune
+    clip_param = uniform(0.1, 0.3). Tune entropy_coeff = uniform(0.0, 0.01) or tune/mutate in uniform(0.0, 0.008).

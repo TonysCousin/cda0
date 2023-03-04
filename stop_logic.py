@@ -268,7 +268,7 @@ class StopLogic(Stopper):
         """This is required to be called by the environment if multi-phase learning is to be done."""
 
         self.env = env
-        print("///// StopLogic: environment model has been made known, at ", self.env)
+        #print("///// StopLogic: environment model has been made known, at ", self.env)
 
 
     def get_success_thresholds(self) -> list:

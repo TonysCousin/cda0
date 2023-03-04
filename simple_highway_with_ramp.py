@@ -318,8 +318,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 ) -> None:
         """Defines the difficulty level of the environment, which can be used for curriculum learning."""
 
-        self.difficulty_level = min(max(task, 0, self.NUM_DIFFICULTY_LEVELS))
-        print("///// Environment difficulty set to {}".format(self.difficulty_level))
+        self.difficulty_level = min(max(task, 0), self.NUM_DIFFICULTY_LEVELS))
+        print("\n\n///// Environment difficulty set to {}\n".format(self.difficulty_level))
 
 
     def get_task(self) -> int:
@@ -1047,7 +1047,9 @@ def curriculum_fn(train_results:        dict,           #current status of train
     phase = task_settable_env.get_task()
     stopper = task_settable_env.get_stopper()
     assert stopper is not None, "///// Unable to access the stopper object in curriculum_fn."
-    if train_results["episode_reward_mean"] >= stopper.get_success_thresholds()[phase]:
+    value = train_results["episode_reward_mean"]
+    if value >= stopper.get_success_thresholds()[phase]:
+        print("\n///// curriculum_fn in phase {}: episode_reward_mean = {}".format(phase, value))
         task_settable_env.set_task(phase+1)
 
     return task_settable_env.get_task() #don't return the local one, since the env may override it
