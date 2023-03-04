@@ -110,8 +110,10 @@ def main(argv):
                     lr                          = tune.loguniform(1e-6, 1e-3),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 32, #must be <= train_batch_size (and divide into it)
-                    #grad_clip                  = tune.uniform(0.1, 0.5),
-                    #clip_param                 = None #tune.choice([0.2, 0.3, 0.6, 1.0]),
+                    kl_coeff                    = tune.uniform(0.24, 0.8),
+                    #clip_actions                = True,
+                    clip_param                  = tune.uniform(0.1, 0.3),
+                    entropy_coeff               = tune.uniform(0.0, 0.008),
     )
 
     # Evaluation process
@@ -185,6 +187,8 @@ def main(argv):
                     hyperparam_mutations={                              #resample distributions
                         "lr"                        :   tune.loguniform(1e-6, 1e-3),
                         "exploration_config/stddev" :   tune.uniform(0.2, 0.7),
+                        "training/kl_coeff"         :   tune.uniform(0.24, 0.8),
+                        "training/entropy_coeff"    :   tune.uniform(0.0, 0.008),
                     },
     )
 

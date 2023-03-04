@@ -318,7 +318,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 ) -> None:
         """Defines the difficulty level of the environment, which can be used for curriculum learning."""
 
-        self.difficulty_level = min(max(task, 0), self.NUM_DIFFICULTY_LEVELS))
+        self.difficulty_level = min(max(task, 0), self.NUM_DIFFICULTY_LEVELS)
         print("\n\n///// Environment difficulty set to {}\n".format(self.difficulty_level))
 
 
@@ -377,7 +377,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             elif self.difficulty_level < 3: #levels 1 and 2
                 ego_x = self.prng.random() * 500.0
-                ego_speed = self.prng.rangom() * SimpleHighwayRamp.MAX_SPEED #any physically possible value
+                ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED #any physically possible value
 
             else: #levels 3 and up
                 ego_x = self.prng.random() * 500.0
