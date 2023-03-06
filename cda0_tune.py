@@ -49,10 +49,11 @@ def main(argv):
     success_threshold   = [5.0,         5.0,        5.0,        1.0]
     failure_threshold   = [0.0,         0.0,        -5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
+    burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
     stopper = StopLogic(max_ep_timesteps        = 400,
-                        max_iterations          = 400,
+                        max_iterations          = 800,
                         min_timesteps           = min_timesteps,
-                        avg_over_latest         = 70,
+                        avg_over_latest         = burn_in_period,
                         success_threshold       = success_threshold,
                         failure_threshold       = failure_threshold,
                         degrade_threshold       = 0.25,
@@ -174,27 +175,30 @@ def main(argv):
     print(pretty_print(cfg.to_dict()))
 
     chkpt_int                                   = 10                    #num iters between checkpoints
-    perturb_int                                 = 30                    #num iters between policy perturbations (must be a multiple of chkpt period)
+    perturb_int                                 = 10                    #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation
+                    metric                      = "episode_reward_mean",#duplicate the TuneConfig setup - this is the metric used to rank trials
+                    mode                        = "max",                #duplicate the TuneConfig setup - looking for largest metric
                     perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
-                    quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
-                    resample_probability        = 0.5,                  #resampling and mutation probability at each decision point
+                    burn_in_period              = burn_in_period,       #num initial iterations before any perturbations occur
+                    quantile_fraction           = 0.4,                  #fraction of trials to keep; must be in [0, 0.5]
+                    resample_probability        = 0.8,                  #resampling and mutation probability at each decision point
                     synch                       = True,                 #True:  all trials must finish before a checkpoint/perturbation decision is made
                                                                         #False:  each trial finishes & decides based on available info at that time,
                                                                         # then immediately moves on
                     hyperparam_mutations={                              #resample distributions
                         "lr"                        :   tune.loguniform(1e-6, 1e-3),
-                        "exploration_config/stddev" :   tune.uniform(0.2, 0.7),
-                        "training/kl_coeff"         :   tune.uniform(0.24, 0.8),
-                        "training/entropy_coeff"    :   tune.uniform(0.0, 0.008),
+                        #"stddev"                    :   tune.uniform(0.2, 0.7),
+                        "kl_coeff"                  :   tune.uniform(0.24, 0.8),
+                        "entropy_coeff"             :   tune.uniform(0.0, 0.008),
                     },
     )
 
     tune_config = TuneConfig(
-                    metric                      = "episode_reward_mean",
-                    mode                        = "max",
+                    #metric                      = "episode_reward_mean",
+                    #mode                        = "max",
                     scheduler                   = scheduler,
                     num_samples                 = 16 #number of HP trials
                 )

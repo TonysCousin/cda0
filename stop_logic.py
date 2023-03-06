@@ -82,6 +82,8 @@ class StopLogic(Stopper):
         self.threshold_latch = False
         self.prev_phase = 0
         self.crossed_min_timesteps = False
+        self.prev_iters = 0             #TODO: these 2 items for debugging only
+        self.prev_steps_this_phase = 0
 
 
     def __call__(self,
@@ -97,7 +99,14 @@ class StopLogic(Stopper):
         #print("///// - end of result\n")
 
         # Determine if this is a multi-phase trial and what phase we are in, then assign local variables for the phase-dependent items
-        phase = self.env.get_task()  if self.env is not None  else  0
+        # NOTE: the iteration count and time step counts don't increase monotonically when a PBT scheduler is used, so these are probably
+        #       not good choices for stopping criteria in such a use case.
+        phase = 0
+        if self.env is not None:
+            phase = self.env.get_task()
+            print("///// StopLogic call: env exists and phase is {} of {} total phases".format(phase, self.num_phases))
+        else:
+            print("///// WARNING: StopLogic called with no environment passed!")
         min_timesteps = 0
         success_avg_thresh = -math.inf
         failure_avg_thresh = -math.inf
@@ -119,8 +128,14 @@ class StopLogic(Stopper):
             let_it_run = self.let_it_run[phase]
 
         # Determine the total iteration count and number of steps passed in the current phase
-        total_iters = result["iterations_since_restore"]
+        total_iters = result["training_iteration"]
         steps_this_phase = result["timesteps_total"] - self.steps_at_phase_begin
+        if total_iters < self.prev_iters  or  0 < steps_this_phase <= self.prev_steps_this_phase:
+            print("///// StopLogic problem? steps_this_phase = {}, prev_steps_this_phase = {}, total_iters =  {}, prev_iters = {}"
+                  .format(steps_this_phase, self.prev_steps_this_phase, total_iters, self.prev_iters))
+
+        self.prev_iters = total_iters
+        self.prev_steps_this_phase = steps_this_phase
 
         # If we see a respectable reward at any point, then extend the guaranteed min timesteps for all phases (need to do this after
         # the phase counter has been evaluated so that we don't bounce back to a previous value)
@@ -258,6 +273,7 @@ class StopLogic(Stopper):
             self.trials[trial_id] = {"stop": False, "num_entries": 1, \
                                      "mean_rewards": mean_rew, "max_rewards": max_rew, "min_rewards": min_rew, "worst_mean": math.inf,
                                      "best_mean": -math.inf}
+            print("///// StopLogic adding new trial: {}".format(trial_id))
 
         return False
 
@@ -268,7 +284,7 @@ class StopLogic(Stopper):
         """This is required to be called by the environment if multi-phase learning is to be done."""
 
         self.env = env
-        #print("///// StopLogic: environment model has been made known, at ", self.env)
+        print("///// StopLogic: environment model has been made known, at ", self.env)
 
 
     def get_success_thresholds(self) -> list:

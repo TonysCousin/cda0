@@ -1126,5 +1126,15 @@ program as a system test.
 * New run with a fix for set_task hang, and the following additional tuning & mutating params:
 	* tuning/mutating kl_coeff (default is 0.2) try uniform(0.24, 0.8). Set clip_actions = True and tune
 	  clip_param = uniform(0.1, 0.3). Tune entropy_coeff = uniform(0.0, 0.01) or tune/mutate in uniform(0.0, 0.008).
+	* Many times a thread hit the success threshold and got promoted to level 1, and a few times a trial got
+	  promoted to level2, but the mean rewards never stayed in the success region. Worse, the min rewards continue
+	  to stay down in the -40 region.  Until I can get rid of that, I don't feel like success is real.
+	* The stop logic is not working, because internally the iteration count keeps getting reset at each
+	  perturbation cycle. Also, the steps_this_phase continues to increase through phase changes in all trials.
+	  It appears that steps_at_phase_begin is never getting updated. Finally, the passing of the env model to
+	  it does not work. While it seems to store it okay, actually referencing it in the __call__() method
+	  doesn't happen, so there seems to be no way for the env and the stopper to communicate.
 
 AI: consider setting the perturb_int up to 50 or 100.
+AI: use 4-char worker ID and print it in set_task. Also print it for every __init__. Why are so many workers getting reset to level 1?
+AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?

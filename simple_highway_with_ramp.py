@@ -288,7 +288,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.speed_hist = deque(maxlen = 4)
         self.num_crashes = 0        #num crashes with a neighbor vehicle since reset
         self.neighbor_print_latch = True #should the neighbor vehicle info be printed when initiated?
-        self.rollout_id = hex(int(self.prng.random() * 256))[2:].zfill(2) #random int to ID this env object in debug logging
+        self.rollout_id = hex(int(self.prng.random() * 65536))[2:].zfill(4) #random int to ID this env object in debug logging
+        print("///// Initializing env rollout ID {} at level {}".format(self.rollout_id, self.difficulty_level))
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
         #self.render_mode = render_mode
@@ -319,7 +320,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         """Defines the difficulty level of the environment, which can be used for curriculum learning."""
 
         self.difficulty_level = min(max(task, 0), self.NUM_DIFFICULTY_LEVELS)
-        print("\n\n///// Environment difficulty set to {}\n".format(self.difficulty_level))
+        print("\n\n///// Environment difficulty for rollout ID {} set to {}\n".format(self.rollout_id, self.difficulty_level))
 
 
     def get_task(self) -> int:
@@ -332,6 +333,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
               seed:         int             = None,
               options:      dict            = None
              ) -> Tuple[np.array, dict]:
+
         """Reinitializes the environment to prepare for a new episode.  This must be called before
             making any calls to step().
 
@@ -1048,8 +1050,18 @@ def curriculum_fn(train_results:        dict,           #current status of train
     stopper = task_settable_env.get_stopper()
     assert stopper is not None, "///// Unable to access the stopper object in curriculum_fn."
     value = train_results["episode_reward_mean"]
+
+    burn_in = 0
+    iter = 1
+    try:
+        burn_in = train_results["burn_in_period"]
+        iter = train_results["training_iteration"]
+    except KeyError as e:
+        pass
+
     if value >= stopper.get_success_thresholds()[phase]:
-        print("\n///// curriculum_fn in phase {}: episode_reward_mean = {}".format(phase, value))
+        print("\n///// curriculum_fn in phase {}: iter = {}, burn-in = {}, episode_reward_mean = {}"
+              .format(phase, iter, burn_in, value))
         task_settable_env.set_task(phase+1)
 
     return task_settable_env.get_task() #don't return the local one, since the env may override it
