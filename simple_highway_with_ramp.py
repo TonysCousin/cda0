@@ -330,7 +330,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
 
     def reset(self, *,
-              seed:         int             = None,
+              seed:         int             = None,    #TODO: reserved for a future version of gym.Environment
               options:      dict            = None
              ) -> Tuple[np.array, dict]:
 
@@ -711,6 +711,18 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         return self.stopper
 
 
+    def get_burn_in_iters(self):
+        """Returns the number of burn-in iterations configured. This quantity is not yet used in this
+            environment, but the environment needs to be able to make it available to other components.
+        """
+        return self.burn_in_iters
+
+
+    def get_total_steps(self):
+        """Returns the total number of time steps executed so far."""
+        return self.total_steps
+
+
     def close(self):
         """Closes any resources that may have been used during the simulation."""
         pass #this method not needed for this version
@@ -723,6 +735,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                                 config:     EnvContext
                                ):
         """Sets the initial conditions of the ego vehicle in member variables (lane ID, speed, downtrack position)."""
+
+        self.burn_in_iters = 0
+        try:
+            bi = config["burn_in_iters"]
+            if bi > 0:
+                self.burn_in_iters = int(bi)
+        except KeyError as e:
+            pass
 
         self.time_step_size = 0.5 #seconds
         try:
@@ -1043,6 +1063,7 @@ def curriculum_fn(train_results:        dict,           #current status of train
                  ) -> int:                              #returns the new difficulty level
     """Callback that allows Ray.Tune to increase the difficulty level, based on the current training results."""
 
+    #print("///// curriculum_fn: train_results =")
     #print(pretty_print(train_results))
 
     # If the mean reward is above the success threshold for the current phase then advance the phase
@@ -1050,16 +1071,16 @@ def curriculum_fn(train_results:        dict,           #current status of train
     stopper = task_settable_env.get_stopper()
     assert stopper is not None, "///// Unable to access the stopper object in curriculum_fn."
     value = train_results["episode_reward_mean"]
+    burn_in = task_settable_env.get_burn_in_iters()
 
-    burn_in = 0
-    iter = 1
+    approx_steps_per_iter = 10.0
     try:
-        burn_in = train_results["burn_in_period"]
-        iter = train_results["training_iteration"]
+        approx_steps_per_iter = max(train_results["episode_mean_len_mean"], 1.0)
     except KeyError as e:
         pass
+    iter = int(task_settable_env.get_total_steps() / approx_steps_per_iter)
 
-    if value >= stopper.get_success_thresholds()[phase]:
+    if iter >= burn_in  and  value >= stopper.get_success_thresholds()[phase]:
         print("\n///// curriculum_fn in phase {}: iter = {}, burn-in = {}, episode_reward_mean = {}"
               .format(phase, iter, burn_in, value))
         task_settable_env.set_task(phase+1)

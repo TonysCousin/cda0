@@ -1104,6 +1104,10 @@ program as a system test.
 * Updated my environment model (SimpleRoadwayRamp) to provide multiple learning levels (tasks), per the Ray 
   curriculum training guidance (see notes above, including advice from a Ray Discuss contributor).  Also updated
   the wrapper class, tuner program and stop logic to accommodate these changes.
+	* It doesn't really work well, since StopLogic can't talk to env, and number of iterations and timesteps
+	  is only approx, since each trial arrives at them independently; also PBT scheduler resets the iteration
+	  counter (the one that is available to env) after eacn perturbation cycle.  I think I'd rather do a single
+	  learning level per run and manually adjust it.
 
 3/3/23
 
@@ -1135,6 +1139,4 @@ program as a system test.
 	  it does not work. While it seems to store it okay, actually referencing it in the __call__() method
 	  doesn't happen, so there seems to be no way for the env and the stopper to communicate.
 
-AI: consider setting the perturb_int up to 50 or 100.
-AI: use 4-char worker ID and print it in set_task. Also print it for every __init__. Why are so many workers getting reset to level 1?
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?

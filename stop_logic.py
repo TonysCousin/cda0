@@ -82,8 +82,6 @@ class StopLogic(Stopper):
         self.threshold_latch = False
         self.prev_phase = 0
         self.crossed_min_timesteps = False
-        self.prev_iters = 0             #TODO: these 2 items for debugging only
-        self.prev_steps_this_phase = 0
 
 
     def __call__(self,
@@ -101,12 +99,13 @@ class StopLogic(Stopper):
         # Determine if this is a multi-phase trial and what phase we are in, then assign local variables for the phase-dependent items
         # NOTE: the iteration count and time step counts don't increase monotonically when a PBT scheduler is used, so these are probably
         #       not good choices for stopping criteria in such a use case.
+        # TODO: most calls will experience self.env == None. I don't know why.  This logic needs to be rewritten!
         phase = 0
         if self.env is not None:
             phase = self.env.get_task()
-            print("///// StopLogic call: env exists and phase is {} of {} total phases".format(phase, self.num_phases))
+            #print("///// StopLogic call: env exists and phase is {} of {} total phases".format(phase, self.num_phases))
         else:
-            print("///// WARNING: StopLogic called with no environment passed!")
+            pass #print("///// WARNING: StopLogic called with no environment passed!")
         min_timesteps = 0
         success_avg_thresh = -math.inf
         failure_avg_thresh = -math.inf
@@ -127,15 +126,9 @@ class StopLogic(Stopper):
             failure_avg_thresh = self.failure_avg_threshold[phase]
             let_it_run = self.let_it_run[phase]
 
-        # Determine the total iteration count and number of steps passed in the current phase
-        total_iters = result["training_iteration"]
+        # Determine the total iteration count and number of steps passed in the current phase - THESE ARE ONLY APPROXIMATE!
+        total_iters = result["training_iteration"] #was "iterations_since_restore"
         steps_this_phase = result["timesteps_total"] - self.steps_at_phase_begin
-        if total_iters < self.prev_iters  or  0 < steps_this_phase <= self.prev_steps_this_phase:
-            print("///// StopLogic problem? steps_this_phase = {}, prev_steps_this_phase = {}, total_iters =  {}, prev_iters = {}"
-                  .format(steps_this_phase, self.prev_steps_this_phase, total_iters, self.prev_iters))
-
-        self.prev_iters = total_iters
-        self.prev_steps_this_phase = steps_this_phase
 
         # If we see a respectable reward at any point, then extend the guaranteed min timesteps for all phases (need to do this after
         # the phase counter has been evaluated so that we don't bounce back to a previous value)

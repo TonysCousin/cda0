@@ -21,14 +21,14 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         self.action_space.high[0] /= SimpleHighwayRamp.MAX_ACCEL
 
 
-    def reset(self,
+    def reset(self, *,
                 seed    :   int = None,     #seed value for the PRNG
                 options :   object = None   #currently not recognized by the Env, but appears for syntactic compliance
              ) -> Tuple[np.array, dict]:    #returns a scaled vector of observations usable by a NN plus an info dict
 
         """Invokes the environment's reset method, then scales the resulting observations to be usable by a NN."""
 
-        obs, info = super().reset(seed = seed, options = options)
+        obs, info = super().reset(options = options)
         return self.scale_obs(obs), info
 
 

@@ -50,6 +50,7 @@ def main(argv):
     failure_threshold   = [0.0,         0.0,        -5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
+
     stopper = StopLogic(max_ep_timesteps        = 400,
                         max_iterations          = 800,
                         min_timesteps           = min_timesteps,
@@ -64,6 +65,7 @@ def main(argv):
     # Define the custom environment for Ray
     env_config = {}
     env_config["stopper"]                       = stopper #object must be instantiated above
+    env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 0
     env_config["training"]                      = True
@@ -87,17 +89,20 @@ def main(argv):
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = 5000000  #tune.choice([100000, 400000]) #was 900k
+    explore_config["scale_timesteps"]           = 200000  #tune.choice([100000, 400000]) #was 900k
     cfg.exploration(explore = True, exploration_config = explore_config)
 
-    # Computing resources
-    cfg.resources(  num_gpus                    = 0, #for the local worker, which does the evaluation runs
+    # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
+    # Use max_concurrent_trials in the TuneConfig area to limit the number of trials being run in parallel.
+    # NOTE: if num_gpus = 0 then policies will always be built/evaluated on cpu, even if gpus are specified for workers;
+    #       to get workers (only) to use gpu, num_gpus needs to be positive (e.g. 0.0001).
+    cfg.resources(  num_gpus                    = 0, #for the local worker, which does the learning & evaluation runs
                     num_cpus_for_local_worker   = 1,
                     num_cpus_per_worker         = 1, #also applies to the local worker and evaluation workers
                     num_gpus_per_worker         = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
-    cfg.rollouts(   num_rollout_workers         = 1, #num remote workers (remember that there is a local worker also)
+    cfg.rollouts(   num_rollout_workers         = 0, #num remote workers _per trial_ (remember that there is a local worker also)
                     num_envs_per_worker         = 1,
                     rollout_fragment_length     = 200, #timesteps pulled from a sampler
                     batch_mode                  = "complete_episodes",
@@ -118,11 +123,11 @@ def main(argv):
     )
 
     # Evaluation process
-    cfg.evaluation( evaluation_interval         = 6, #iterations
-                    evaluation_duration         = 6, #units specified next
+    cfg.evaluation( evaluation_interval         = 20, #iterations
+                    evaluation_duration         = 16, #units specified next
                     evaluation_duration_unit    = "episodes",
                     evaluation_parallel_to_training = False, #True requires evaluation_num_workers > 0
-                    evaluation_num_workers      = 0,
+                    evaluation_num_workers      = 1,
     )
 
     # Debugging assistance
@@ -175,7 +180,7 @@ def main(argv):
     print(pretty_print(cfg.to_dict()))
 
     chkpt_int                                   = 10                    #num iters between checkpoints
-    perturb_int                                 = 10                    #num iters between policy perturbations (must be a multiple of chkpt period)
+    perturb_int                                 = 50                    #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation
@@ -183,14 +188,15 @@ def main(argv):
                     mode                        = "max",                #duplicate the TuneConfig setup - looking for largest metric
                     perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
                     burn_in_period              = burn_in_period,       #num initial iterations before any perturbations occur
-                    quantile_fraction           = 0.4,                  #fraction of trials to keep; must be in [0, 0.5]
+                    quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
                     resample_probability        = 0.8,                  #resampling and mutation probability at each decision point
-                    synch                       = True,                 #True:  all trials must finish before a checkpoint/perturbation decision is made
+                    synch                       = False,                #True:  all trials must finish before each perturbation decision is made
                                                                         #False:  each trial finishes & decides based on available info at that time,
-                                                                        # then immediately moves on
+                                                                        # then immediately moves on. If True and one trial dies, then PBT hangs and all
+                                                                        # remaining trials go into perpetual PAUSED state.
                     hyperparam_mutations={                              #resample distributions
                         "lr"                        :   tune.loguniform(1e-6, 1e-3),
-                        #"stddev"                    :   tune.uniform(0.2, 0.7),
+                        #"exploration_config/stddev" :   tune.uniform(0.2, 0.7), #PPOConfig doesn't recognize any variation on this key
                         "kl_coeff"                  :   tune.uniform(0.24, 0.8),
                         "entropy_coeff"             :   tune.uniform(0.0, 0.008),
                     },
@@ -201,6 +207,7 @@ def main(argv):
                     #mode                        = "max",
                     scheduler                   = scheduler,
                     num_samples                 = 16 #number of HP trials
+                    #max_concurrent_trials      = 8
                 )
 
     run_config = RunConfig(
