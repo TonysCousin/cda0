@@ -84,9 +84,9 @@ def main(argv):
 
     # Add dict for model structure
     model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = [128, 50] #[256, 256]
+    model_config["fcnet_hiddens"]               = [11, 10] #[256, 256]
     model_config["fcnet_activation"]            = "relu"
-    model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
+    model_config["post_fcnet_activation"]       = tune.choice(["linear", "tanh"])
     cfg.training(model = model_config)
 
     # Add exploration noise params
@@ -125,7 +125,7 @@ def main(argv):
     # Training algorithm HPs
     # NOTE: lr_schedule is only defined for policy gradient algos
     # NOTE: all items below lr_schedule are PPO-specific
-    cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
+    cfg.training(   gamma                       = tune.choice([0.99, 0.999, 0.9999]),
                     train_batch_size            = 200, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
                     lr                          = tune.loguniform(1e-6, 1e-3),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
@@ -196,7 +196,7 @@ def main(argv):
     print("\n///// {} training params are:\n".format(algo))
     print(pretty_print(cfg.to_dict()))
 
-    chkpt_int                                   = 10                    #num iters between checkpoints
+    chkpt_int                                   = 5                    #num iters between checkpoints
     perturb_int                                 = 50                    #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
@@ -206,7 +206,7 @@ def main(argv):
                     perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
                     burn_in_period              = burn_in_period,       #num initial iterations before any perturbations occur
                     quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
-                    resample_probability        = 0.5,                  #resampling and mutation probability at each decision point
+                    resample_probability        = 0.9,                  #resampling and mutation probability at each decision point
                     synch                       = True,                #True:  all trials must finish before each perturbation decision is made
                                                                         #False:  each trial finishes & decides based on available info at that time,
                                                                         # then immediately moves on. If True and one trial dies, then PBT hangs and all
@@ -223,7 +223,7 @@ def main(argv):
                     #metric                      = "episode_reward_mean",
                     #mode                        = "max",
                     scheduler                   = scheduler,
-                    num_samples                 = 15 #number of HP trials
+                    num_samples                 = 1 #number of HP trials
                     #max_concurrent_trials      = 8
                 )
 

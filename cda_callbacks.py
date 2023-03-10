@@ -1,4 +1,5 @@
 from typing import Dict
+from ray.rllib.algorithms import Algorithm
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 from ray.tune.logger import pretty_print
 
@@ -33,13 +34,29 @@ class CdaCallbacks (DefaultCallbacks):
             algorithm object creates its own object of this class, so we get info into that object
             via the class variable, _checkpoint_path.
 
-            ASSUMES that the NN structure in the checkpoint is identical to the current run config.
+            ASSUMES that the NN structure in the checkpoint is identical to the current run config,
+            and belongs to the one and only policy, named "default_policy".
         """
 
         print("///// CdaCallbacks.on_algorithm_init: checkpoint path = ", CdaCallbacks._checkpoint_path)
         # Here is an old dir from 12/17/22. It only contains one file, named checkpoint-600, so the format seems incompatible.
         ckpt = "/home/starkj/ray_results/cda0-solo/PPO_SimpleHighwayRampWrapper_53a0c_00002_2_stddev=0.6529,seed=10003_2022-12-17_10-54-12/checkpoint_000600"
 
+        # Here is a new checkpoint made on 3/10/23 (on the Git branch tune-checkpointing, commit 4ae6)
+        ckpt = "/home/starkj/ray_results/cda0/PPO_SimpleHighwayRampWrapper_05f87_00003_3_clip_param=0.1785,entropy_coeff=0.0051,stddev=0.4683,kl_coeff=0.4298,lr=0.0001_2023-03-10_11-17-45/checkpoint_000270"
+        initial_weights = algorithm.get_weights(["default_policy"])
+        self._print_sample_weights("Newly created model", initial_weights)
+
+        ### When this line is uncommented, then Ray hangs!
+        temp_ppo = Algorithm.from_checkpoint(ckpt)
+        print("      checkpoint loaded.")
+        saved_weights = temp_ppo.get_weights()
+        self._print_sample_weights("Restored from checkpoint", saved_weights)
+        algorithm.set_weights(saved_weights)
+        verif_weights = algorithm.get_weights(["default_policy"])
+        self._print_sample_weights("Verified now in algo to be trained", verif_weights)
+
+        """TODO: can't get the RLlib Algorithm instance of CdaCallbacks to recognize a value that I put in here.
         # if a checkpoint location has been specified, then we will attempt to load the weights from it
         if CdaCallbacks._checkpoint_path is not None:
 
@@ -49,6 +66,7 @@ class CdaCallbacks (DefaultCallbacks):
 
             # attempt to load the weights from the specified checkpoint file and overwrite them onto the new model
             print("///// on_algorithm_init: attempting to restore NN weights from ", CdaCallbacks._checkpoint_path)
+        """
 
 
     def _print_sample_weights(self,

@@ -823,7 +823,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             s.set_environment_model(self)
             self.stopper = s
         except KeyError as e:
-            print("///// Stopper not specified in environment config.")
+            print("///// INFO: Stopper not specified in environment config.")
 
 
     def _select_init_lane(self) -> int:
@@ -1066,6 +1066,7 @@ def curriculum_fn(train_results:        dict,           #current status of train
     #print("///// curriculum_fn: train_results =")
     #print(pretty_print(train_results))
 
+    """TODO: commenting out the promotions just for a quick test
     # If the mean reward is above the success threshold for the current phase then advance the phase
     phase = task_settable_env.get_task()
     stopper = task_settable_env.get_stopper()
@@ -1084,6 +1085,7 @@ def curriculum_fn(train_results:        dict,           #current status of train
         print("\n///// curriculum_fn in phase {}: iter = {}, burn-in = {}, episode_reward_mean = {}"
               .format(phase, iter, burn_in, value))
         task_settable_env.set_task(phase+1)
+    """
 
     return task_settable_env.get_task() #don't return the local one, since the env may override it
 

@@ -1142,8 +1142,21 @@ program as a system test.
 3/9/23 - I've spent the last few days trying to get the Tuner program to start up and load weights from the NN in a
 	 previously saved checkpoint.  A slow conversation with Ray staff on the Ray Discuss is working through it.
 
-NEXT STEP: try hard-coding a checkpoint dir in the new on_algorithm_init() method just to see if I can get one loaded
-and recognized.  Then I can worry about how to make it variable.
+3/10/23
+
+* Working to test checkpoint injection capability.  First step is to get a checkpoint worthy of ingestion, one where
+  the agent can perform straight driving pretty well. This will enable me to easily verify whether that checkpoint
+  was loaded correctly or not.
+	* Notes above indicate that straight driving success was achieved on 12/17/22. I looked at the saved checkpoint
+	  from that run and found it to be a single file (checkpoint-600), not a full file structure like I have been
+	  recently studying and experiencing. Therefore, I don't believe it will work.
+	* Pulled code from that Git checkpoint, which happens to be the current head of the master branch, and tried
+	  to run it to regenerate the checkpoint. Since I have upgraded the system to Ray 2.3, this code no longer
+	  runs. I went back to my tune-checkpoints branch head, then modified the tune program to meet the same config
+	  that was used on 12/17. I also modified the env model so that it won't promote levels, but stays at level 0,
+	  since my stopping criteria are currently hosed up. 
+	* Made a new run with this setup (05f87), but with new HP search params & logic (using PBT), hoping to achieve
+	  similar level of training of the agent.
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
 AI: with PBT synch = True, watch for errored trial to see if it hangs the whole process; I now have
