@@ -15,6 +15,7 @@ from stop_logic import StopLogic
 #from stop_long  import StopLong
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 from simple_highway_with_ramp import curriculum_fn
+from cda_callbacks import CdaCallbacks
 
 """This program tunes (explores) hyperparameters to find a good set suitable for training.
     Usage is:
@@ -32,6 +33,12 @@ def main(argv):
     checkpoint = None
     if len(argv) > 1:
         checkpoint = argv[1]
+
+    #TODO: clean up the checkpoint handling here
+    # If we are starting from a previously saved checkpoint, this is where we communicate that to the training algo
+    CdaCallbacks._checkpoint_path = "someplace!"
+    ccb = CdaCallbacks()
+    ccb.set_path("or else")
 
     ray.init()
 
@@ -77,7 +84,7 @@ def main(argv):
 
     # Add dict for model structure
     model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = [256, 256]
+    model_config["fcnet_hiddens"]               = [11, 10] #[256, 256]
     model_config["fcnet_activation"]            = "relu"
     model_config["post_fcnet_activation"]       = tune.choice(["linear", "tanh"])
     cfg.training(model = model_config)
@@ -85,7 +92,7 @@ def main(argv):
     # Add exploration noise params
     explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.2, 0.75) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = tune.uniform(0.2, 0.5) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
@@ -94,18 +101,25 @@ def main(argv):
 
     # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
     # Use max_concurrent_trials in the TuneConfig area to limit the number of trials being run in parallel.
+    # The number of workers does not equal the number of trials.
     # NOTE: if num_gpus = 0 then policies will always be built/evaluated on cpu, even if gpus are specified for workers;
     #       to get workers (only) to use gpu, num_gpus needs to be positive (e.g. 0.0001).
-    cfg.resources(  num_gpus                    = 0, #for the local worker, which does the learning & evaluation runs
+    # NOTE: local worker needs to do work for every trial, so needs to divide its time among simultaneous trials. Therefore,
+    #       if gpu is to be used for local workder only, then the number of gpus available need to be divided among the
+    #       number of possible simultaneous trials (as well as gpu memory).
+    # This config will run 5 parallel trials on the Tensorbook.
+    cfg.resources(  num_gpus                    = 0.2, #for the local worker, which does the learning & evaluation runs
                     num_cpus_for_local_worker   = 1,
-                    num_cpus_per_worker         = 1, #also applies to the local worker and evaluation workers
-                    num_gpus_per_worker         = 0  #this has to allow gpu left over for local worker & evaluation workers also
+                    num_cpus_per_trainer_worker = 1, #also applies to the local worker and evaluation workers
+                    num_gpus_per_trainer_worker = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
-    cfg.rollouts(   num_rollout_workers         = 0, #num remote workers _per trial_ (remember that there is a local worker also)
+    cfg.rollouts(   num_rollout_workers         = 1, #num remote workers _per trial_ (remember that there is a local worker also)
+                                                     # 0 forces rollouts to be done by local worker
                     num_envs_per_worker         = 1,
                     rollout_fragment_length     = 200, #timesteps pulled from a sampler
                     batch_mode                  = "complete_episodes",
+                    recreate_failed_workers     = True,
     )
 
     # Training algorithm HPs
@@ -116,15 +130,15 @@ def main(argv):
                     lr                          = tune.loguniform(1e-6, 1e-3),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 32, #must be <= train_batch_size (and divide into it)
-                    kl_coeff                    = tune.uniform(0.24, 0.8),
+                    entropy_coeff               = tune.uniform(0.0, 0.008),
+                    kl_coeff                    = tune.uniform(0.35, 0.8),
                     #clip_actions                = True,
                     clip_param                  = tune.uniform(0.1, 0.3),
-                    entropy_coeff               = tune.uniform(0.0, 0.008),
     )
 
     # Evaluation process
     cfg.evaluation( evaluation_interval         = 20, #iterations
-                    evaluation_duration         = 16, #units specified next
+                    evaluation_duration         = 15, #units specified next
                     evaluation_duration_unit    = "episodes",
                     evaluation_parallel_to_training = False, #True requires evaluation_num_workers > 0
                     evaluation_num_workers      = 1,
@@ -134,6 +148,9 @@ def main(argv):
     cfg.debugging(  log_level                   = "WARN",
                     seed                        = 17, #tune.choice([2, 17, 666, 4334, 10003, 29771, 38710, 50848, 81199])
     )
+
+    # Custom callbacks from the training algorithm
+    cfg.callbacks(  CdaCallbacks)
 
     # checkpoint behavior
     #cfg.checkpointing(export_native_model_files = True) #raw torch NN weights will be stored in checkpoints
@@ -179,7 +196,7 @@ def main(argv):
     print("\n///// {} training params are:\n".format(algo))
     print(pretty_print(cfg.to_dict()))
 
-    chkpt_int                                   = 10                    #num iters between checkpoints
+    chkpt_int                                   = 5                    #num iters between checkpoints
     perturb_int                                 = 50                    #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
@@ -189,15 +206,15 @@ def main(argv):
                     perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
                     burn_in_period              = burn_in_period,       #num initial iterations before any perturbations occur
                     quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
-                    resample_probability        = 0.8,                  #resampling and mutation probability at each decision point
-                    synch                       = False,                #True:  all trials must finish before each perturbation decision is made
+                    resample_probability        = 0.9,                  #resampling and mutation probability at each decision point
+                    synch                       = True,                #True:  all trials must finish before each perturbation decision is made
                                                                         #False:  each trial finishes & decides based on available info at that time,
                                                                         # then immediately moves on. If True and one trial dies, then PBT hangs and all
                                                                         # remaining trials go into perpetual PAUSED state.
                     hyperparam_mutations={                              #resample distributions
                         "lr"                        :   tune.loguniform(1e-6, 1e-3),
                         #"exploration_config/stddev" :   tune.uniform(0.2, 0.7), #PPOConfig doesn't recognize any variation on this key
-                        "kl_coeff"                  :   tune.uniform(0.24, 0.8),
+                        "kl_coeff"                  :   tune.uniform(0.35, 0.8),
                         "entropy_coeff"             :   tune.uniform(0.0, 0.008),
                     },
     )
@@ -206,7 +223,7 @@ def main(argv):
                     #metric                      = "episode_reward_mean",
                     #mode                        = "max",
                     scheduler                   = scheduler,
-                    num_samples                 = 16 #number of HP trials
+                    num_samples                 = 1 #number of HP trials
                     #max_concurrent_trials      = 8
                 )
 
@@ -215,6 +232,7 @@ def main(argv):
                     local_dir                   = "~/ray_results",
                     stop                        = stopper,
                     sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
+                    verbose                     = 3, #3 is default
                     checkpoint_config           = air.CheckpointConfig(
                                                     checkpoint_frequency        = chkpt_int,
                                                     checkpoint_score_attribute  = "episode_reward_mean",
@@ -237,6 +255,7 @@ def main(argv):
     #print("\n///// tuner.fit() returned: ", type(result), " - ", result[0]) #we should only look at result[0] for some reason?
     print(pretty_print(result))
 
+    ccb.set_path("Placeholder")
     ray.shutdown()
 
 
