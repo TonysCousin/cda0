@@ -37,6 +37,8 @@ class CdaCallbacks (DefaultCallbacks):
         """
 
         print("///// CdaCallbacks.on_algorithm_init: checkpoint path = ", CdaCallbacks._checkpoint_path)
+        # Here is an old dir from 12/17/22. It only contains one file, named checkpoint-600, so the format seems incompatible.
+        ckpt = "/home/starkj/ray_results/cda0-solo/PPO_SimpleHighwayRampWrapper_53a0c_00002_2_stddev=0.6529,seed=10003_2022-12-17_10-54-12/checkpoint_000600"
 
         # if a checkpoint location has been specified, then we will attempt to load the weights from it
         if CdaCallbacks._checkpoint_path is not None:
