@@ -1139,6 +1139,12 @@ program as a system test.
 	  it does not work. While it seems to store it okay, actually referencing it in the __call__() method
 	  doesn't happen, so there seems to be no way for the env and the stopper to communicate.
 
+3/9/23 - I've spent the last few days trying to get the Tuner program to start up and load weights from the NN in a
+	 previously saved checkpoint.  A slow conversation with Ray staff on the Ray Discuss is working through it.
+
+NEXT STEP: try hard-coding a checkpoint dir in the new on_algorithm_init() method just to see if I can get one loaded
+and recognized.  Then I can worry about how to make it variable.
+
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
 AI: with PBT synch = True, watch for errored trial to see if it hangs the whole process; I now have
 	rollout.recreate_failed_workers = True, which should bring them back most of the time.
