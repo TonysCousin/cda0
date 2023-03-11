@@ -1156,7 +1156,14 @@ program as a system test.
 	  that was used on 12/17. I also modified the env model so that it won't promote levels, but stays at level 0,
 	  since my stopping criteria are currently hosed up. 
 	* Made a new run with this setup (05f87), but with new HP search params & logic (using PBT), hoping to achieve
-	  similar level of training of the agent.
+	  similar level of training of the agent. It found a solution with mean rewards > 8 pretty quickly (1-2 hr).
+	  This checkpoint is now saved in ~/project/cda0/test/level0-pt.
+* I tried running the tune program with the above checkpoint hard-coded in the CdaCallbacks class to load by the
+  Algorithm code.  It now hangs if the from_checkpoint() line is there (not even when it's executed, just if it is
+  uncommented). The hang is in the TrialRunner.step() method for some reason.
+* Also, the inference program no longer works. It displays a mysterious error in the Ray code, after I have done
+  nothing to it except set the NN size paramater to match what's in the checkpoint. It seems it can't handle the new
+  checkpoint format (?)
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
 AI: with PBT synch = True, watch for errored trial to see if it hangs the whole process; I now have

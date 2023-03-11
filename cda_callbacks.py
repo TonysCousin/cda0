@@ -43,7 +43,7 @@ class CdaCallbacks (DefaultCallbacks):
         ckpt = "/home/starkj/ray_results/cda0-solo/PPO_SimpleHighwayRampWrapper_53a0c_00002_2_stddev=0.6529,seed=10003_2022-12-17_10-54-12/checkpoint_000600"
 
         # Here is a new checkpoint made on 3/10/23 (on the Git branch tune-checkpointing, commit 4ae6)
-        ckpt = "/home/starkj/ray_results/cda0/PPO_SimpleHighwayRampWrapper_05f87_00003_3_clip_param=0.1785,entropy_coeff=0.0051,stddev=0.4683,kl_coeff=0.4298,lr=0.0001_2023-03-10_11-17-45/checkpoint_000270"
+        ckpt = "/home/starkj/projects/cda0/test/level0-pt/checkpoint_000270"
         initial_weights = algorithm.get_weights(["default_policy"])
         self._print_sample_weights("Newly created model", initial_weights)
 
