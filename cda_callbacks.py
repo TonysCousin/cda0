@@ -1,5 +1,6 @@
 from typing import Dict
 from ray.rllib.algorithms import Algorithm
+from ray.rllib.algorithms.ppo.ppo import PPO
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 from ray.tune.logger import pretty_print
 
@@ -26,7 +27,7 @@ class CdaCallbacks (DefaultCallbacks):
 
 
     def on_algorithm_init(self, *,
-                          algorithm:    "Algorithm", #TODO: does this need to be "PPO"?
+                          algorithm:    "PPO", #TODO: does this need to be "PPO"?
                           **kwargs,
                          ) -> None:
         """Called when a new algorithm instance had finished its setup() but before training begins.
@@ -50,7 +51,7 @@ class CdaCallbacks (DefaultCallbacks):
         self._print_sample_weights("Newly created model", initial_weights)
 
         ### When this line is uncommented, then Ray hangs!
-        temp_ppo = Algorithm.from_checkpoint(ckpt)
+        temp_ppo = PPO.from_checkpoint(ckpt)
         print("      checkpoint loaded.")
         saved_weights = temp_ppo.get_weights()
         self._print_sample_weights("Restored from checkpoint", saved_weights)

@@ -86,7 +86,7 @@ def main(argv):
     # Run the agent through a complete episode
     episode_reward = 0
     done = False
-    obs = env.reset()
+    obs, _ = env.reset()
     step = 0
     while not done:
         step += 1
@@ -94,7 +94,7 @@ def main(argv):
         if step <= 5:
             if abs(action[1]) > 0.49:
                 action[1] = 0.0
-        raw_obs, reward, done, info = env.step(np.ndarray.tolist(action)) #obs returned is UNSCALED
+        raw_obs, reward, done, truncated, info = env.step(np.ndarray.tolist(action)) #obs returned is UNSCALED
         episode_reward += reward
 
         # Display current status of all the vehicles

@@ -1,6 +1,6 @@
 from collections import deque
 from statistics import mean
-from typing import Tuple, Any
+from typing import Tuple, Dict
 import gymnasium
 from gymnasium.spaces import Discrete, Box
 import numpy as np
@@ -498,9 +498,11 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
     def step(self,
                 action  : list      #list of floats; 0 = accel cmd, m/s^2, 1 = lane chg cmd (-1 left, 0 none, +1 right)
-            ):
+            ) -> Tuple[np.array, float, bool, bool, Dict]:
         """Executes a single time step of the environment.  Determines how the input actions will alter the
             simulated world and returns the resulting observations to the agent.
+
+            Return is array of new observations, new reward, done flag, truncated flag, and a dict of additional info.
 
             CAUTION: the returned observation vector is at actual world scale and needs to be
                      preprocessed before going into a NN!
@@ -702,7 +704,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             print("      reason = {}".format(return_info["reason"]))
             print("      reward_detail = {}".format(return_info["reward_detail"]))
 
-        truncated = done #intended to indicate if the episode ended prematurely due to step/time limit
+        truncated = False #intended to indicate if the episode ended prematurely due to step/time limit
         return self.obs, reward, done, truncated, return_info
 
 
