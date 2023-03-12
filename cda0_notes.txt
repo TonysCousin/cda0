@@ -1164,7 +1164,21 @@ program as a system test.
 * Also, the inference program no longer works. It displays a mysterious error in the Ray code, after I have done
   nothing to it except set the NN size paramater to match what's in the checkpoint. It seems it can't handle the new
   checkpoint format (?)
+	* Commenting out the class variable and all its uses doesn't fix the hanging. But changing the checkpoint
+	  string to an invalid checkpoint (e.g. the parent dir) allows it to continue running, only with an exception
+	  raised about the invalid checkpoint.
+
+3/11/23
+
+	* Forced python not to buffer stdout, and found that problem is in Algorithm.from_state() where it tries to
+	  create the new PPO algorithm object. The PPO class doesn't have a constructor, so I assume it just runs the
+	  parent's, which is Algorithm.
+	* Additional print stmts throughout RLlib code shows that there is a call to ray.wait() that never comes back,
+	  made from FaultTolerantActorManager.__fetch_result(), which results from a call to WorkerSet.add_workers()
+	  from Algorithm.setup(). Posting the gory details to Ray Discuss thread for insight.
+
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
+AI: figure out how PBT acts when one of the stop conditions is met on one of its trials.
 AI: with PBT synch = True, watch for errored trial to see if it hangs the whole process; I now have
 	rollout.recreate_failed_workers = True, which should bring them back most of the time.

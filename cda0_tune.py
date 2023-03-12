@@ -193,8 +193,8 @@ def main(argv):
 
     # ===== Final setup =========================================================================
 
-    print("\n///// {} training params are:\n".format(algo))
-    print(pretty_print(cfg.to_dict()))
+    #print("\n///// {} training params are:\n".format(algo))
+    #print(pretty_print(cfg.to_dict()))
 
     chkpt_int                                   = 10                    #num iters between checkpoints
     perturb_int                                 = 50                    #num iters between policy perturbations (must be a multiple of chkpt period)
@@ -223,7 +223,7 @@ def main(argv):
                     #metric                      = "episode_reward_mean",
                     #mode                        = "max",
                     scheduler                   = scheduler,
-                    num_samples                 = 15 #number of HP trials
+                    num_samples                 = 1 #number of HP trials
                     #max_concurrent_trials      = 8
                 )
 
