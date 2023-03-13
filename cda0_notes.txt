@@ -1177,6 +1177,10 @@ program as a system test.
 	  made from FaultTolerantActorManager.__fetch_result(), which results from a call to WorkerSet.add_workers()
 	  from Algorithm.setup(). Posting the gory details to Ray Discuss thread for insight.
 
+3/12/23
+
+	* Got the inference program working. The call signature for env.reset() needed to be updated.
+
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
 AI: figure out how PBT acts when one of the stop conditions is met on one of its trials.

@@ -110,12 +110,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         + If a lane change is requested where no target lane exists, it is considered a crash and ends the episode.
         + If there is no crash, but all vehicles exit the indefinite end of a lane, then the episode is complete (success).
         + The environment supports curriculum learning with multiple levels of difficulty. The levels are:
-            0 = solo agent drives a (possibly short) straight lane to the end without departing the roadway with limited init spd
+            0 = solo agent drives a (possibly short) straight lane to the end without departing the roadway with limited init spd;
+                focus is on making legal lane changes in small numbers (lanes 0 & 1 only)
             1 = level 0 but always start near beginning of track with full possible initial speeds
-            2 = level 1 plus solo agent driving on entry ramp, and forced to change lanes to complete the course
-            3 = level 2 plus 3 sequential, constant-speed vehicles in lane 1
-            4 = level 2 plus 3 randomly located, constant-speed vehicles anywhere on the track
-            5 = level 2 plus 3 randomly located, variable-speed vehicles anywhere on the track
+            2 = level 1 plus added emphasis on minimizing jerk and speed changes
+            3 = level 2 plus solo agent driving on entry ramp (lane 2), and forced to change lanes to complete the course
+            4 = level 3 plus 3 sequential, constant-speed vehicles in lane 1
+            5 = level 3 plus 3 randomly located, constant-speed vehicles anywhere on the track
+            6 = level 3 plus 3 randomly located, variable-speed vehicles anywhere on the track
 
         Agent rewards are provided by a separate reward function.  The reward logic is documented there.
     """
@@ -377,11 +379,11 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     ego_x = self.prng.random() * max_distance
                 ego_speed = self.prng.random() * 10.0 + 20.0 #value in [10, 30] m/s
 
-            elif self.difficulty_level < 3: #levels 1 and 2
+            elif self.difficulty_level < 4: #levels 1, 2, 3
                 ego_x = self.prng.random() * 500.0
                 ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED #any physically possible value
 
-            else: #levels 3 and up
+            else: #levels 4 and up
                 ego_x = self.prng.random() * 500.0
                 ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
 
@@ -394,14 +396,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # If this difficulty level uses neighbor vehicles then initialize their speed and starting point
         n_loc = 0.0
         n_speed = 0.0
-        if self.difficulty_level == 3: #steady speed vehicles in lane 1
+        if self.difficulty_level == 4: #steady speed vehicles in lane 1
             n_loc = self.neighbor_start_loc
             n_speed = self.neighbor_speed
             if self.neighbor_print_latch:
                 print("///// reset worker {}: Neighbor vehicles on the move in level 3. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
                         .format(self.rollout_id, self.episode_count, self.total_steps, n_loc, n_speed))
                 self.neighbor_print_latch = False
-        elif self.difficulty_level > 3:
+        elif self.difficulty_level > 4:
             raise NotImplementedError("///// Neighbor vehicle motion not defined for difficulty level {}".format(self.difficulty_level))
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1, and always start at the same location
@@ -831,12 +833,12 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     def _select_init_lane(self) -> int:
         """Chooses the initial lane for training runs, which may not be totally random."""
 
-        # Levels 0 & 1 are restricted to lanes 0 & 1 (the full-length lanes)
-        if self.difficulty_level < 2:
+        # Levels 0-2 are restricted to lanes 0 & 1 (the full-length lanes)
+        if self.difficulty_level < 3:
             return int(self.prng.random()*2) #select 0 or 1
 
-        # Levels 2 & 3 need to emphasizes lots of experience in lane 2
-        elif self.difficulty_level < 4:
+        # Levels 3 & 4 need to emphasizes lots of experience in lane 2
+        elif self.difficulty_level < 5:
             if self.prng.random() < 0.7:
                 return 2
             else:

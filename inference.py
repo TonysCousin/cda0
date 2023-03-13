@@ -7,6 +7,7 @@ import ray
 import ray.rllib.algorithms.ppo as ppo
 #import ray.rllib.algorithms.ddpg as ddpg
 #import ray.rllib.algorithms.td3  as td3
+from ray.tune.logger import pretty_print
 import pygame
 from pygame.locals import *
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
@@ -45,12 +46,6 @@ def main(argv):
 
     # DDPG - These need to be same as in the checkpoint being read!
     """
-    exp = config["exploration_config"]
-    exp["type"] = "GaussianNoise"
-    exp.pop("ou_sigma")
-    exp.pop("ou_theta")
-    exp.pop("ou_base_scale")
-    config["exploration_config"] = exp
     config["actor_hiddens"]               = [512, 64]
     config["critic_hiddens"]              = [512, 64]
     """
@@ -68,7 +63,8 @@ def main(argv):
                    )
 
     env = SimpleHighwayRampWrapper(env_config)
-    print("///// Environment configured.")
+    print("///// Environment configured. Params are:")
+    print(pretty_print(cfg.to_dict()))
 
     # Restore the selected checkpoint file
     # Note that the raw environment class is passed to the algo, but we are only using the algo to run the NN model,
@@ -90,7 +86,7 @@ def main(argv):
     step = 0
     while not done:
         step += 1
-        action = algo.compute_single_action(obs)
+        action = algo.compute_single_action(obs, explore = False)
         if step <= 5:
             if abs(action[1]) > 0.49:
                 action[1] = 0.0

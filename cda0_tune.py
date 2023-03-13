@@ -51,10 +51,10 @@ def main(argv):
     # Define the stopper object that decides when to terminate training.
     # All list objects (min_timesteps, success_threshold, failure_threshold) must be of length equal to num phases in use.
     # let_it_run can be a single value if it applies to all phases.
-    # Phase...............0             1           2           3
-    min_timesteps       = [1500000,     1000000,    1500000,    2000000]
-    success_threshold   = [5.0,         5.0,        5.0,        1.0]
-    failure_threshold   = [0.0,         0.0,        -5.0,       -10.0]
+    # Phase...............0             1           2           3           4
+    min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
+    success_threshold   = [8.0,         8.0,        8.0,        5.0,        1.0]
+    failure_threshold   = [0.0,         0.0,        0.0,        -5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
 
@@ -114,7 +114,7 @@ def main(argv):
                     num_gpus_per_trainer_worker = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
-    cfg.rollouts(   num_rollout_workers         = 1, #num remote workers _per trial_ (remember that there is a local worker also)
+    cfg.rollouts(   num_rollout_workers         = 5, #num remote workers _per trial_ (remember that there is a local worker also)
                                                      # 0 forces rollouts to be done by local worker
                     num_envs_per_worker         = 1,
                     rollout_fragment_length     = 200, #timesteps pulled from a sampler
@@ -126,7 +126,7 @@ def main(argv):
     # NOTE: lr_schedule is only defined for policy gradient algos
     # NOTE: all items below lr_schedule are PPO-specific
     cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
-                    train_batch_size            = 200, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
+                    train_batch_size            = 1000, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
                     lr                          = tune.loguniform(1e-6, 1e-3),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 32, #must be <= train_batch_size (and divide into it)
@@ -141,7 +141,7 @@ def main(argv):
                     evaluation_duration         = 15, #units specified next
                     evaluation_duration_unit    = "episodes",
                     evaluation_parallel_to_training = False, #True requires evaluation_num_workers > 0
-                    evaluation_num_workers      = 1,
+                    evaluation_num_workers      = 2,
     )
 
     # Debugging assistance
@@ -206,7 +206,7 @@ def main(argv):
                     perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
                     burn_in_period              = burn_in_period,       #num initial iterations before any perturbations occur
                     quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
-                    resample_probability        = 0.5,                  #resampling and mutation probability at each decision point
+                    resample_probability        = 0.3,                  #resampling and mutation probability at each decision point
                     synch                       = True,                #True:  all trials must finish before each perturbation decision is made
                                                                         #False:  each trial finishes & decides based on available info at that time,
                                                                         # then immediately moves on. If True and one trial dies, then PBT hangs and all
@@ -223,7 +223,7 @@ def main(argv):
                     #metric                      = "episode_reward_mean",
                     #mode                        = "max",
                     scheduler                   = scheduler,
-                    num_samples                 = 1 #number of HP trials
+                    num_samples                 = 15 #number of HP trials
                     #max_concurrent_trials      = 8
                 )
 

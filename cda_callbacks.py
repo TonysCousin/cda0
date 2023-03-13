@@ -40,6 +40,8 @@ class CdaCallbacks (DefaultCallbacks):
             and belongs to the one and only policy, named "default_policy".
         """
 
+        return #Force Tune to generate a brand-new model
+
         print("///// CdaCallbacks.on_algorithm_init entered.")
         #print("///// CdaCallbacks.on_algorithm_init: checkpoint path = ", CdaCallbacks._checkpoint_path)
         # Here is an old dir from 12/17/22. It only contains one file, named checkpoint-600, so the format seems incompatible.
@@ -53,6 +55,7 @@ class CdaCallbacks (DefaultCallbacks):
         ### When this line is uncommented, then Ray hangs!
         temp_ppo = PPO.from_checkpoint(ckpt)
         print("      checkpoint loaded.")
+
         saved_weights = temp_ppo.get_weights()
         self._print_sample_weights("Restored from checkpoint", saved_weights)
         algorithm.set_weights(saved_weights)
