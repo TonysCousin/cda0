@@ -1,4 +1,5 @@
 from typing import Dict
+from ray.rllib.policy.policy import Policy
 from ray.rllib.algorithms import Algorithm
 from ray.rllib.algorithms.ppo.ppo import PPO
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
@@ -40,7 +41,7 @@ class CdaCallbacks (DefaultCallbacks):
             and belongs to the one and only policy, named "default_policy".
         """
 
-        return #Force Tune to generate a brand-new model
+        #return #Force Tune to generate a brand-new model
 
         print("///// CdaCallbacks.on_algorithm_init entered.")
         #print("///// CdaCallbacks.on_algorithm_init: checkpoint path = ", CdaCallbacks._checkpoint_path)
@@ -48,17 +49,27 @@ class CdaCallbacks (DefaultCallbacks):
         ckpt = "/home/starkj/ray_results/cda0-solo/PPO_SimpleHighwayRampWrapper_53a0c_00002_2_stddev=0.6529,seed=10003_2022-12-17_10-54-12/checkpoint_000600"
 
         # Here is a new checkpoint made on 3/10/23 (on the Git branch tune-checkpointing, commit 4ae6)
-        ckpt = "/home/starkj/projects/cda0/test/level0-pt/checkpoint_000270"
-        initial_weights = algorithm.get_weights(["default_policy"])
+        ckpt = "/home/starkj/projects/cda0/test/level0-pt/05f87/checkpoint_000270"
+
+        # More recent, collected on 3/13/23
+        ckpt = "/home/starkj/projects/cda0/test/level0-pt/0d8e1/PPO_00001/checkpoint_000420"
+        initial_weights = algorithm.get_weights(["default_policy"])["default_policy"]
+        print("///// initial_weights = ", type(initial_weights))
         self._print_sample_weights("Newly created model", initial_weights)
 
+        """
         ### When this line is uncommented, then Ray hangs!
         temp_ppo = PPO.from_checkpoint(ckpt)
-        print("      checkpoint loaded.")
-
         saved_weights = temp_ppo.get_weights()
+        """
+        saved_weights = Policy.from_checkpoint("{}".format(ckpt)) #use "/policies/default_policy" to create a policy; else return is a dict
+        #print("\n///// CdaCallback.on_algorithm_init: temp_policy = ", type(temp_policy))
+        #saved_weights = temp_policy.get_weights()
+        print("///// checkpoint loaded. saved_weights = ", type(saved_weights))
+
         self._print_sample_weights("Restored from checkpoint", saved_weights)
-        algorithm.set_weights(saved_weights)
+        algorithm.set_weights(saved_weights)    ### ERROR HERE in ndarray type conversion
+        print("///// returned from algorithm.set_weights.")
         verif_weights = algorithm.get_weights(["default_policy"])
         self._print_sample_weights("Verified now in algo to be trained", verif_weights)
 
@@ -79,12 +90,26 @@ class CdaCallbacks (DefaultCallbacks):
                               descrip   : str,
                               weights   : Dict
                              ) -> None:
-        """Prints a few of the weight values to aid in confirming which model we are dealing with."""
+        """Prints a few of the weight values to aid in confirming which model we are dealing with.
 
+            ASSUMES that weights represents a single policy, not a dict of dicts.
+        """
+
+        return
         # Assume the NN structure is at least [10, 10] with biases and at least 20 inputs and 1 output
         print("///// Sample NN weights: {}".format(descrip))
-        dp = weights["default_policy"]
-        for i, dd in enumerate(dp.items()): #index 0 represents the default_policy item
+
+        # If the weights were loaded from an Algorithm checkpoint then the dict will be nested in a dict of policies, so first
+        # need to pull out the correct policy. If the weights come from a Policy checkpoint then the wrapping dict will be
+        # absent.
+        dp = weights
+        try:
+            dp = weights["default_policy"]
+        except KeyError as e:
+            pass
+        print("///// CdaCallbacks._print_sample_weights: dp = ", dp)
+
+        for i, dd in enumerate(dp):
             d = dd[1]
             if i == 2: #layer 0 weights (at least 10 x 20)
                 print("      L0 weights: [0, 3] = {:8.5f}, [1,  8] = {:8.5f}, [2,  9] = {:8.5f}".format(d[0, 3], d[1, 8], d[2, 9]))
