@@ -41,52 +41,27 @@ class CdaCallbacks (DefaultCallbacks):
             and belongs to the one and only policy, named "default_policy".
         """
 
-        #return #Force Tune to generate a brand-new model
-
-        print("///// CdaCallbacks.on_algorithm_init entered.")
-        #print("///// CdaCallbacks.on_algorithm_init: checkpoint path = ", CdaCallbacks._checkpoint_path)
-        # Here is an old dir from 12/17/22. It only contains one file, named checkpoint-600, so the format seems incompatible.
-        ckpt = "/home/starkj/ray_results/cda0-solo/PPO_SimpleHighwayRampWrapper_53a0c_00002_2_stddev=0.6529,seed=10003_2022-12-17_10-54-12/checkpoint_000600"
-
+        # For now, we need to hard-code the checkpoint file here, because there is no clear way to pass that info in.
         # Here is a new checkpoint made on 3/10/23 (on the Git branch tune-checkpointing, commit 4ae6)
         ckpt = "/home/starkj/projects/cda0/test/level0-pt/05f87/checkpoint_000270"
-
         # More recent, collected on 3/13/23
         ckpt = "/home/starkj/projects/cda0/test/level0-pt/0d8e1/PPO_00001/checkpoint_000420"
+
+        # Get the initial weights from the newly created NN and sample some values
         initial_weights = algorithm.get_weights(["default_policy"])["default_policy"]
-        print("///// initial_weights = ", type(initial_weights))
         self._print_sample_weights("Newly created model", initial_weights)
 
-        """
-        ### When this line is uncommented, then Ray hangs!
-        temp_ppo = PPO.from_checkpoint(ckpt)
-        saved_weights = temp_ppo.get_weights()
-        """
-        temp_policy = Policy.from_checkpoint("{}/policies/default_policy".format(ckpt)) #use "/policies/default_policy" to create a policy; else return is a dict
-        print("\n///// CdaCallback.on_algorithm_init: temp_policy = ", type(temp_policy))
+        # Load the checkpoint into a Policy object and pull the NN weights from there. Doing this avoids all the extra
+        # trainig info that is stored with the full policy and the algorithm.
+        temp_policy = Policy.from_checkpoint("{}/policies/default_policy".format(ckpt))
         saved_weights = temp_policy.get_weights()
-        print("///// checkpoint loaded. saved_weights = ", type(saved_weights))
-
         self._print_sample_weights("Restored from checkpoint", saved_weights)
+
+        # Stuff the loaded weights into the newly created NN, and display a sample of these for comparison
         to_algo = {"default_policy": saved_weights} #should be of type Dict[PolicyId, ModelWeights]; PolicyID = str, ModelWeights = dict
         algorithm.set_weights(to_algo)    ### ERROR HERE in ndarray type conversion
-        print("///// returned from algorithm.set_weights.")
         verif_weights = algorithm.get_weights(["default_policy"])
         self._print_sample_weights("Verified now in algo to be trained", verif_weights)
-
-
-
-        """TODO: can't get the RLlib Algorithm instance of CdaCallbacks to recognize a value that I put in here.
-        # if a checkpoint location has been specified, then we will attempt to load the weights from it
-        if CdaCallbacks._checkpoint_path is not None:
-
-            # Get the newly created individual NN model weights
-            weights = algorithm.get_weights(["default_policy"])
-            self._print_sample_weights("Newly created model", weights)
-
-            # attempt to load the weights from the specified checkpoint file and overwrite them onto the new model
-            print("///// on_algorithm_init: attempting to restore NN weights from ", CdaCallbacks._checkpoint_path)
-        """
 
 
     def _print_sample_weights(self,
@@ -98,7 +73,6 @@ class CdaCallbacks (DefaultCallbacks):
             ASSUMES that weights represents a single policy, not a dict of dicts.
         """
 
-        return
         # Assume the NN structure is at least [10, 10] with biases and at least 20 inputs and 1 output
         print("///// Sample NN weights: {}".format(descrip))
 
@@ -110,10 +84,9 @@ class CdaCallbacks (DefaultCallbacks):
             dp = weights["default_policy"]
         except KeyError as e:
             pass
-        print("///// CdaCallbacks._print_sample_weights: dp = ", dp)
 
-        for i, dd in enumerate(dp):
-            d = dd[1]
+        for i, key in enumerate(dp):
+            d = dp[key]
             if i == 2: #layer 0 weights (at least 10 x 20)
                 print("      L0 weights: [0, 3] = {:8.5f}, [1,  8] = {:8.5f}, [2,  9] = {:8.5f}".format(d[0, 3], d[1, 8], d[2, 9]))
                 print("                  [6, 1] = {:8.5f}, [7, 12] = {:8.5f}, [8, 16] = {:8.5f}".format(d[6, 1], d[7, 2], d[8, 6]))

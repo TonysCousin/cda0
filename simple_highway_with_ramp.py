@@ -291,7 +291,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.num_crashes = 0        #num crashes with a neighbor vehicle since reset
         self.neighbor_print_latch = True #should the neighbor vehicle info be printed when initiated?
         self.rollout_id = hex(int(self.prng.random() * 65536))[2:].zfill(4) #random int to ID this env object in debug logging
-        print("///// Initializing env rollout ID {} at level {}".format(self.rollout_id, self.difficulty_level))
+        #print("///// Initializing env rollout ID {} at level {}".format(self.rollout_id, self.difficulty_level))
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
         #self.render_mode = render_mode

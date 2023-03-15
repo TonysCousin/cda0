@@ -1181,6 +1181,23 @@ program as a system test.
 
 	* Got the inference program working. The call signature for env.reset() needed to be updated.
 
+3/15/23
+
+* Tentatively got checkpoint restore working for use in Tuner. Restoring individual Policy checkpoints rather than the
+  whole Algorithm checkpoint.
+	* In the process of of figuring this out (besides help from Ray staff), I added print stmts to:
+		rllib.evaluation.rollout_worker.py
+		rllib.utils.torch_utils.py
+		rllib.utils.actor_manager.py
+		_private.worker.py
+		rllib.utils.checkpoint.py
+		rllib.evaluation.worker_set.py
+		rllib.algorithms.algorithm.py
+		tune.execution.trial_runner.py
+		tune.tune.py	
+		tune.trainable.trainable.py
+		tune.impl.tuner_internal.py
+
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
 AI: figure out how PBT acts when one of the stop conditions is met on one of its trials.
