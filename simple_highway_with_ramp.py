@@ -137,7 +137,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     HALF_LANE_CHANGE_STEPS  = 3.0 / 0.5 // 2    #num steps to get half way across the lane (equally straddling both)
     TOTAL_LANE_CHANGE_STEPS = 2 * HALF_LANE_CHANGE_STEPS
     MAX_STEPS_SINCE_LC      = 60        #largest num time steps we will track since previous lane change
-    NUM_DIFFICULTY_LEVELS   = 4         #num levels of environment difficulty for the agent to learn; see descrip above
+    NUM_DIFFICULTY_LEVELS   = 5         #num levels of environment difficulty for the agent to learn; see descrip above
 
 
     def __init__(self,
@@ -145,14 +145,21 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                  seed:          int             = None, #seed for PRNG
                  render_mode:   int             = None  #Ray rendering info, unused in this version
                 ):
+
         """Initialize an object of this class.  Config options are:
             time_step_size: duration of a time step, s (default = 0.5)
             debug:          level of debug printing (0=none (default), 1=moderate, 2=full details)
             training:       (bool) True if this is a training run, else it is inference (affects initial conditions)
             init_ego_lane:  lane ID that the agent vehicle begins in (default = 2)
-            init_ego_speed: initial speed of the agent vehicle (defaults to random in [5, 20])
-            init_ego_x:     initial downtrack location of the agent vehicle from lane begin (defaults to random in [0, 200])
-        """
+            init_ego_speed: initial speed of the agent vehicle, m/s (defaults to random in [5, 20])
+            init_ego_x:     initial downtrack location of the agent vehicle from lane begin, m (defaults to random in [0, 200])
+            randomize_start_dist: (bool) True if ego vehicle start location is to be randomized; only applies to level 0
+            neighbor_speed: initial speed of the neighbor vehicles, m/s (default = 29.1)
+            neighbor_start_loc: initial location of neighbor vehicle N3 (the rear-most vehicle), m (default = 0)
+            stopper:        the object used to render experiment stopping decisions (default = None)
+            difficulty_level: the fixed level of difficulty of the environment in [0, NUM_DIFFICULTY_LEVELS] (default = 0)
+            burn_in_iters:  num iterations that must pass before a difficulty level promotion is possible
+       """
 
         super().__init__()
 
@@ -163,7 +170,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.render_mode = render_mode
 
         self._set_initial_conditions(config)
-
         if self.debug > 0:
             print("\n///// SimpleHighwayRamp init: config = ", config)
 
@@ -260,13 +266,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         upper_obs[self.ADJ_LN_RIGHT_CONN_B] = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         upper_obs[self.ADJ_LN_RIGHT_REM]    = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
 
-        self.observation_space = Box(low=lower_obs, high=upper_obs, dtype=np.float32)
+        self.observation_space = Box(low=lower_obs, high=upper_obs, dtype=np.float)
         if self.debug == 2:
             print("///// observation_space = ", self.observation_space)
 
         lower_act = np.array([-SimpleHighwayRamp.MAX_ACCEL, -1.0])
         upper_act = np.array([ SimpleHighwayRamp.MAX_ACCEL,  1.0])
-        self.action_space = Box(low=lower_act, high=upper_act, dtype=np.float32)
+        self.action_space = Box(low=lower_act, high=upper_act, dtype=np.float)
         if self.debug == 2:
             print("///// action_space = ", self.action_space)
 
@@ -277,7 +283,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.roadway = Roadway(self.debug)
 
         # Other persistent data
-        self.difficulty_level = 0   #environment difficulty for the agent; int in [0, NUM_DIFFICULTY_LEVELS], where 0 is simplest
         self.lane_change_underway = "none" #possible values: "left", "right", "none"
         self.lane_change_count = 0  #num consecutive time steps since a lane change was begun
         self.total_steps = 0        #num time steps for this trial (worker), across all episodes; NOTE that this is different from the
@@ -291,7 +296,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.num_crashes = 0        #num crashes with a neighbor vehicle since reset
         self.neighbor_print_latch = True #should the neighbor vehicle info be printed when initiated?
         self.rollout_id = hex(int(self.prng.random() * 65536))[2:].zfill(4) #random int to ID this env object in debug logging
-        #print("///// Initializing env rollout ID {} at level {}".format(self.rollout_id, self.difficulty_level))
+        print("///// Initializing env environment ID {} at level {}".format(self.rollout_id, self.difficulty_level))
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
         #self.render_mode = render_mode
@@ -820,6 +825,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         except KeyError as e:
             pass
 
+        self.difficulty_level = 0
+        try:
+            dl = config["difficulty_level"]
+            if 0 <= dl < SimpleHighwayRamp.NUM_DIFFICULTY_LEVELS:
+                self.difficulty_level = int(dl)
+        except KeyError as e:
+            pass
+
         # Store the stopper, but also let the stopper know how to reach this object
         self.stopper = None
         try:
@@ -1065,12 +1078,17 @@ def curriculum_fn(train_results:        dict,           #current status of train
                   task_settable_env:    TaskSettableEnv,#the env model that difficulties will be applied to
                   env_ctx,                              #???
                  ) -> int:                              #returns the new difficulty level
+
     """Callback that allows Ray.Tune to increase the difficulty level, based on the current training results."""
 
     #print("///// curriculum_fn: train_results =")
     #print(pretty_print(train_results))
 
-    """TODO: commenting out the promotions just for a quick test
+    """TODO: reconsider automated promotion logic. Currently commented out to allow manually setting
+        the level as a constant for each Tune experiment. In this way, variable HPs, like annealing LR
+        and noise levels can easily be set and scaled down through the course of a single level. It is
+        not clear how to automate the resetting of these kinds of HPs.
+
     # If the mean reward is above the success threshold for the current phase then advance the phase
     phase = task_settable_env.get_task()
     stopper = task_settable_env.get_stopper()

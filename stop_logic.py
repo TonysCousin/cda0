@@ -79,7 +79,6 @@ class StopLogic(Stopper):
         self.env = None
         self.steps_at_phase_begin = 0
         self.steps_prev_call = 0
-        self.threshold_latch = False
         self.prev_phase = 0
         self.crossed_min_timesteps = False
 
@@ -99,7 +98,8 @@ class StopLogic(Stopper):
         # Determine if this is a multi-phase trial and what phase we are in, then assign local variables for the phase-dependent items
         # NOTE: the iteration count and time step counts don't increase monotonically when a PBT scheduler is used, so these are probably
         #       not good choices for stopping criteria in such a use case.
-        # TODO: most calls will experience self.env == None. I don't know why.  This logic needs to be rewritten!
+        # TODO: most calls will experience self.env == None. I don't know why.  This logic needs to be rewritten in order to use the
+        #       stop logic for any phase > 0.
         phase = 0
         if self.env is not None:
             phase = self.env.get_task()
@@ -129,14 +129,6 @@ class StopLogic(Stopper):
         # Determine the total iteration count and number of steps passed in the current phase - THESE ARE ONLY APPROXIMATE!
         total_iters = result["training_iteration"] #was "iterations_since_restore"
         steps_this_phase = result["timesteps_total"] - self.steps_at_phase_begin
-
-        # If we see a respectable reward at any point, then extend the guaranteed min timesteps for all phases (need to do this after
-        # the phase counter has been evaluated so that we don't bounce back to a previous value)
-        #if result["episode_reward_max"] > -0.4  and   not self.threshold_latch: #TODO: make this a config var or input arg
-        #    min_timesteps *= 1.2
-        #    if self.num_phases > 1:
-        #        self.required_min_timesteps = [1.2*item for item in self.required_min_timesteps]
-        #    self.threshold_latch = True
 
         # If this trial is already underway and being tracked, then
         if trial_id in self.trials:

@@ -1197,6 +1197,7 @@ program as a system test.
 		tune.tune.py	
 		tune.trainable.trainable.py
 		tune.impl.tuner_internal.py
+****	* Verified that checkpoints are now working!
 
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?

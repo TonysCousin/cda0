@@ -19,26 +19,20 @@ from cda_callbacks import CdaCallbacks
 
 """This program tunes (explores) hyperparameters to find a good set suitable for training.
     Usage is:
-        cda0_tune [checkpoint]
-    If a checkpoint directory is provided, it will use the learning algorithm & NN state stored there as a starting point.
-    Note that for this to work, the algo and NN structure specified below need to be identical to those recorded in the
-    checkpoint.
+        cda0_tune <difficulty_level>
+    If a difficulty level is not provided, it will default to 0.
 
-    If no checkpoint is specified, then this program will create a new NN with the structure specified below, and begin
-    training it anew.
+    NOTE that this program will begin training the existing (pre-trained) checkpoint that is hard-coded in
+    the CdaCallbacks code (cda_callbacks.py). While hard-coding is not ideal, it is the only known way, at
+    this time, to pass the information into RLlib.
 """
 
 def main(argv):
 
-    checkpoint = None
+    difficulty_level = 0
     if len(argv) > 1:
-        checkpoint = argv[1]
-
-    #TODO: clean up the checkpoint handling here
-    # If we are starting from a previously saved checkpoint, this is where we communicate that to the training algo
-    CdaCallbacks._checkpoint_path = "someplace!"
-    ccb = CdaCallbacks()
-    ccb.set_path("or else")
+        difficulty_level = min(max(int(argv[1]), 0), SimpleHighwayRampWrapper.NUM_DIFFICULTY_LEVELS)
+    print("\n///// Tuning with environment difficulty level {}".format(difficulty_level))
 
     ray.init()
 
@@ -54,12 +48,13 @@ def main(argv):
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
     success_threshold   = [8.0,         8.0,        8.0,        5.0,        1.0]
-    failure_threshold   = [0.0,         0.0,        0.0,        -5.0,       -10.0]
+    failure_threshold   = [2.0,         2.0,        0.0,        -5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
+    max_iterations      = 800
 
     stopper = StopLogic(max_ep_timesteps        = 400,
-                        max_iterations          = 800,
+                        max_iterations          = max_iterations,
                         min_timesteps           = min_timesteps,
                         avg_over_latest         = burn_in_period,
                         success_threshold       = success_threshold,
@@ -71,13 +66,14 @@ def main(argv):
 
     # Define the custom environment for Ray
     env_config = {}
+    env_config["difficulty_level"]              = difficulty_level
     env_config["stopper"]                       = stopper #object must be instantiated above
     env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 0
     env_config["training"]                      = True
     env_config["randomize_start_dist"]          = True
-    env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit
+    env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
     env_config["neighbor_start_loc"]            = 320.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
     cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config, env_task_fn = curriculum_fn)
@@ -92,7 +88,7 @@ def main(argv):
     # Add exploration noise params
     explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.2, 0.5) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = tune.uniform(0.1, 0.4) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
@@ -152,51 +148,12 @@ def main(argv):
     # Custom callbacks from the training algorithm
     cfg.callbacks(  CdaCallbacks)
 
-    # checkpoint behavior
-    #cfg.checkpointing(export_native_model_files = True) #raw torch NN weights will be stored in checkpoints
-
-    # ===== Params for DDPG =====================================================================
-    """
-    replay = params["replay_buffer_config"]
-    replay["type"]                              = "MultiAgentReplayBuffer"
-    replay["capacity"]                          = 1000000
-    replay["learning_starts"]                   =   10000
-
-    exp = params["exploration_config"]
-    exp["type"]                                 = "OrnsteinUhlenbeckNoise"
-    exp["random_timesteps"]                     = 100000
-    #exp["stddev"]                               = 0.5 #used for GaussianNoise only
-    exp["initial_scale"]                        = 1.0 #tune.choice([1.0, 0.05])
-    exp["final_scale"]                          = 0.1
-    exp["scale_timesteps"]                      = 4000000
-    exp["ou_sigma"]                             = 1.0
-    #exp.pop("ou_sigma")                         #these ou items need to be removed if not using OU noise
-    #exp.pop("ou_theta")
-    #exp.pop("ou_base_scale")
-
-    params["replay_buffer_config"]              = replay
-    params["exploration_config"]                = exp
-    params["actor_hiddens"]                     = [512, 64] #tune.choice([ [512, 64],
-    params["critic_hiddens"]                    = [768, 80] #tune.choice([[768, 80],
-    params["actor_lr"]                          = tune.choice([2e-8, 4e-8, 7e-8, 1e-5, 1e-4, 1e-3]) #tune.choice([1e-5, 3e-5, 1e-4, 3e-4, 1e-3])
-    params["critic_lr"]                         = tune.choice([9e-5, 2e-4, 5e-4]) #tune.loguniform(3e-5, 2e-4)
-    params["tau"]                               = 0.005 #tune.choice([0.0005, 0.001, 0.005])
-    params["train_batch_size"]                  = tune.choice([4, 8, 16])
-    """
-    # ===== Params for TD3 (added to the DDPG params) ===========================================
-    """
-    params["twin_q"]                            = True
-    params["policy_delay"]                      = 2
-    params["smooth_target_policy"]              = True
-    params["l2_reg"]                            = 0.0
-    """
-
     # ===== Final setup =========================================================================
 
     #print("\n///// {} training params are:\n".format(algo))
     #print(pretty_print(cfg.to_dict()))
 
-    chkpt_int                                   = 10                    #num iters between checkpoints
+    chkpt_int                                   = 10                    #num iters between storing new checkpoints
     perturb_int                                 = 50                    #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
@@ -230,7 +187,10 @@ def main(argv):
     run_config = RunConfig(
                     name                        = "cda0",
                     local_dir                   = "~/ray_results",
-                    stop                        = stopper,
+                    #stop                        = stopper,
+                    stop                        = {"episode_reward_min":        failure_threshold[difficulty_level],
+                                                   "training_iteration":        max_iterations,
+                                                   },
                     sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
                     verbose                     = 3, #3 is default
                     checkpoint_config           = air.CheckpointConfig(
@@ -241,21 +201,14 @@ def main(argv):
                     )
                 )
 
-    # Execute the HP tuning job, beginning with a previous checkpoint, if one was specified
+    # Execute the HP tuning job, beginning with a previous checkpoint, if one was specified in the CdaCallbacks.
     tuner = Tuner(algo, param_space = cfg.to_dict(), tune_config = tune_config, run_config = run_config)
     print("\n///// Tuner created.\n")
-
-    if checkpoint != None:
-        tuner.restore(checkpoint)
-        print("\n///// Successfully loaded starting checkpoint: {}".format(checkpoint))
-
-
 
     result = tuner.fit()
     #print("\n///// tuner.fit() returned: ", type(result), " - ", result[0]) #we should only look at result[0] for some reason?
     print(pretty_print(result))
 
-    ccb.set_path("Placeholder")
     ray.shutdown()
 
 

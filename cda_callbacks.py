@@ -6,9 +6,21 @@ from ray.rllib.algorithms.callbacks import DefaultCallbacks
 from ray.tune.logger import pretty_print
 
 class CdaCallbacks (DefaultCallbacks):
-    """This class provides utility callbacks that RLlib training algorithms invoke at various points."""
+    """This class provides utility callbacks that RLlib training algorithms invoke at various points.
+        For now, we need to hard-code the checkpoint file here, because there is no clear way to pass that info in.
+        This needs to be the path to an algorithm-level directory. This class currently only handles a one-policy
+        situation (could be used by multiple agents), with the policy named "default_policy".
+    """
 
-    #_checkpoint_path = None #static class variable that will be seen by Algorithm's instance
+    # Here is a new checkpoint made on 3/10/23 (on the Git branch tune-checkpointing, commit 4ae6)
+    #_checkpoint_path = "/home/starkj/projects/cda0/test/level0-pt/05f87/checkpoint_000270"
+
+    # More recent, collected on 3/13/23. Well-trained level 0 model (mean_reward ~10, min_reward > 0)
+    #_checkpoint_path = "/home/starkj/projects/cda0/test/level0-pt/0d8e1/PPO_00001/checkpoint_000420"
+
+    _checkpoint_path = None
+
+    #####################################################################################################
 
     def __init__(self,
                  legacy_callbacks_dict: Dict[str, callable] = None
@@ -22,15 +34,15 @@ class CdaCallbacks (DefaultCallbacks):
                 ) -> None:
         """Provides an OO approach to setting the static checkpoint path location."""
 
-        #CdaCallbacks._checkpoint_path = path
-        #print("///// CdaCallbacks.set_path confirming that path has been stored as ", CdaCallbacks._checkpoint_path)
-        pass
+        CdaCallbacks._checkpoint_path = path
+        print("///// CdaCallbacks.set_path confirming that path has been stored as ", CdaCallbacks._checkpoint_path)
 
 
     def on_algorithm_init(self, *,
                           algorithm:    "PPO", #TODO: does this need to be "PPO"?
                           **kwargs,
                          ) -> None:
+
         """Called when a new algorithm instance had finished its setup() but before training begins.
             We will use it to load NN weights from a previous checkpoint.  No kwargs are passed in,
             so we have to resort to some tricks to retrieve the deisred checkpoint name.  The RLlib
@@ -41,11 +53,9 @@ class CdaCallbacks (DefaultCallbacks):
             and belongs to the one and only policy, named "default_policy".
         """
 
-        # For now, we need to hard-code the checkpoint file here, because there is no clear way to pass that info in.
-        # Here is a new checkpoint made on 3/10/23 (on the Git branch tune-checkpointing, commit 4ae6)
-        ckpt = "/home/starkj/projects/cda0/test/level0-pt/05f87/checkpoint_000270"
-        # More recent, collected on 3/13/23
-        ckpt = "/home/starkj/projects/cda0/test/level0-pt/0d8e1/PPO_00001/checkpoint_000420"
+        if CdaCallbacks._checkpoint_path is None:
+            return
+        print("///// CdaCallbacks invoked to restore model from checkpoint ", CdaCallbacks._checkpoint_path)
 
         # Get the initial weights from the newly created NN and sample some values
         initial_weights = algorithm.get_weights(["default_policy"])["default_policy"]
@@ -53,7 +63,7 @@ class CdaCallbacks (DefaultCallbacks):
 
         # Load the checkpoint into a Policy object and pull the NN weights from there. Doing this avoids all the extra
         # trainig info that is stored with the full policy and the algorithm.
-        temp_policy = Policy.from_checkpoint("{}/policies/default_policy".format(ckpt))
+        temp_policy = Policy.from_checkpoint("{}/policies/default_policy".format(CdaCallbacks._checkpoint_path))
         saved_weights = temp_policy.get_weights()
         self._print_sample_weights("Restored from checkpoint", saved_weights)
 
