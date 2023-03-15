@@ -940,18 +940,18 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If there was a single- or multi-car crash or then set a penalty, larger for multi-car crash
             if crash:
-                reward = -50.0
+                reward = -5.0
                 explanation = "Crashed into a vehicle. "
 
             elif off_road:
-                reward = -40.0
+                reward = -3.0
                 explanation = "Ran off road. "
 
             # Else if the vehicle just stopped in the middle of the road then
             elif stopped:
 
                 # Subtract a penalty for no movement
-                reward = -30.0
+                reward = -2.0
                 explanation = "Vehicle stopped. "
 
             # Else (episode ended successfully)
@@ -959,26 +959,23 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
                 # If we are allowed to reward the completion bonus then add amount inversely proportional
                 # to the length of the episode.
-                if self.reward_for_completion:
-                    #diff = 600 - self.steps_since_reset
-                    #reward = max(47.26e-6 * diff*diff, 0.0)
-                    reward = min(max(10.0 - 0.05882*(self.steps_since_reset - 130), 0.0), 10.0)
-                    explanation = "Successful episode! {} steps".format(self.steps_since_reset)
-                else:
-                    reward = 0.0
-                    explanation = "Completed episode, but no bonus due to rule violation."
+                if self.difficulty_level > 0:
+                    if self.reward_for_completion:
+                        reward = min(max(10.0 - 0.05882*(self.steps_since_reset - 130), 0.0), 10.0)
+                        explanation = "Successful episode! {} steps".format(self.steps_since_reset)
+                    else:
+                        explanation = "Completed episode, but no bonus due to rule violation."
 
         # Else, episode still underway
         else:
 
-            """
-            # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
-            jerk = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
-            penalty = 0.002 * jerk*jerk
-            reward -= penalty
-            if penalty > 0.0001:
-                explanation += "Jerk pen {:.4f}. ".format(penalty)
-            """
+            if self.difficulty_level > 0:
+                # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
+                jerk = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
+                penalty = 0.002 * jerk*jerk
+                reward -= penalty
+                if penalty > 0.0001:
+                    explanation += "Jerk pen {:.4f}. ".format(penalty)
 
             # Penalty for exceeding roadway speed limit - in some cases, this triggers a cancellation of the
             # eventual completion award (similar punishment to stopping the episode, but without changing the
@@ -994,40 +991,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 penalty = 0.4 * diff*diff
                 explanation += "Low speed pen {:.4f}. ".format(penalty)
             reward -= penalty
-
-            """
-            # Track historical speed & accels for possible incentives
-            self.accel_hist.append(self.obs[self.EGO_ACCEL_CMD_CUR])
-            self.speed_hist.append(norm_speed)
-            avg_accel = 0.0
-            avg_speed = SimpleHighwayRamp.ROAD_SPEED_LIMIT
-            if len(self.accel_hist) == self.accel_hist.maxlen:
-                avg_accel = mean(self.accel_hist)
-                avg_speed = mean(self.speed_hist)
-            bonus = 0.0
-            max_bonus = 0.15
-
-            # If recent speed was above speed limit and avg accel since then was negative then
-            if norm_speed > 1.02  and  self.obs[self.EGO_ACCEL_CMD_CUR] < 0.0:
-
-                # Award a bonus proportional to the ratio of accel / excess speed
-                slope = -self.obs[self.EGO_ACCEL_CMD_CUR]/SimpleHighwayRamp.MAX_ACCEL * max_bonus / (0.2 - 0.02)
-                bonus = slope * (norm_speed - 1.02)
-
-            # Else if recent speed was significantly below speed limit and avg accel since then was positive then
-            elif norm_speed < 0.95  and  self.obs[self.EGO_ACCEL_CMD_CUR] > 0.0:
-
-                # Award a bonus proportional to the ratio of accel / speed deficit
-                intercept = self.obs[self.EGO_ACCEL_CMD_CUR] / SimpleHighwayRamp.MAX_ACCEL * max_bonus
-                slope = -intercept / 0.95
-                bonus = slope * norm_speed + intercept
-
-            if bonus > 0.0001:
-                reward += bonus
-                explanation += "Accel bonus {:.4f}. ".format(bonus)
-            #print("///// ep {}, step {}, speed {:.4f}, accel = {:.4f}, bonus = {:.4f}"
-            #        .format(self.episode_count, self.steps_since_reset, norm_speed, self.obs[self.EGO_ACCEL_CMD_CUR], bonus))
-            """
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
