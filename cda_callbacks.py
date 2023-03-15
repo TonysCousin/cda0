@@ -62,16 +62,19 @@ class CdaCallbacks (DefaultCallbacks):
         temp_ppo = PPO.from_checkpoint(ckpt)
         saved_weights = temp_ppo.get_weights()
         """
-        saved_weights = Policy.from_checkpoint("{}".format(ckpt)) #use "/policies/default_policy" to create a policy; else return is a dict
-        #print("\n///// CdaCallback.on_algorithm_init: temp_policy = ", type(temp_policy))
-        #saved_weights = temp_policy.get_weights()
+        temp_policy = Policy.from_checkpoint("{}/policies/default_policy".format(ckpt)) #use "/policies/default_policy" to create a policy; else return is a dict
+        print("\n///// CdaCallback.on_algorithm_init: temp_policy = ", type(temp_policy))
+        saved_weights = temp_policy.get_weights()
         print("///// checkpoint loaded. saved_weights = ", type(saved_weights))
 
         self._print_sample_weights("Restored from checkpoint", saved_weights)
-        algorithm.set_weights(saved_weights)    ### ERROR HERE in ndarray type conversion
+        to_algo = {"default_policy": saved_weights} #should be of type Dict[PolicyId, ModelWeights]; PolicyID = str, ModelWeights = dict
+        algorithm.set_weights(to_algo)    ### ERROR HERE in ndarray type conversion
         print("///// returned from algorithm.set_weights.")
         verif_weights = algorithm.get_weights(["default_policy"])
         self._print_sample_weights("Verified now in algo to be trained", verif_weights)
+
+
 
         """TODO: can't get the RLlib Algorithm instance of CdaCallbacks to recognize a value that I put in here.
         # if a checkpoint location has been specified, then we will attempt to load the weights from it
