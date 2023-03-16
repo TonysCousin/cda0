@@ -1210,7 +1210,18 @@ program as a system test.
 	  well, so I restored it almost to its original (Dec 22) logic; the exception was that completion reward is
 	  now a flat 10 points (for level 0), instead of being scaled based on time to complete.
 	* 13 of 15 trials terminated successfully (min reward > 5), which put the mean rewards all close to 10.
+	* Inference tests revealed:
+		* Trial 1 YES, with 4/4 runs getting reward > 4, and one > 9.
+		* Trial 2 no good. Accel was pretty limited, and even wrong sign sometimes.
+		* Trial 3 no good. Accel was not as much as some of the others, and scores < 5.
+		* trial 6 is very small accels, and even wrong sign in some cases.
+		* trial 9 YES, with 4/4 runs getting reward > 4, one at 9.8.
+		* Trial 10 no good. Accel is virtually 0.
+		* trial 14 no good. It has ~0 accel, and is happy to go way too fast or too slow.
+		* All tested trials perform well on lane change - no maneuvers at all, and LC cmd close to 0.
+	* Saved trials 1 & 9 in project dir (and checked them into Git).
 
+NEXT STEP: verify reward structure for level 1 and run it.
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
 AI: with PBT synch = True, watch for errored trial to see if it hangs the whole process; I now have
