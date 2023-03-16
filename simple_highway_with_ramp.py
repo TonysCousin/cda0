@@ -940,18 +940,18 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If there was a single- or multi-car crash or then set a penalty, larger for multi-car crash
             if crash:
-                reward = -5.0
+                reward = -50.0
                 explanation = "Crashed into a vehicle. "
 
             elif off_road:
-                reward = -3.0
+                reward = -40.0
                 explanation = "Ran off road. "
 
             # Else if the vehicle just stopped in the middle of the road then
             elif stopped:
 
                 # Subtract a penalty for no movement
-                reward = -2.0
+                reward = -20.0
                 explanation = "Vehicle stopped. "
 
             # Else (episode ended successfully)
@@ -959,7 +959,11 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
                 # If we are allowed to reward the completion bonus then add amount inversely proportional
                 # to the length of the episode.
-                if self.difficulty_level > 0:
+                if self.difficulty_level == 0:
+                    reward = 10.0
+                    explanation = "Successful episode!"
+
+                else:
                     if self.reward_for_completion:
                         reward = min(max(10.0 - 0.05882*(self.steps_since_reset - 130), 0.0), 10.0)
                         explanation = "Successful episode! {} steps".format(self.steps_since_reset)

@@ -1199,8 +1199,19 @@ program as a system test.
 		tune.impl.tuner_internal.py
 ****	* Verified that checkpoints are now working!
 
+========================================
+===== Curriculum training for cda0 =====
+========================================
+
+* Began training level 0 (experiment 7ea15)
+	* I had adjusted the reward function to remove completion bonus and to reduce the magnitude of penalties for
+	  crashing or stopping (e.g. crash into vehicle went from -50 to -5) in an attempt to narrow the range of
+	  potential rewards and therefore keep the reward gradient more moderate. However, this didn't learn very
+	  well, so I restored it almost to its original (Dec 22) logic; the exception was that completion reward is
+	  now a flat 10 points (for level 0), instead of being scaled based on time to complete.
+	* 13 of 15 trials terminated successfully (min reward > 5), which put the mean rewards all close to 10.
+
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
-AI: figure out how PBT acts when one of the stop conditions is met on one of its trials.
 AI: with PBT synch = True, watch for errored trial to see if it hangs the whole process; I now have
 	rollout.recreate_failed_workers = True, which should bring them back most of the time.

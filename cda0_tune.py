@@ -47,8 +47,8 @@ def main(argv):
     # let_it_run can be a single value if it applies to all phases.
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
-    success_threshold   = [8.0,         8.0,        8.0,        5.0,        1.0]
-    failure_threshold   = [2.0,         2.0,        0.0,        -5.0,       -10.0]
+    success_threshold   = [9.0,         9.0,        8.0,        5.0,        1.0]
+    failure_threshold   = [5.0,         4.0,        0.0,        -5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
     max_iterations      = 800
@@ -110,7 +110,7 @@ def main(argv):
                     num_gpus_per_trainer_worker = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
-    cfg.rollouts(   num_rollout_workers         = 1, #num remote workers _per trial_ (remember that there is a local worker also)
+    cfg.rollouts(   num_rollout_workers         = 5, #num remote workers _per trial_ (remember that there is a local worker also)
                                                      # 0 forces rollouts to be done by local worker
                     num_envs_per_worker         = 1,
                     rollout_fragment_length     = 200, #timesteps pulled from a sampler
@@ -122,7 +122,7 @@ def main(argv):
     # NOTE: lr_schedule is only defined for policy gradient algos
     # NOTE: all items below lr_schedule are PPO-specific
     cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
-                    train_batch_size            = 200, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
+                    train_batch_size            = 1000, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
                     lr                          = tune.loguniform(1e-6, 1e-3),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 32, #must be <= train_batch_size (and divide into it)
@@ -185,7 +185,7 @@ def main(argv):
                 )
 
     run_config = RunConfig(
-                    name                        = "cda0",
+                    name                        = "cda0/level0",
                     local_dir                   = "~/ray_results",
                     #stop                        = stopper,
                     stop                        = {"episode_reward_min":        failure_threshold[difficulty_level],
@@ -207,7 +207,7 @@ def main(argv):
 
     result = tuner.fit()
     #print("\n///// tuner.fit() returned: ", type(result), " - ", result[0]) #we should only look at result[0] for some reason?
-    print(pretty_print(result))
+    print(pretty_print(result[0]))
 
     ray.shutdown()
 
