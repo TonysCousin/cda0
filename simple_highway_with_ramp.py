@@ -112,7 +112,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         + The environment supports curriculum learning with multiple levels of difficulty. The levels are:
             0 = solo agent drives a (possibly short) straight lane to the end without departing the roadway with limited init spd;
                 focus is on making legal lane changes in small numbers (lanes 0 & 1 only)
-            1 = level 0 but always start near beginning of track with full possible initial speeds
+            1 = level 0 but always start near beginning of track with full range of possible initial speeds
             2 = level 1 plus added emphasis on minimizing jerk and speed changes
             3 = level 2 plus solo agent driving on entry ramp (lane 2), and forced to change lanes to complete the course
             4 = level 3 plus 3 sequential, constant-speed vehicles in lane 1
@@ -984,15 +984,21 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # Penalty for exceeding roadway speed limit - in some cases, this triggers a cancellation of the
             # eventual completion award (similar punishment to stopping the episode, but without changing the
             # physical environment)
+            high_speed_mult = 10.0
+            low_speed_mult = 0.4
+            if self.difficulty_level > 0:
+                high_speed_mult = 20.0
+                low_speed_mult = 2.0
+
             norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT #1.0 = speed limit
             penalty = 0.0
             if norm_speed > 1.0:
                 diff = norm_speed - 1.0
-                penalty = 10.0 * diff*diff
+                penalty = high_speed_mult * diff*diff
                 explanation += "HIGH speed pen {:.4f}. ".format(penalty)
             elif norm_speed < 0.95:
                 diff = 0.95 - norm_speed
-                penalty = 0.4 * diff*diff
+                penalty = low_speed_mult * diff*diff
                 explanation += "Low speed pen {:.4f}. ".format(penalty)
             reward -= penalty
 

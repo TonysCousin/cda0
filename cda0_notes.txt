@@ -1209,7 +1209,11 @@ program as a system test.
 	  potential rewards and therefore keep the reward gradient more moderate. However, this didn't learn very
 	  well, so I restored it almost to its original (Dec 22) logic; the exception was that completion reward is
 	  now a flat 10 points (for level 0), instead of being scaled based on time to complete.
+
+3/16/23
+
 	* 13 of 15 trials terminated successfully (min reward > 5), which put the mean rewards all close to 10.
+	  Most trials took no more than ~90k steps.
 	* Inference tests revealed:
 		* Trial 1 YES, with 4/4 runs getting reward > 4, and one > 9.
 		* Trial 2 no good. Accel was pretty limited, and even wrong sign sometimes.
@@ -1221,7 +1225,13 @@ program as a system test.
 		* All tested trials perform well on lane change - no maneuvers at all, and LC cmd close to 0.
 	* Saved trials 1 & 9 in project dir (and checked them into Git).
 
-NEXT STEP: verify reward structure for level 1 and run it.
+* Ran training level 1 (experiment ef817) starting with level 0 checkpoint from trial 1.
+	* Prior to running, I changed the reward structure to give higher weights to the high-speed and low-speed
+	  penalties.
+	* Only one trial, #13, passed the stop criterion of min reward > 5, and that after ~500k steps. All other trials
+	  settled out with mean rewards in the 0-5 range and min rewards in -60 to -10. Inference on this performed
+	  really well, accelerating smartly from low initial speeds, and 4/4 achieving episode rewards > 7.
+
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
 AI: with PBT synch = True, watch for errored trial to see if it hangs the whole process; I now have

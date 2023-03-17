@@ -48,7 +48,7 @@ def main(argv):
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
     success_threshold   = [9.0,         9.0,        8.0,        5.0,        1.0]
-    failure_threshold   = [5.0,         4.0,        0.0,        -5.0,       -10.0]
+    failure_threshold   = [5.0,         5.0,        0.0,        -5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
     max_iterations      = 800
@@ -185,7 +185,7 @@ def main(argv):
                 )
 
     run_config = RunConfig(
-                    name                        = "cda0/level0",
+                    name                        = "cda0/level1",
                     local_dir                   = "~/ray_results",
                     #stop                        = stopper,
                     stop                        = {"episode_reward_min":        failure_threshold[difficulty_level],

@@ -18,7 +18,10 @@ class CdaCallbacks (DefaultCallbacks):
     # More recent, collected on 3/13/23. Well-trained level 0 model (mean_reward ~10, min_reward > 0)
     #_checkpoint_path = "/home/starkj/projects/cda0/test/level0-pt/0d8e1/PPO_00001/checkpoint_000420"
 
-    _checkpoint_path = None
+    # Level 0 completed on 3/16/23:
+    _checkpoint_path = "/home/starkj/projects/cda0/test/level0-pt/7ea15/trial01/checkpoint_000099"
+
+    #_checkpoint_path = None
 
     #####################################################################################################
 
