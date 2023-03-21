@@ -13,13 +13,22 @@ class CdaCallbacks (DefaultCallbacks):
     """
 
     # Here is a new checkpoint made on 3/10/23 (on the Git branch tune-checkpointing, commit 4ae6)
-    #_checkpoint_path = "/home/starkj/projects/cda0/test/level0-pt/05f87/checkpoint_000270"
+    #_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/05f87/checkpoint_000270"
 
     # More recent, collected on 3/13/23. Well-trained level 0 model (mean_reward ~10, min_reward > 0)
-    #_checkpoint_path = "/home/starkj/projects/cda0/test/level0-pt/0d8e1/PPO_00001/checkpoint_000420"
+    #_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/0d8e1/PPO_00001/checkpoint_000420"
 
     # Level 0 completed on 3/16/23:
-    _checkpoint_path = "/home/starkj/projects/cda0/test/level0-pt/7ea15/trial01/checkpoint_000099"
+    #_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/7ea15/trial01/checkpoint_000099"
+
+    # Level 1 completed on 3/16/23:
+    #_checkpoint_path = "/home/starkj/projects/cda0/training/level1-pt/ef817/trial13/checkpoint_000371"
+
+    # Level 0 completed on 3/18/23:
+    #_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/e43eb/trial00/checkpoint_000328"
+
+    # Level 2 completed on 3/19/23:
+    _checkpoint_path = "/home/starkj/projects/cda0/training/level2/eee95/trial10/checkpoint_000171"
 
     #_checkpoint_path = None
 

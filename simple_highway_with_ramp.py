@@ -986,7 +986,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # physical environment)
             high_speed_mult = 10.0
             low_speed_mult = 0.4
-            if self.difficulty_level > 0:
+            if self.difficulty_level == 1  or  self.difficulty_level == 2:
                 high_speed_mult = 20.0
                 low_speed_mult = 2.0
 

@@ -20,14 +20,19 @@ def main(argv):
     prng = np.random.default_rng()
 
     # Handle any args
-    if len(argv) == 1:
-        print("Usage is: {} <checkpoint> [starting lane]".format(argv[0]))
+    num_args = len(argv)
+    if num_args == 1  or  num_args == 3:
+        print("Usage is: {} <checkpoint> [learning_level, starting_lane]".format(argv[0]))
         sys.exit(1)
 
     checkpoint = argv[1]
+    learning_level = 0
     start_lane = int(prng.random()*3)
     if len(argv) > 2:
-        lane = int(argv[2])
+        level = int(argv[2])
+        if 0 <= level <= 6:
+            learning_level = level
+        lane = int(argv[3])
         if 0 <= lane <= 2:
             start_lane = lane
 
@@ -36,6 +41,7 @@ def main(argv):
     # Set up the environment
     env_config = {  "time_step_size":       0.5,
                     "debug":                0,
+                    "difficulty_level":     learning_level,
                     "init_ego_lane":        start_lane,
                     "neighbor_speed":       29.1,
                     "neighbor_start_loc":   320.0 #dist downtrack from beginning of lane 1 for n3, m
@@ -52,7 +58,7 @@ def main(argv):
 
     # PPO - need to match checkpoint being read!
     model = cfg.to_dict()["model"]
-    model["fcnet_hiddens"]                  = [128, 50]
+    model["fcnet_hiddens"]                  = [256, 128]
     model["fcnet_activation"]               = "relu"
     model["post_fcnet_activation"]          = "linear"
     cfg.training(model = model)
@@ -63,15 +69,14 @@ def main(argv):
                    )
 
     env = SimpleHighwayRampWrapper(env_config)
-    print("///// Environment configured. Params are:")
-    print(pretty_print(cfg.to_dict()))
+    #print("///// Environment configured. Params are:")
+    #print(pretty_print(cfg.to_dict()))
 
     # Restore the selected checkpoint file
     # Note that the raw environment class is passed to the algo, but we are only using the algo to run the NN model,
     # not to run the environment, so any environment info we pass to the algo is irrelevant for this program.
     algo = cfg.build()
     #algo = ppo.PPO(config = config, env = SimpleHighwayRampWrapper) #needs the env class, not the object created above
-    print("///// algo object built.")
 
     algo.restore(checkpoint)
     print("///// Checkpoint {} successfully loaded.".format(checkpoint))

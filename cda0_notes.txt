@@ -1224,6 +1224,7 @@ program as a system test.
 		* trial 14 no good. It has ~0 accel, and is happy to go way too fast or too slow.
 		* All tested trials perform well on lane change - no maneuvers at all, and LC cmd close to 0.
 	* Saved trials 1 & 9 in project dir (and checked them into Git).
+***	* Considering level 0 complete.
 
 * Ran training level 1 (experiment ef817) starting with level 0 checkpoint from trial 1.
 	* Prior to running, I changed the reward structure to give higher weights to the high-speed and low-speed
@@ -1231,8 +1232,92 @@ program as a system test.
 	* Only one trial, #13, passed the stop criterion of min reward > 5, and that after ~500k steps. All other trials
 	  settled out with mean rewards in the 0-5 range and min rewards in -60 to -10. Inference on this performed
 	  really well, accelerating smartly from low initial speeds, and 4/4 achieving episode rewards > 7.
+***	* Considering level 1 complete.
 
+* Level 2 is not needed, since its objective is addressed with the level 1 solution.  Moving on to level 3.
+
+* Level 3 training begins, to teach driving on lane 2 and making the lane change to survive.
+	* Starting run aaf00
+
+3/17/23
+
+	* Training didn't work well. After 280k steps, only one trial had a mean reward > -10. Three trials errored,
+	  and the remainder paused forever waiting on them. So the setting for recovering workers doesn't help this
+	  situation with PBT. It seems the only answer is to not force it to sync.
+	* The 3 errors were from the Gaussian noise calculation (distribution.py) trying to work with tensors full
+	  of `nan`. Feels like a Ray defect.
+	* It seems that the agent isn't exploring lane changes enough to figure out the solution, so probably needs
+	  more noise.
+	* However, running inference on the best one (run 9 got mean reward ~-5), it handles the lane change well
+	  (never ran off road in 4/4 runs starting in lane 2). However, it has some sloppy speed control, usually
+	  preferring lower speeds. It consistently got rewards in the 7-8 range, however. Saving this run in the
+	  ray_results dir in case I want to use it as a baseline. Its reward curves look promising, like it would
+	  have probably reached the goal if it had been allowed to continue.
+
+* Next run (41fcb) started from the aaf00 trial 9 checkpoint saved in the previous run.
+	* Tweaked initial noise std dev to range [0.1, 0.5]. Also increased its duration from 200k to 250k steps.
+	* Set the PBT scheduler's synch param to False.
+	* Configured for 1 rollout worker, which increases the number of parallel trials from 2 to 4. I think this is
+	  important for asynch PBT perturbations, so that each trial has more to look at before making its decision.
+	* Reducing the num rollout workers, however, reduces the number of steps per iteration. Even though there are
+	  more trials running in parallel, they are doing less work, so the total progress against the wall clock is
+	  maybe no better than having more workers running fewer trials.
+	* Several of the trials passed the stop criterion of min reward > 0, but I'm not happy with it. First, these
+	  ended up with mean rewards < 5. Second, these conditions just suddenly appeared, in every trial, for a single
+	  iteration, where the previous iteration had mins around -50. With small batch sizes, it's hard to believe that
+	  the agent has suddenly figured it all out in a single iteration. I would rather see the trend gradually grow
+	  to the threshold value.
+	* Inference runs on a couple of the "successful" trials showed performance no better than the starting
+	  baseline.
+
+* Next run (5501e) starting again from the aaf00 trial 9 checkpoint.
+	* Increased num_rollout_workers from 1 to 4, and gave each 0.25 gpu.
+	* Increased sgd_minibatch from 32 to 64 to help smooth out results. To accommodate, I increased rollout
+	  fragment length from 200 to 256, and train_batch_size from 200 to 1024.
+
+3/18/23
+
+	* None of the trials got a mean reward > 0, but all ran to iteration limit of 800.
+	* I suspect that the NN is just not large enough to handle the secondary reactions to its chosen actions.
+
+* Next run (e43eb) starting from scratch and learning level 0.
+	* Increased NN structure from [128, 50] to [256, 128]
+
+3/19/23
+
+	* All trials finished successfully, the longest taking ~420k steps. Trial 0 had both the mean and min rewards
+	  climbing most gradually toward the end, so both were in good shape for a few iterations. I chose this one
+	  to move forward, after confirming its inference performed well.
+
+* Next run (eee95) started from the previous level 0 checkpoint (e43eb) and is training to level 2 with no HP changes.
+	* First to complete was trial 10, after 210k steps. It worked well in inference, although it sometimes
+	  commands negative accel (~-0.08) when speed is below the limit (26.8 m/s) with significant distance remaining.
+
+3/20/23
+
+	* Trial 3 reached a high mean reward of 8.4 with a min of 6.7 at 847k steps, which met the success criteria,
+	  but everything else stayed level in the 4-6 range after ~400k time steps.
+	* Inference on trial 10 looks very good. On one run its total score was only 5.15, due to a low starting speed.
+	  In recovering from that it piled up lots of large low-speed penalties (~0.5/step initially). It was fairly
+	  aggressive on the accel, but could have done more. It maxed out around 0.48; not sure why it didn't try up
+	  to 1.0. This is disappointing, but not terrible. It also probably explains why nobody else was able to get
+	  averages (or mins) any higher than they did, so I need to lower my success criteria or ease up on the
+	  penalty calcs.
+	* Inference on trial 3 is pretty good also, but it has a little more tendency to lower speeds and lower accels
+	  than 10, so leaving it behind.
+
+* Next run () at level 3
+	* Changed max iterations from 800 to 500 and tweaked the success/failure criteria a bit to work with relaxed
+	  speed penalties.
+	* Changed reward function to relax the stiff speed penalties that were applied for levels 1 & 2. I figure the
+	  agent has learned speed control at those levels, and now just needs a gentle reminder, as was in level 0.
+	* Changed stopping criteria to use evaluation metrics instead of training metrics; also changed evaluation
+	  config to go at every 10 iters (was 20) and in parallel to training runs to keep it from slowing things down.
+	  The tag prefix to be used for evaluation metrics seems to be "sampler_results/", not "evaluation/"
+	* None of the trials even came close to succeeding, which is strange, since it learned level 3 pretty well
+	  last time around.
+**	* I noticed that the CdaCallbacks.on_algorithm_init() is being called (and thus re-loading the baseline
+	  checkpoint) every time a trial passes its perturb interval. This seems to be having the effect of erasing all
+	  of the learning that has happened in the past perturb cycle. I initiated a question in Ray Discuss.
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
-AI: with PBT synch = True, watch for errored trial to see if it hangs the whole process; I now have
-	rollout.recreate_failed_workers = True, which should bring them back most of the time.

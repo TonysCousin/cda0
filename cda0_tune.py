@@ -47,11 +47,11 @@ def main(argv):
     # let_it_run can be a single value if it applies to all phases.
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
-    success_threshold   = [9.0,         9.0,        8.0,        5.0,        1.0]
-    failure_threshold   = [5.0,         5.0,        0.0,        -5.0,       -10.0]
+    success_threshold   = [9.5,         9.5,        9.5,        9.0,        1.0]
+    failure_threshold   = [6.0,         6.0,        6.0,        5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 800
+    max_iterations      = 500
 
     stopper = StopLogic(max_ep_timesteps        = 400,
                         max_iterations          = max_iterations,
@@ -80,7 +80,7 @@ def main(argv):
 
     # Add dict for model structure
     model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = [128, 50] #[256, 256]
+    model_config["fcnet_hiddens"]               = [256, 128]
     model_config["fcnet_activation"]            = "relu"
     model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
     cfg.training(model = model_config)
@@ -88,11 +88,11 @@ def main(argv):
     # Add exploration noise params
     explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.1, 0.4) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = tune.uniform(0.1, 0.5) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = 200000  #tune.choice([100000, 400000]) #was 900k
+    explore_config["scale_timesteps"]           = 250000  #tune.choice([100000, 400000]) #was 900k
     cfg.exploration(explore = True, exploration_config = explore_config)
 
     # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
@@ -104,16 +104,16 @@ def main(argv):
     #       if gpu is to be used for local workder only, then the number of gpus available need to be divided among the
     #       number of possible simultaneous trials (as well as gpu memory).
     # This config will run 5 parallel trials on the Tensorbook.
-    cfg.resources(  num_gpus                    = 0.2, #for the local worker, which does the learning & evaluation runs
+    cfg.resources(  num_gpus                    = 0.5, #for the local worker, which does the learning & evaluation runs
                     num_cpus_for_local_worker   = 1,
                     num_cpus_per_trainer_worker = 1, #also applies to the local worker and evaluation workers
                     num_gpus_per_trainer_worker = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
-    cfg.rollouts(   num_rollout_workers         = 5, #num remote workers _per trial_ (remember that there is a local worker also)
+    cfg.rollouts(   num_rollout_workers         = 4, #num remote workers _per trial_ (remember that there is a local worker also)
                                                      # 0 forces rollouts to be done by local worker
                     num_envs_per_worker         = 1,
-                    rollout_fragment_length     = 200, #timesteps pulled from a sampler
+                    rollout_fragment_length     = 256, #timesteps pulled from a sampler
                     batch_mode                  = "complete_episodes",
                     recreate_failed_workers     = True,
     )
@@ -122,10 +122,10 @@ def main(argv):
     # NOTE: lr_schedule is only defined for policy gradient algos
     # NOTE: all items below lr_schedule are PPO-specific
     cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
-                    train_batch_size            = 1000, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
+                    train_batch_size            = 1024, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
                     lr                          = tune.loguniform(1e-6, 1e-3),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
-                    sgd_minibatch_size          = 32, #must be <= train_batch_size (and divide into it)
+                    sgd_minibatch_size          = 64, #must be <= train_batch_size (and divide into it)
                     entropy_coeff               = tune.uniform(0.0, 0.008),
                     kl_coeff                    = tune.uniform(0.35, 0.8),
                     #clip_actions                = True,
@@ -133,10 +133,10 @@ def main(argv):
     )
 
     # Evaluation process
-    cfg.evaluation( evaluation_interval         = 20, #iterations
+    cfg.evaluation( evaluation_interval         = 10, #iterations
                     evaluation_duration         = 15, #units specified next
                     evaluation_duration_unit    = "episodes",
-                    evaluation_parallel_to_training = False, #True requires evaluation_num_workers > 0
+                    evaluation_parallel_to_training = True, #True requires evaluation_num_workers > 0
                     evaluation_num_workers      = 2,
     )
 
@@ -163,8 +163,9 @@ def main(argv):
                     perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
                     burn_in_period              = burn_in_period,       #num initial iterations before any perturbations occur
                     quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
-                    resample_probability        = 0.3,                  #resampling and mutation probability at each decision point
-                    synch                       = True,                 #True:  all trials must finish before each perturbation decision is made
+                    resample_probability        = 0.5,                  #resampling and mutation probability at each decision point
+                    synch                       = False,                #True:  all trials must finish before each perturbation decision is made
+                                                                        # if any trial errors then all trials hang!
                                                                         #False:  each trial finishes & decides based on available info at that time,
                                                                         # then immediately moves on. If True and one trial dies, then PBT hangs and all
                                                                         # remaining trials go into perpetual PAUSED state.
@@ -180,15 +181,16 @@ def main(argv):
                     #metric                      = "episode_reward_mean",
                     #mode                        = "max",
                     scheduler                   = scheduler,
-                    num_samples                 = 15 #number of HP trials
+                    num_samples                 = 16 #number of HP trials
                     #max_concurrent_trials      = 8
                 )
 
     run_config = RunConfig(
-                    name                        = "cda0/level1",
+                    name                        = "cda0",
                     local_dir                   = "~/ray_results",
                     #stop                        = stopper,
-                    stop                        = {"episode_reward_min":        failure_threshold[difficulty_level],
+                    stop                        = {"sampler_results/episode_reward_min":        failure_threshold[difficulty_level],
+                                                   "sampler_results/episode_reward_mean":       success_threshold[difficulty_level],
                                                    "training_iteration":        max_iterations,
                                                    },
                     sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
@@ -206,8 +208,11 @@ def main(argv):
     print("\n///// Tuner created.\n")
 
     result = tuner.fit()
-    #print("\n///// tuner.fit() returned: ", type(result), " - ", result[0]) #we should only look at result[0] for some reason?
-    print(pretty_print(result[0]))
+    best_result = result.get_best_result(metric = "episode_reward_mean", mode = "max")
+    print("\n///// Fit completed...")
+    print("      Best result: ", pretty_print(best_result)) #ray.air.result.Result
+    print("      Best checkpoint is ", best_result.checkpoint)
+    print("      Best metrics: ", pretty_print(best_result.metrics))
 
     ray.shutdown()
 
