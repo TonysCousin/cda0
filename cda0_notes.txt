@@ -1306,7 +1306,7 @@ program as a system test.
 	* Inference on trial 3 is pretty good also, but it has a little more tendency to lower speeds and lower accels
 	  than 10, so leaving it behind.
 
-* Next run () at level 3
+* Next run (e629c) at level 3
 	* Changed max iterations from 800 to 500 and tweaked the success/failure criteria a bit to work with relaxed
 	  speed penalties.
 	* Changed reward function to relax the stiff speed penalties that were applied for levels 1 & 2. I figure the
@@ -1319,5 +1319,45 @@ program as a system test.
 **	* I noticed that the CdaCallbacks.on_algorithm_init() is being called (and thus re-loading the baseline
 	  checkpoint) every time a trial passes its perturb interval. This seems to be having the effect of erasing all
 	  of the learning that has happened in the past perturb cycle. I initiated a question in Ray Discuss.
+
+* Next run (2d9c3) at level 3, using normal random search on HPs (not PBT).
+	* Starting from checkpoint of level 2 yesterday (eee95); no other changes from the previous run.
+	* Log confirms that it is only restoring from the checkpoint once per trial.
+	* Several trials looked promising until around 200k to 300k steps, then reward dramatically dropped or leveled
+	  off. The noise schedule stops at 250k steps.
+
+* Next run (02121) at level 3, repeated the above, but extended the noise degradation out to 500k steps.
+	* This was a little better. One trial reached mean reward ~7, one reached ~3 and another reached ~0. There was
+	  a bit of a drop-off after 500k, but less severe than before.
+	* Of these three, the HP ranges used were
+		* clip_param in [0.12, 0.25] from original range [0.1, 0.3]
+		* entropy_coeff	in [0.00060, 0.0027] from original range [0, 0.008]
+		* stddev noise in [0.19, 0.24] from original range [0.1, 0.5]
+		* kl_coeff in [0.36, 0.71] from original range [0.35, 0.8]
+		* LR in [3.2e-5, 14e-5] from original range [1e-6, 1e-3]
+
+3/21/23
+
+* Next run () at level 3, but this time starting from scratch (no baseline checkpoint)
+	* Tightened some of the HP search space around the effective ranges above.
+	* Since it is starting from scratch, it needs to learn everything, so extended max iterations from 500 to 1000
+	  and noise schedule from 500k to 1.2M time steps. Also revised noise final scale from 0.1 to 0.2 to keep it
+	  more involved.
+	* NOT using curriculum logic, just letting it run completely at level 3.
+	* No winners, but a couple trials hit mean reward ~ +5, so this is better. A few looked like they were still on
+	  upward trajectories when terminated at 1000 iterations, but mins are all at -20 or less.
+
+* Next run (7c62d) at level 3, starting from the level 2 checkpoint eee95. Otherwise, everything is same as previous
+  run.
+
+3/22/23
+
+	* Trial 9 was fairly successful, ending with a gradual climb to mean reward of 7.4 and min reward of 2.8. This
+	  did not meet the stopping criteria, but could be acceptable anyway. Two others reached above zero (trial 10
+	  mean reward maxed out at 5.4 and trial 7 reached mean reward of 2.5, but the best min for both of these was
+	  ~ -40).
+	* Inference on trial 9 shows pretty good performance, but it likes speeds a little on the low side (20-25 m/s).
+	  Rewards are consistently in the 8s. It seems it could use some remedial speed control training.
+	* Stored the trial 9 checkpoint for future reference.
 
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?

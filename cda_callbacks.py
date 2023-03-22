@@ -28,7 +28,10 @@ class CdaCallbacks (DefaultCallbacks):
     #_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/e43eb/trial00/checkpoint_000328"
 
     # Level 2 completed on 3/19/23:
-    _checkpoint_path = "/home/starkj/projects/cda0/training/level2/eee95/trial10/checkpoint_000171"
+    #_checkpoint_path = "/home/starkj/projects/cda0/training/level2/eee95/trial10/checkpoint_000171"
+
+    # Level 3 completed on 3/22/23:
+    _checkpoint_path = "/home/starkj/projects/cda0/training/level3/7c62d/trial09/checkpoint_001000"
 
     #_checkpoint_path = None
 

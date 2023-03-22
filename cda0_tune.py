@@ -51,7 +51,7 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 500
+    max_iterations      = 1000
 
     stopper = StopLogic(max_ep_timesteps        = 400,
                         max_iterations          = max_iterations,
@@ -88,11 +88,11 @@ def main(argv):
     # Add exploration noise params
     explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.1, 0.5) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = tune.uniform(0.18, 0.4) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
-    explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = 250000  #tune.choice([100000, 400000]) #was 900k
+    explore_config["final_scale"]               = 0.2 #tune.choice([1.0, 0.01])
+    explore_config["scale_timesteps"]           = 1200000  #tune.choice([100000, 400000]) #was 900k
     cfg.exploration(explore = True, exploration_config = explore_config)
 
     # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
@@ -123,10 +123,10 @@ def main(argv):
     # NOTE: all items below lr_schedule are PPO-specific
     cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
                     train_batch_size            = 1024, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    lr                          = tune.loguniform(1e-6, 1e-3),
+                    lr                          = tune.loguniform(1e-5, 3e-4),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 64, #must be <= train_batch_size (and divide into it)
-                    entropy_coeff               = tune.uniform(0.0, 0.008),
+                    entropy_coeff               = tune.uniform(0.001, 0.004),
                     kl_coeff                    = tune.uniform(0.35, 0.8),
                     #clip_actions                = True,
                     clip_param                  = tune.uniform(0.1, 0.3),
@@ -178,9 +178,9 @@ def main(argv):
     )
 
     tune_config = TuneConfig(
-                    #metric                      = "episode_reward_mean",
-                    #mode                        = "max",
-                    scheduler                   = scheduler,
+                    metric                      = "episode_reward_mean",
+                    mode                        = "max",
+                    #scheduler                   = scheduler,
                     num_samples                 = 16 #number of HP trials
                     #max_concurrent_trials      = 8
                 )
@@ -189,8 +189,8 @@ def main(argv):
                     name                        = "cda0",
                     local_dir                   = "~/ray_results",
                     #stop                        = stopper,
-                    stop                        = {"sampler_results/episode_reward_min":        failure_threshold[difficulty_level],
-                                                   "sampler_results/episode_reward_mean":       success_threshold[difficulty_level],
+                    stop                        = {"episode_reward_min":        failure_threshold[difficulty_level],
+                                                   "episode_reward_mean":       success_threshold[difficulty_level],
                                                    "training_iteration":        max_iterations,
                                                    },
                     sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
@@ -210,7 +210,6 @@ def main(argv):
     result = tuner.fit()
     best_result = result.get_best_result(metric = "episode_reward_mean", mode = "max")
     print("\n///// Fit completed...")
-    print("      Best result: ", pretty_print(best_result)) #ray.air.result.Result
     print("      Best checkpoint is ", best_result.checkpoint)
     print("      Best metrics: ", pretty_print(best_result.metrics))
 
