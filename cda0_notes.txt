@@ -1084,7 +1084,6 @@ program as a system test.
 				* However, in one mutation, it multiplied gamma by 1.2 and ended up with gamma > 1,
 				  which is illegal, but it continued to run.  If I can't find a way to limit this,
 				  then gamma is not a good candidate for perturbation!
-**				AI: getting a lot of warning from Ray about my env setup that I really should resolve soon.
 				* When I specified num_cpus_per_worker = 1 and num_rollout_workers = 1, it set up
 				  8 rollout workers, each with its own cpu. So it evaluated the 24 trials 8 at a
 				  time for 20 iters, then perturbed them all and started another round of 20 iters.
@@ -1353,11 +1352,57 @@ program as a system test.
 3/22/23
 
 	* Trial 9 was fairly successful, ending with a gradual climb to mean reward of 7.4 and min reward of 2.8. This
-	  did not meet the stopping criteria, but could be acceptable anyway. Two others reached above zero (trial 10
+	  did not meet the stopping criteria, but could be acceptable anyway. HPs for this run were:
+		* clip_param = 0.264
+		* entropy_coeff = 0.00287
+		* stddev = 0.229
+		* kl_coeff = 0.734
+		* lr = 7.6e-5
+	  Two others reached above zero (trial 10
 	  mean reward maxed out at 5.4 and trial 7 reached mean reward of 2.5, but the best min for both of these was
 	  ~ -40).
 	* Inference on trial 9 shows pretty good performance, but it likes speeds a little on the low side (20-25 m/s).
 	  Rewards are consistently in the 8s. It seems it could use some remedial speed control training.
 	* Stored the trial 9 checkpoint for future reference.
 
+* Run 7a976 starting from the level 3 checkpoint (7c62d), but running level 2 to help refresh its memory of good
+  speed control. Limited to 200 iterations.  All other HPs the same as previous run.
+	* All trials performed similarly, maxing out at ~ -20 for mean reward. Even the max rewards were often < 0, and
+	  for 2 trials they stayed locked in at -40 and -28.  How can this be, if it has already 
+	  succeeded at level 2? I hope it's due to the noise.  Need to try running without any noise.
+
+* Run 6bdc1 attempting to repeat the above run, but this time with exploration = False.
+	* None of the trials performed well. The best ones had mean rewards <-20.
+	* I'm done trying to re-train the level 3 agent at this time.  Moving on.
+
+* Run 7de26 - learning level 4, starting from the level 3 checkpoint (7c62d).
+	* Expanded the HP search range a little bit, noise & LR, in particular.
+
+3/23/23
+
+	* Two trials had a promising trajectory, 12 and 13, with mean rewards climbing towards 0, but everything else
+	  stayed at -40.  The HPs for these two defined the ranges
+		clip_param in [0.10, 0.29]
+		entropy_coeff in [0.0015, 0.0030]
+		stddev in [0.22, 0.27]
+		kl_coeff in [0.54, 0.57]
+		lr in [1.6e-6, 9.9e-5]
+
+* Run f3974 is a repeat of the previous run, trying level 4, but with the HPs tuning in the ranges listed above. Also
+  extended the max duration out to 1200 iterations.
+	* Most trials maintained mean reward at -40. Four climbed above, with the best trial (#2) reaching > -5, while
+	  its max reward was near 10 for a long time.
+	* Inference runs on trial 2 showed decent performance in all lanes, except that it tends to go way slower than
+	  speed limit. When in lane 1 it starte behind the neighbor cars, so they always pull away from it. The lane 2
+	  starts are interesting, but it's hard to tell if it is trying to avoid a collision with speed changes, or if
+	  that is just a natural effect of the random starting state. I need to give user more control of that starting
+	  situation.
+	* Storing trial 2 for future reference, as the only example of level 4 action I have at this point. Probably
+	  not demo-worthy, but it wouldn't be terrible.
+
+
+AI: enhance inference to closely control the starting locations & speeds of agent & neighbors in lane 2 to force 
+    various collision scenarios.
+AI: track down where Trainable/Algorithm object is instantiated and its setup() method is called, since this happens at
+    the beginning of each trial, and at each perturbation of each trial in PBT.
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?

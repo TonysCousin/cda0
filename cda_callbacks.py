@@ -68,6 +68,9 @@ class CdaCallbacks (DefaultCallbacks):
             and belongs to the one and only policy, named "default_policy".
         """
 
+        print("///// CdaCallbacks.on_algorithm_init: algorithm = ", type(algorithm), algorithm)
+        print("      algorithm._counters = ", algorithm._counters)
+
         if CdaCallbacks._checkpoint_path is None:
             return
         print("///// CdaCallbacks invoked to restore model from checkpoint ", CdaCallbacks._checkpoint_path)

@@ -51,7 +51,7 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        5.0,       -10.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 1000
+    max_iterations      = 1200
 
     stopper = StopLogic(max_ep_timesteps        = 400,
                         max_iterations          = max_iterations,
@@ -88,12 +88,13 @@ def main(argv):
     # Add exploration noise params
     explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.18, 0.4) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = tune.uniform(0.18, 0.6) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.2 #tune.choice([1.0, 0.01])
     explore_config["scale_timesteps"]           = 1200000  #tune.choice([100000, 400000]) #was 900k
     cfg.exploration(explore = True, exploration_config = explore_config)
+    #cfg.exploration(explore = False)
 
     # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
     # Use max_concurrent_trials in the TuneConfig area to limit the number of trials being run in parallel.
@@ -123,13 +124,13 @@ def main(argv):
     # NOTE: all items below lr_schedule are PPO-specific
     cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
                     train_batch_size            = 1024, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    lr                          = tune.loguniform(1e-5, 3e-4),
+                    lr                          = tune.loguniform(1e-6, 3e-4),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 64, #must be <= train_batch_size (and divide into it)
-                    entropy_coeff               = tune.uniform(0.001, 0.004),
-                    kl_coeff                    = tune.uniform(0.35, 0.8),
+                    entropy_coeff               = tune.uniform(0.001, 0.0035),
+                    kl_coeff                    = tune.uniform(0.4, 0.65),
                     #clip_actions                = True,
-                    clip_param                  = tune.uniform(0.1, 0.3),
+                    clip_param                  = tune.uniform(0.07, 0.36),
     )
 
     # Evaluation process
@@ -154,12 +155,12 @@ def main(argv):
     #print(pretty_print(cfg.to_dict()))
 
     chkpt_int                                   = 10                    #num iters between storing new checkpoints
-    perturb_int                                 = 50                    #num iters between policy perturbations (must be a multiple of chkpt period)
+    perturb_int                                 = 70                    #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation
-                    metric                      = "episode_reward_mean",#duplicate the TuneConfig setup - this is the metric used to rank trials
-                    mode                        = "max",                #duplicate the TuneConfig setup - looking for largest metric
+                    #metric                      = "episode_reward_mean",#duplicate the TuneConfig setup - this is the metric used to rank trials
+                    #mode                        = "max",                #duplicate the TuneConfig setup - looking for largest metric
                     perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
                     burn_in_period              = burn_in_period,       #num initial iterations before any perturbations occur
                     quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
