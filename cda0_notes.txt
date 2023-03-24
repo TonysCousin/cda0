@@ -1392,6 +1392,12 @@ program as a system test.
   extended the max duration out to 1200 iterations.
 	* Most trials maintained mean reward at -40. Four climbed above, with the best trial (#2) reaching > -5, while
 	  its max reward was near 10 for a long time.
+	* Trial 2 used 
+		clip_param = 0.19
+		entropy_coeff = 0.0022
+		stddev = 0.27
+		kl_coeff = 0.53
+		lr = 1.6e-6
 	* Inference runs on trial 2 showed decent performance in all lanes, except that it tends to go way slower than
 	  speed limit. When in lane 1 it starte behind the neighbor cars, so they always pull away from it. The lane 2
 	  starts are interesting, but it's hard to tell if it is trying to avoid a collision with speed changes, or if
@@ -1399,6 +1405,28 @@ program as a system test.
 	  situation.
 	* Storing trial 2 for future reference, as the only example of level 4 action I have at this point. Probably
 	  not demo-worthy, but it wouldn't be terrible.
+
+* Run 64981 training level 4 starting from scratch. I opened up the HP search speace some more, and allowed it 2000
+  iterations. I also turned on PBT scheduler, with first perturbation at 70 iterations, then every 50 afterward.
+
+3/24/23
+
+	* Four trials succeeded! Three of those four not only beat the mean reward target but also the min target
+	  simultaneously.  These are:
+		* Trial 1, rmean = 7.5, rmin = 5.7 at ~780k steps
+		* Trial 14, rmean = 5.1, rmin = -40 at ~1.1M steps
+		* Trial 2, rmean = 7.7, rmin = 6.5 at ~1.3M steps
+		* Trial 9, rmean = 7.3, rmin = 5.4 at ~1.6M steps
+	* All of the trials reached rmax ~10 before 500k steps and stayed there for the remainder. Most of the rmins
+	  remained in the -50 to -40 range.
+	* 10 of the trials errored out before completing. Every one was due to the common nan error in the Gaussian
+	  noise generator. Maybe this has to do with interaction with PBT? I never saw it before using PBT.
+	* Inference on trial 2 shows good performance from all 3 lanes, except that it likes the lower speeds (as low
+	  as 12 m/s, when speed limit is 29 m/s). During ramp merges, it definitely slows down to avoid the neighbors
+	  and then makes 2 lane changes to get on their far side, then accelerates smartly (69%) to get back to a
+	  reasonable speed.
+	* Training could be improved with better positioning of the ramp vehicle & its init speed. Also need a higher
+	  low speed penalty.
 
 
 AI: enhance inference to closely control the starting locations & speeds of agent & neighbors in lane 2 to force 

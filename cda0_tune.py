@@ -47,11 +47,11 @@ def main(argv):
     # let_it_run can be a single value if it applies to all phases.
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
-    success_threshold   = [9.5,         9.5,        9.5,        9.0,        1.0]
-    failure_threshold   = [6.0,         6.0,        6.0,        5.0,       -10.0]
+    success_threshold   = [9.5,         9.5,        9.5,        9.0,        5.0]
+    failure_threshold   = [6.0,         6.0,        6.0,        5.0,        0.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 1200
+    max_iterations      = 2000
 
     stopper = StopLogic(max_ep_timesteps        = 400,
                         max_iterations          = max_iterations,
@@ -124,13 +124,13 @@ def main(argv):
     # NOTE: all items below lr_schedule are PPO-specific
     cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
                     train_batch_size            = 1024, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    lr                          = tune.loguniform(1e-6, 3e-4),
+                    lr                          = tune.loguniform(1e-6, 1e-3),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 64, #must be <= train_batch_size (and divide into it)
-                    entropy_coeff               = tune.uniform(0.001, 0.0035),
-                    kl_coeff                    = tune.uniform(0.4, 0.65),
+                    entropy_coeff               = tune.uniform(0.0005, 0.008),
+                    kl_coeff                    = tune.uniform(0.3, 0.8),
                     #clip_actions                = True,
-                    clip_param                  = tune.uniform(0.07, 0.36),
+                    clip_param                  = tune.uniform(0.05, 0.4),
     )
 
     # Evaluation process
@@ -155,7 +155,7 @@ def main(argv):
     #print(pretty_print(cfg.to_dict()))
 
     chkpt_int                                   = 10                    #num iters between storing new checkpoints
-    perturb_int                                 = 70                    #num iters between policy perturbations (must be a multiple of chkpt period)
+    perturb_int                                 = 50                    #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation
@@ -181,7 +181,7 @@ def main(argv):
     tune_config = TuneConfig(
                     metric                      = "episode_reward_mean",
                     mode                        = "max",
-                    #scheduler                   = scheduler,
+                    scheduler                   = scheduler,
                     num_samples                 = 16 #number of HP trials
                     #max_concurrent_trials      = 8
                 )
