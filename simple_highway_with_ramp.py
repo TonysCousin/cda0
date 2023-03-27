@@ -127,7 +127,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
     OBS_SIZE                = 29
     VEHICLE_LENGTH          = 20.0      #m
-    MAX_SPEED               = 35.0      #vehicle's max achievable speed, m/s
+    MAX_SPEED               = 36.0      #vehicle's max achievable speed, m/s
     MAX_ACCEL               = 3.0       #vehicle's max achievable acceleration (fwd or backward), m/s^2
     MAX_JERK                = 4.0       #max desirable jerk for occupant comfort, m/s^3
     ROAD_SPEED_LIMIT        = 29.1      #Roadway's legal speed limit, m/s (29.1 m/s = 65 mph)
@@ -157,7 +157,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             neighbor_speed: initial speed of the neighbor vehicles, m/s (default = 29.1)
             neighbor_start_loc: initial location of neighbor vehicle N3 (the rear-most vehicle), m (default = 0)
             stopper:        the object used to render experiment stopping decisions (default = None)
-            difficulty_level: the fixed level of difficulty of the environment in [0, NUM_DIFFICULTY_LEVELS] (default = 0)
+            difficulty_level: the fixed level of difficulty of the environment in [0, NUM_DIFFICULTY_LEVELS) (default = 0)
             burn_in_iters:  num iterations that must pass before a difficulty level promotion is possible
        """
 
@@ -337,7 +337,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
 
     def reset(self, *,
-              seed:         int             = None,    #TODO: reserved for a future version of gym.Environment
+              seed:         int             = None,    #reserved for a future version of gym.Environment
               options:      dict            = None
              ) -> Tuple[np.array, dict]:
 
@@ -388,7 +388,17 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 ego_x = self.prng.random() * 500.0
                 ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED #any physically possible value
 
-            else: #levels 4 and up
+            elif self.difficulty_level == 4:
+                # We want to sync the agent in lane 2 to force it to avoid a collision by positioning it right next to the neighbors
+                if ego_lane_id == 2:
+                    ego_x = 0.0
+                    loc = int(self.prng.random()*2.0) + 3 #Choose all location 3 or 4 to get it used to falling behind the convoy
+                    ego_speed = self.initialize_ramp_vehicle_speed(loc)
+                else:
+                    ego_x = self.prng.random() * 500.0
+                    ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
+
+            else: #levels 5 and up
                 ego_x = self.prng.random() * 500.0
                 ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
 
@@ -396,7 +406,12 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         else:
             ego_lane_id = int(self.prng.random()*3) if self.init_ego_lane is None  else  self.init_ego_lane
             ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
-            ego_speed = self.prng.random() * 31.0 + 4.0 if self.init_ego_speed is None  else self.init_ego_speed
+
+            # If difficulty level 4, then always use the config value for merge relative position
+            if self.difficulty_level == 4  and  ego_lane_id == 2:
+                ego_speed = self.initialize_ramp_vehicle_speed(self.merge_relative_pos)
+            else:
+                ego_speed = self.prng.random() * 31.0 + 4.0 if self.init_ego_speed is None  else self.init_ego_speed
 
         # If this difficulty level uses neighbor vehicles then initialize their speed and starting point
         n_loc = 0.0
@@ -405,7 +420,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             n_loc = self.neighbor_start_loc
             n_speed = self.neighbor_speed
             if self.neighbor_print_latch:
-                print("///// reset worker {}: Neighbor vehicles on the move in level 3. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
+                print("///// reset worker {}: Neighbor vehicles on the move in level 4. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
                         .format(self.rollout_id, self.episode_count, self.total_steps, n_loc, n_speed))
                 self.neighbor_print_latch = False
         elif self.difficulty_level > 4:
@@ -737,6 +752,55 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         pass #this method not needed for this version
 
 
+    def initialize_ramp_vehicle_speed(self,
+                                      relative_pos    : int = 2,  #desired position of the ego vehicle relative to the 3 neighbors
+                                                                  # at the time it reaches the merge area
+                                     ) -> float:
+        """Returns a speed to start the ego vehicle when it starts at the beginning of lane 2, such that when it arrives at the
+            beginning of the merge area, assuming it continues at the same speed, it will approximately match the specified
+            position relative to the approaching neighbor vehicles.
+            This location will be randomized as a normal draw near the specified relative position.  Relative position codes are:
+                0 = in front of neighbor #1
+                1 = roughly beside neighbor #1
+                2 = roughly beside neighbor #2
+                3 = roughly beside neighbor #3
+                4 = behind neighbor #3
+            Note that this method only makes sense in difficulty level 4, where the neighbors start lined up in lane 1 (neighbor 1
+            in front and neighbor 3 in the rear), and they travel at constant speed with no lane changes.  So predicting their
+            arrival at the merge area is trivial.  Estimating the ego vehicle's nominal arrival at the merge area assumes that it
+            continues at its initial speed throughout the ramp length.
+        """
+
+        L1_DIST_TO_MERGE = 800.0 #m, depends on code in Roadway class
+        L2_DIST_TO_MERGE = 740.0 #m, depends on code in Roadway class
+        headway = 3.0 * SimpleHighwayRamp.VEHICLE_LENGTH #this is hard-coded into the reset() method
+
+        # Find the time of arrival of the target neighbor
+        tgt_arrival_time = 0.0
+        if relative_pos <= 1:
+            tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc - 2*headway) / self.neighbor_speed
+        elif relative_pos == 2:
+            tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc - headway) / self.neighbor_speed
+        else:
+            tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc) / self.neighbor_speed
+
+        # Get a random offset from that arrival time and apply it
+        time_headway = headway / self.neighbor_speed
+        offset = self.prng.normal(scale = 0.3*time_headway)
+        if relative_pos == 0:
+            offset -= 1.1 * time_headway
+        elif relative_pos == 4:
+            offset += 1.1 * time_headway
+
+        # Determine the ego vehicle's avg speed to give that time of arrival
+        desired_avg_speed = L2_DIST_TO_MERGE / (tgt_arrival_time + offset)
+        #print("\n///// initialize_ramp_vehicle_speed computed desired speed = {:.1f} for relative_pos = {}, tgt arrival = {:.1f} s"
+        #      .format(desired_avg_speed, relative_pos, tgt_arrival_time))
+        if desired_avg_speed > SimpleHighwayRamp.MAX_SPEED:
+            desired_avg_speed = SimpleHighwayRamp.MAX_SPEED
+        return desired_avg_speed
+
+
     ##### internal methods #####
 
 
@@ -822,6 +886,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             nsl = config["neighbor_start_loc"]
             if 0 <= nsl <= 1000.0:
                 self.neighbor_start_loc = nsl
+        except KeyError as e:
+            pass
+
+        self.merge_relative_pos = 2 #default to beside neighbor 2
+        try:
+            mrp = config["merge_relative_pos"]
+            if 0 <= mrp <= 4:
+                self.merge_relative_pos = mrp
         except KeyError as e:
             pass
 
@@ -985,10 +1057,10 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # eventual completion award (similar punishment to stopping the episode, but without changing the
             # physical environment)
             high_speed_mult = 10.0
-            low_speed_mult = 0.4
+            low_speed_mult = 0.8
             if self.difficulty_level == 1  or  self.difficulty_level == 2:
                 high_speed_mult = 20.0
-                low_speed_mult = 2.0
+                low_speed_mult = 3.0
 
             norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT #1.0 = speed limit
             penalty = 0.0
@@ -996,8 +1068,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 diff = norm_speed - 1.0
                 penalty = high_speed_mult * diff*diff
                 explanation += "HIGH speed pen {:.4f}. ".format(penalty)
-            elif norm_speed < 0.95:
-                diff = 0.95 - norm_speed
+            else:
+                diff = 1.0 - norm_speed
                 penalty = low_speed_mult * diff*diff
                 explanation += "Low speed pen {:.4f}. ".format(penalty)
             reward -= penalty
@@ -1061,25 +1133,37 @@ def curriculum_fn(train_results:        dict,           #current status of train
         the level as a constant for each Tune experiment. In this way, variable HPs, like annealing LR
         and noise levels can easily be set and scaled down through the course of a single level. It is
         not clear how to automate the resetting of these kinds of HPs.
+    """
+    #return task_settable_env.get_task()
 
     # If the mean reward is above the success threshold for the current phase then advance the phase
+    assert task_settable_env is not None, "\n///// Unable to access task_settable_env in curriculum_fn."
     phase = task_settable_env.get_task()
     stopper = task_settable_env.get_stopper()
-    assert stopper is not None, "///// Unable to access the stopper object in curriculum_fn."
+    assert stopper is not None, "\n///// Unable to access the stopper object in curriculum_fn."
     value = train_results["episode_reward_mean"]
     burn_in = task_settable_env.get_burn_in_iters()
+    total_steps_sampled = task_settable_env.get_total_steps() #for a single copy of the environment
 
-    approx_steps_per_iter = 10.0
-    try:
-        approx_steps_per_iter = max(train_results["episode_mean_len_mean"], 1.0)
-    except KeyError as e:
-        pass
-    iter = int(task_settable_env.get_total_steps() / approx_steps_per_iter)
+    approx_steps_per_iter = 300.0 #for an individual environment, not across all workers
+    iter = int(total_steps_sampled / approx_steps_per_iter)
 
+    #print("///// curriculum_fn: phase = {}, value = {}, approx_steps_per_iter = {}, iter = {}".format(phase, value, approx_steps_per_iter, iter))
+    #print("/////                results num_env_steps_sampled = {}, env total steps = {}"
+    #      .format(total_steps_sampled, task_settable_env.get_total_steps()))
+
+    # When threshold number of steps expires, advance from phase 0 to phase 4; this allows the agent to start
+    # figuring out where the finish line is, but otherwise do all training at the phase 4 difficulty.
+    if phase == 0  and  total_steps_sampled > 60000: #should correspond to just before first perturbation
+        print("///// curriculum_fn advancing phase from {} ".format(phase), end = "")
+        task_settable_env.set_task(4)
+        print("to {}".format(task_settable_env.get_task()))
+
+    """This section is for normal curriculum progression
     if iter >= burn_in  and  value >= stopper.get_success_thresholds()[phase]:
         print("\n///// curriculum_fn in phase {}: iter = {}, burn-in = {}, episode_reward_mean = {}"
               .format(phase, iter, burn_in, value))
-        task_settable_env.set_task(phase+1)
+        #task_settable_env.set_task(phase+1) #TODO uncomment to change phases
     """
 
     return task_settable_env.get_task() #don't return the local one, since the env may override it
@@ -1129,9 +1213,9 @@ class Roadway:
 
         # Lane 2 - two segments as the merge ramp; first seg is separate; second it adjacent to L1
         L2_Y = L1_Y - Roadway.WIDTH
-        segs = [(384.3, L2_Y-240.0,  800.0, L2_Y, 480.0),
+        segs = [(159.1, L2_Y-370.0,  800.0, L2_Y, 740.0),
                 (800.0, L2_Y,       1320.0, L2_Y, 520.0)]
-        lane = Lane(2, 1000.0, segs, left_id = 1, left_join = 480.0, left_sep = 1000.0)
+        lane = Lane(2, 1260.0, segs, left_id = 1, left_join = 740.0, left_sep = 1260.0)
         self.lanes.append(lane)
 
 

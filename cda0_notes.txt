@@ -1428,9 +1428,66 @@ program as a system test.
 	* Training could be improved with better positioning of the ramp vehicle & its init speed. Also need a higher
 	  low speed penalty.
 
+* Run c9ded at level 4 with PPO and PBT from scratch. Same HP search space as previous run.
+	* Changed reward penalties for low-speed to be a bit more severe.
+	* Lengthened lane 2 so that the ramp vehicle can start with the neighbors and arrive at the merge approx
+	  together while both are still close to the speed limit (don't want it to try to change its ramp speed
+	  greatly).
+	* Added method initialize_ramp_vehicle_speed() to try to force the ramp vehicle to hit merge point at particular
+	  positions relative to the chain of neighbors.
+	* After 200k steps all of the trials showed max reward < -25! This continued till > 500k steps, by which point
+	  all mean rewards were coalescing ~ -32. So I killed it in favor of starting a duplicate run.
 
-AI: enhance inference to closely control the starting locations & speeds of agent & neighbors in lane 2 to force 
-    various collision scenarios.
+* Run c8429 is an almost duplicate of the previous run conditions - level 4 starting from scratch.
+	* I increased the lower end of the noise range from 0.18 to 0.25, since all of the previous trials had converged
+	  on 0.19, and I don't think that is enough to help them find their way around the neighbor vehicles well. This
+	  time, the noise stddev values are all on the high side, with several > 0.5, and the smallest at 0.31.
+
+3/25/23
+
+	* Every trial quickly reached a state with both rmin and rmax = -40, so there was no learning going on.
+
+* Played with turning on the curriculum_fn again to let it begin the training in level 0, then switch over to level 4
+  just before the first perturb cycle. I got the timing of that down, but the problem is that PBT starts each perturb
+  cycle by creating brand-new algorithm objects and environments, instead of reusing previous ones. So the environment
+  loses all history and thinks it is starting over at level 0 again.
+	* Created a new CallbackSingleton class to act as a singleton object that all instances of environment and
+	  algorithms and CdaCallbacks can share info through. I made this a separate module that is first instantiated
+	  by main (the tuner program) to ensure that it consistently lives through all creation cycles. Problem is
+	  apparently each worker is a complete new process that re-instantiates _everything_ for itself, and doesn't
+	  know about any of the other workers.
+	* I think what I really need is this singleton to live in the local_worker and have all other workers somehow
+	  do an IPC to share that info. Not sure how to do that.
+	* In the meantime, I'll experiment with running a single local worker. No good. Even the local worker apparently
+	  runs multiple trial threads, and recreates everythiing as well.
+	* Designing a method that uses file system to track singleton-like behavior. This will work as long as all Ray
+	  activity is on a single node, which is fine for now. It is the PerturbationController class. Tests show that
+	  it works very well and doesn't seem to add a big execution time burden.
+
+* Run 81302 started at level 4, using the level 3 checkpoint 7c62d as the baseline.
+	* Early concerns in that the first 2 trials have rmax = -40 for the first 70 iterations.
+
+3/26/23
+
+	* Indeed, all trials scored a consistent -40, which is consistent with running off the road.
+	* Log shows that after first perturb cycle it was correctly not restoring the checkpoint, and stayed in level 4.
+
+* Run 6bee2 for level 4, but starting at level 0 from the level 3 checkpoint.
+	* Enabled the curriculum_fn again, so that it will promote from level 0 to level 4 after 18k steps.
+	* Modified env reset() so that in level 4 it only chooses vehicle position in lane 2 at relative loc 3 or 4, which
+	  may help it avoid some collisions.
+	* It transitioned from level 0 to 4 at 18k steps total (not per trial), at which point the rmax went from 10 to
+	  -40 and stayed there. I killed it after 6 trials.
+	* However, the evaluation plot shows that it continues to get rmax near 10 all the way to 70k steps.
+	* I am starting to suspect this level 3 baseline checkpoint is no good.
+
+* Run 9669f starting from scratch at level 0, then getting promoted to level 4 after 60k time steps.
+	* Changed the promotion code to increase the number of steps.
+	* Training progressed really well, with all trials showing improved rewards through ~350k steps, then they leveled
+	  off with rmean between -10 and 0 and a few short peaks up to the +2 to +5 region, but nothing sustained. And the
+	  rmins remain near -50.
+
+
 AI: track down where Trainable/Algorithm object is instantiated and its setup() method is called, since this happens at
     the beginning of each trial, and at each perturbation of each trial in PBT.
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?

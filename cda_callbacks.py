@@ -4,57 +4,28 @@ from ray.rllib.algorithms import Algorithm
 from ray.rllib.algorithms.ppo.ppo import PPO
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 from ray.tune.logger import pretty_print
+from perturbation_control import PerturbationController
+
 
 class CdaCallbacks (DefaultCallbacks):
     """This class provides utility callbacks that RLlib training algorithms invoke at various points.
-        For now, we need to hard-code the checkpoint file here, because there is no clear way to pass that info in.
         This needs to be the path to an algorithm-level directory. This class currently only handles a one-policy
         situation (could be used by multiple agents), with the policy named "default_policy".
     """
-
-    # Here is a new checkpoint made on 3/10/23 (on the Git branch tune-checkpointing, commit 4ae6)
-    #_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/05f87/checkpoint_000270"
-
-    # More recent, collected on 3/13/23. Well-trained level 0 model (mean_reward ~10, min_reward > 0)
-    #_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/0d8e1/PPO_00001/checkpoint_000420"
-
-    # Level 0 completed on 3/16/23:
-    #_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/7ea15/trial01/checkpoint_000099"
-
-    # Level 1 completed on 3/16/23:
-    #_checkpoint_path = "/home/starkj/projects/cda0/training/level1-pt/ef817/trial13/checkpoint_000371"
-
-    # Level 0 completed on 3/18/23:
-    #_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/e43eb/trial00/checkpoint_000328"
-
-    # Level 2 completed on 3/19/23:
-    #_checkpoint_path = "/home/starkj/projects/cda0/training/level2/eee95/trial10/checkpoint_000171"
-
-    # Level 3 completed on 3/22/23:
-    #_checkpoint_path = "/home/starkj/projects/cda0/training/level3/7c62d/trial09/checkpoint_001000"
-
-    _checkpoint_path = None
-
-    #####################################################################################################
 
     def __init__(self,
                  legacy_callbacks_dict: Dict[str, callable] = None
                 ):
         super().__init__(legacy_callbacks_dict)
-        #print("///// CdaCallbacks __init__ entered. Stored path = ", CdaCallbacks._checkpoint_path)
 
-
-    def set_path(self,
-                 path   : str,
-                ) -> None:
-        """Provides an OO approach to setting the static checkpoint path location."""
-
-        CdaCallbacks._checkpoint_path = path
-        print("///// CdaCallbacks.set_path confirming that path has been stored as ", CdaCallbacks._checkpoint_path)
+        self.info = PerturbationController()
+        self._checkpoint_path = self.info.get_checkpoint_path()
+        self._num_trials = self.info.get_num_trials()
+        #print("///// CdaCallback instantiated! algo counter = ", self.info.get_algo_init_count())
 
 
     def on_algorithm_init(self, *,
-                          algorithm:    "PPO", #TODO: does this need to be "PPO"?
+                          algorithm, #: "PPO", #TODO: does this need to be "PPO"?
                           **kwargs,
                          ) -> None:
 
@@ -68,12 +39,25 @@ class CdaCallbacks (DefaultCallbacks):
             and belongs to the one and only policy, named "default_policy".
         """
 
-        print("///// CdaCallbacks.on_algorithm_init: algorithm = ", type(algorithm), algorithm)
-        print("      algorithm._counters = ", algorithm._counters)
+        # Update the initialize counter
+        self.info.increment_algo_init()
 
-        if CdaCallbacks._checkpoint_path is None:
+        # If there is no checkpoint specified, then return now
+        if self._checkpoint_path is None:
+            print("///// CdaCallbacks detects checpoint path is None, so returning.")
             return
-        print("///// CdaCallbacks invoked to restore model from checkpoint ", CdaCallbacks._checkpoint_path)
+
+        #TODO: this relationship is fragile - need to investigate how it may change as numbers of
+        #       rollout workers, eval workers, and other HPs change.
+        # Determine when the first perturbation cycle has been completed. On a single node running
+        # 2 trials simultaneously, there will be 14 of these objects created for every pair of trials
+        # being started.  This number will go up with each perturb cycle. So we want to allow reading
+        # from the checkpoint for the first 14*num_trials/2 objects, then no more.
+        max_instances = 14 * self._num_trials/2
+        if self.info.get_algo_init_count() > max_instances:
+            return
+
+        print("///// CdaCallbacks restoring model from checkpoint ", self._checkpoint_path)
 
         # Get the initial weights from the newly created NN and sample some values
         initial_weights = algorithm.get_weights(["default_policy"])["default_policy"]
@@ -81,7 +65,7 @@ class CdaCallbacks (DefaultCallbacks):
 
         # Load the checkpoint into a Policy object and pull the NN weights from there. Doing this avoids all the extra
         # trainig info that is stored with the full policy and the algorithm.
-        temp_policy = Policy.from_checkpoint("{}/policies/default_policy".format(CdaCallbacks._checkpoint_path))
+        temp_policy = Policy.from_checkpoint("{}/policies/default_policy".format(self._checkpoint_path))
         saved_weights = temp_policy.get_weights()
         self._print_sample_weights("Restored from checkpoint", saved_weights)
 

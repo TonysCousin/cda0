@@ -22,19 +22,25 @@ def main(argv):
     # Handle any args
     num_args = len(argv)
     if num_args == 1  or  num_args == 3:
-        print("Usage is: {} <checkpoint> [learning_level, starting_lane]".format(argv[0]))
+        print("Usage is: {} <checkpoint> [learning_level, starting_lane [, relative_pos]]".format(argv[0]))
         sys.exit(1)
 
     checkpoint = argv[1]
     learning_level = 0
+    relative_pos = 2
     start_lane = int(prng.random()*3)
-    if len(argv) > 2:
+    if num_args > 2:
         level = int(argv[2])
         if 0 <= level <= 6:
             learning_level = level
         lane = int(argv[3])
         if 0 <= lane <= 2:
             start_lane = lane
+
+        if num_args == 5:
+            rp = int(argv[4])
+            if 0 <= rp <= 4:
+                relative_pos = rp
 
     ray.init()
 
@@ -44,7 +50,8 @@ def main(argv):
                     "difficulty_level":     learning_level,
                     "init_ego_lane":        start_lane,
                     "neighbor_speed":       29.1,
-                    "neighbor_start_loc":   320.0 #dist downtrack from beginning of lane 1 for n3, m
+                    "neighbor_start_loc":   0.0, #dist downtrack from beginning of lane 1 for n3, m
+                    "merge_relative_pos":   relative_pos, #neighbor vehicle that we want ego to be beside when starting in lane 2
                 }
 
     cfg = ppo.PPOConfig()
@@ -80,6 +87,8 @@ def main(argv):
 
     algo.restore(checkpoint)
     print("///// Checkpoint {} successfully loaded.".format(checkpoint))
+    if learning_level == 4  and  start_lane == 2:
+        print("///// using ramp relative position ", relative_pos)
 
     # Set up the graphic display
     graphics = Graphics(env)

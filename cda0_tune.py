@@ -16,6 +16,7 @@ from stop_logic import StopLogic
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 from simple_highway_with_ramp import curriculum_fn
 from cda_callbacks import CdaCallbacks
+from perturbation_control import PerturbationController
 
 """This program tunes (explores) hyperparameters to find a good set suitable for training.
     Usage is:
@@ -27,12 +28,39 @@ from cda_callbacks import CdaCallbacks
     this time, to pass the information into RLlib.
 """
 
+# Here is a new checkpoint made on 3/10/23 (on the Git branch tune-checkpointing, commit 4ae6)
+#_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/05f87/checkpoint_000270"
+
+# More recent, collected on 3/13/23. Well-trained level 0 model (mean_reward ~10, min_reward > 0)
+#_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/0d8e1/PPO_00001/checkpoint_000420"
+
+# Level 0 completed on 3/16/23:
+#_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/7ea15/trial01/checkpoint_000099"
+
+# Level 1 completed on 3/16/23:
+#_checkpoint_path = "/home/starkj/projects/cda0/training/level1-pt/ef817/trial13/checkpoint_000371"
+
+# Level 0 completed on 3/18/23:
+#_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/e43eb/trial00/checkpoint_000328"
+
+# Level 2 completed on 3/19/23:
+#_checkpoint_path = "/home/starkj/projects/cda0/training/level2/eee95/trial10/checkpoint_000171"
+
+# Level 3 completed on 3/22/23:
+#_checkpoint_path = "/home/starkj/projects/cda0/training/level3/7c62d/trial09/checkpoint_001000"
+
+# Level 4 completed on 3/24/23:
+#_checkpoint_path = "/home/starkj/projects/cda0/training/level4/64981/trial02/checkpoint_001071"
+
+_checkpoint_path = None
+
+
 def main(argv):
 
     difficulty_level = 0
     if len(argv) > 1:
         difficulty_level = min(max(int(argv[1]), 0), SimpleHighwayRampWrapper.NUM_DIFFICULTY_LEVELS)
-    print("\n///// Tuning with environment difficulty level {}".format(difficulty_level))
+    print("\n///// Tuning with initial environment difficulty level {}".format(difficulty_level))
 
     ray.init()
 
@@ -47,12 +75,17 @@ def main(argv):
     # let_it_run can be a single value if it applies to all phases.
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
-    success_threshold   = [9.5,         9.5,        9.5,        9.0,        5.0]
-    failure_threshold   = [6.0,         6.0,        6.0,        5.0,        0.0]
+    success_threshold   = [9.5,         9.5,        9.5,        9.0,        7.0]
+    failure_threshold   = [6.0,         6.0,        6.0,        5.0,        2.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
     max_iterations      = 2000
+    num_trials          = 16
 
+    # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
+    PerturbationController(_checkpoint_path, num_trials)
+
+    # Define the stopping logic for non-PBT runs
     stopper = StopLogic(max_ep_timesteps        = 400,
                         max_iterations          = max_iterations,
                         min_timesteps           = min_timesteps,
@@ -88,7 +121,7 @@ def main(argv):
     # Add exploration noise params
     explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.18, 0.6) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = tune.uniform(0.25, 0.6) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.2 #tune.choice([1.0, 0.01])
@@ -111,7 +144,7 @@ def main(argv):
                     num_gpus_per_trainer_worker = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
-    cfg.rollouts(   num_rollout_workers         = 4, #num remote workers _per trial_ (remember that there is a local worker also)
+    cfg.rollouts(   num_rollout_workers         = 0, #num remote workers _per trial_ (remember that there is a local worker also)
                                                      # 0 forces rollouts to be done by local worker
                     num_envs_per_worker         = 1,
                     rollout_fragment_length     = 256, #timesteps pulled from a sampler
@@ -138,7 +171,7 @@ def main(argv):
                     evaluation_duration         = 15, #units specified next
                     evaluation_duration_unit    = "episodes",
                     evaluation_parallel_to_training = True, #True requires evaluation_num_workers > 0
-                    evaluation_num_workers      = 2,
+                    evaluation_num_workers      = 2, #TODO uncomment this after understanding local worker ops
     )
 
     # Debugging assistance
@@ -182,7 +215,7 @@ def main(argv):
                     metric                      = "episode_reward_mean",
                     mode                        = "max",
                     scheduler                   = scheduler,
-                    num_samples                 = 16 #number of HP trials
+                    num_samples                 = num_trials,
                     #max_concurrent_trials      = 8
                 )
 
