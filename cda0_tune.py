@@ -1,18 +1,17 @@
 import sys
 import ray
 from ray import air, tune
-import ray.rllib.algorithms.ppo as ppo
 from ray.tune import Tuner
 from ray.tune.schedulers import PopulationBasedTraining
 from ray.tune.tune_config import TuneConfig
 from ray.tune.logger import pretty_print
 from ray.air import RunConfig
+#import ray.rllib.algorithms.ppo as ppo
 #import ray.rllib.algorithms.a2c as a2c
-#import ray.rllib.algorithms.sac as sac
+import ray.rllib.algorithms.sac as sac
 #import ray.rllib.algorithms.ddpg as ddpg
 
 from stop_logic import StopLogic
-#from stop_long  import StopLong
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 from simple_highway_with_ramp import curriculum_fn
 from cda_callbacks import CdaCallbacks
@@ -22,36 +21,9 @@ from perturbation_control import PerturbationController
     Usage is:
         cda0_tune <difficulty_level>
     If a difficulty level is not provided, it will default to 0.
-
-    NOTE that this program will begin training the existing (pre-trained) checkpoint that is hard-coded in
-    the CdaCallbacks code (cda_callbacks.py). While hard-coding is not ideal, it is the only known way, at
-    this time, to pass the information into RLlib.
 """
 
-# Here is a new checkpoint made on 3/10/23 (on the Git branch tune-checkpointing, commit 4ae6)
-#_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/05f87/checkpoint_000270"
-
-# More recent, collected on 3/13/23. Well-trained level 0 model (mean_reward ~10, min_reward > 0)
-#_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/0d8e1/PPO_00001/checkpoint_000420"
-
-# Level 0 completed on 3/16/23:
-#_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/7ea15/trial01/checkpoint_000099"
-
-# Level 1 completed on 3/16/23:
-#_checkpoint_path = "/home/starkj/projects/cda0/training/level1-pt/ef817/trial13/checkpoint_000371"
-
-# Level 0 completed on 3/18/23:
-#_checkpoint_path = "/home/starkj/projects/cda0/training/level0-pt/e43eb/trial00/checkpoint_000328"
-
-# Level 2 completed on 3/19/23:
-#_checkpoint_path = "/home/starkj/projects/cda0/training/level2/eee95/trial10/checkpoint_000171"
-
-# Level 3 completed on 3/22/23:
-#_checkpoint_path = "/home/starkj/projects/cda0/training/level3/7c62d/trial09/checkpoint_001000"
-
-# Level 4 completed on 3/24/23:
-#_checkpoint_path = "/home/starkj/projects/cda0/training/level4/64981/trial02/checkpoint_001071"
-
+# Identify a baseline checkpoint from which to continue training
 _checkpoint_path = None
 
 
@@ -65,8 +37,8 @@ def main(argv):
     ray.init()
 
     # Define which learning algorithm we will use and set up is default config params
-    algo = "PPO"
-    cfg = ppo.PPOConfig()
+    algo = "SAC"
+    cfg = sac.SACConfig()
     cfg.framework("torch")
     cfg_dict = cfg.to_dict()
 
@@ -78,8 +50,8 @@ def main(argv):
     success_threshold   = [9.5,         9.5,        9.5,        9.0,        7.0]
     failure_threshold   = [6.0,         6.0,        6.0,        5.0,        2.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
-    burn_in_period      = 70 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 2000
+    burn_in_period      = 100 #num iterations before we consider stopping or promoting to next level
+    max_iterations      = 1100
     num_trials          = 16
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -100,7 +72,7 @@ def main(argv):
     # Define the custom environment for Ray
     env_config = {}
     env_config["difficulty_level"]              = difficulty_level
-    env_config["stopper"]                       = stopper #object must be instantiated above
+    #env_config["stopper"]                       = stopper #object must be instantiated above
     env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 0
@@ -110,13 +82,6 @@ def main(argv):
     env_config["neighbor_start_loc"]            = 320.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
     cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config, env_task_fn = curriculum_fn)
-
-    # Add dict for model structure
-    model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = [256, 128]
-    model_config["fcnet_activation"]            = "relu"
-    model_config["post_fcnet_activation"]       = "linear" #tune.choice(["linear", "tanh"])
-    cfg.training(model = model_config)
 
     # Add exploration noise params
     explore_config = cfg_dict["exploration_config"]
@@ -152,20 +117,6 @@ def main(argv):
                     recreate_failed_workers     = True,
     )
 
-    # Training algorithm HPs
-    # NOTE: lr_schedule is only defined for policy gradient algos
-    # NOTE: all items below lr_schedule are PPO-specific
-    cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
-                    train_batch_size            = 1024, #must be = rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    lr                          = tune.loguniform(1e-6, 1e-3),
-                    #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
-                    sgd_minibatch_size          = 64, #must be <= train_batch_size (and divide into it)
-                    entropy_coeff               = tune.uniform(0.0005, 0.008),
-                    kl_coeff                    = tune.uniform(0.3, 0.8),
-                    #clip_actions                = True,
-                    clip_param                  = tune.uniform(0.05, 0.4),
-    )
-
     # Evaluation process
     cfg.evaluation( evaluation_interval         = 10, #iterations
                     evaluation_duration         = 15, #units specified next
@@ -182,13 +133,62 @@ def main(argv):
     # Custom callbacks from the training algorithm
     cfg.callbacks(  CdaCallbacks)
 
+    """
+    # ===== Training algorithm HPs for PPO =================================================
+
+    # NOTE: lr_schedule is only defined for policy gradient algos
+    # NOTE: all items below lr_schedule are PPO-specific
+    cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
+                    train_batch_size            = 1024, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
+                    lr                          = tune.loguniform(1e-6, 1e-3),
+                    #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
+                    sgd_minibatch_size          = 64, #must be <= train_batch_size (and divide into it)
+                    entropy_coeff               = tune.uniform(0.0005, 0.008),
+                    kl_coeff                    = tune.uniform(0.3, 0.8),
+                    #clip_actions                = True,
+                    clip_param                  = tune.uniform(0.05, 0.4),
+    )
+
+    # Add dict for model structure
+    model_config = cfg_dict["model"]
+    model_config["fcnet_hiddens"]               = [256, 128]
+    model_config["fcnet_activation"]            = "relu"
+    cfg.training(model = model_config)
+    """
+
+    # ===== Training algorithm HPs for SAC ==================================================
+
+    opt_config = cfg_dict["optimization"]
+    opt_config["actor_learning_rate"]           = tune.loguniform(1e-6, 1e-3) #default 0.0003
+    opt_config["critic_learning_rate"]          = tune.loguniform(1e-6, 1e-3) #default 0.0003
+    opt_config["entropy_learning_rate"]         = tune.loguniform(1e-4, 1e-3) #default 0.0003
+
+    policy_config = cfg_dict["policy_model_config"]
+    policy_config["fcnet_hiddens"]              = [256, 128]
+    policy_config["fcnet_activation"]           = "relu"
+
+    q_config = cfg_dict["q_model_config"]
+    q_config["fcnet_hiddens"]                   = [256, 128]
+    q_config["fcnet_activation"]                = "relu"
+
+    cfg.training(   twin_q                      = True,
+                    gamma                       = 0.999,
+                    train_batch_size            = 256, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
+                    initial_alpha               = 1.0,
+                    tau                         = 0.005,
+                    n_step                      = 1,
+                    optimization_config         = opt_config,
+                    policy_model_config         = policy_config,
+                    q_model_config              = q_config,
+    )
+
     # ===== Final setup =========================================================================
 
-    #print("\n///// {} training params are:\n".format(algo))
-    #print(pretty_print(cfg.to_dict()))
+    print("\n///// {} training params are:\n".format(algo))
+    print(pretty_print(cfg.to_dict()))
 
     chkpt_int                                   = 10                    #num iters between storing new checkpoints
-    perturb_int                                 = 50                    #num iters between policy perturbations (must be a multiple of chkpt period)
+    perturb_int                                 = 100                   #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation
@@ -204,10 +204,9 @@ def main(argv):
                                                                         # then immediately moves on. If True and one trial dies, then PBT hangs and all
                                                                         # remaining trials go into perpetual PAUSED state.
                     hyperparam_mutations={                              #resample distributions
-                        "lr"                        :   tune.loguniform(1e-6, 1e-3),
-                        #"exploration_config/stddev" :   tune.uniform(0.2, 0.7), #PPOConfig doesn't recognize any variation on this key
-                        "kl_coeff"                  :   tune.uniform(0.35, 0.8),
-                        "entropy_coeff"             :   tune.uniform(0.0, 0.008),
+                        "actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
+                        "critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
+                        "entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
                     },
     )
 

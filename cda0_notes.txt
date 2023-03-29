@@ -1487,7 +1487,59 @@ program as a system test.
 	  off with rmean between -10 and 0 and a few short peaks up to the +2 to +5 region, but nothing sustained. And the
 	  rmins remain near -50.
 
+3/27/23
 
+	* ~1M steps (920 iters) a few trials started showing some serious rewards, in the 6-7 range. Although the stopping
+	  condition for level 4 is rmean > 7, they are continuing. I started the program with cmd line arg of level 0, and
+	  it internally promoted to level 4. Therefore, the main program is using the level 0 stoopping criteria, which are
+	  stiffer.
+	* After 1000 iters (~1.3M steps) all but one of the trials had met one of the level 0 stopping criteria, which was
+	  impressive. However,...
+	* Inference runs on trials 12 and 13 were very disappointing, as they did illegal lane changes consistently very
+	  early in every episode. I did some deep investigation into the Ray code to ensure that it was truly inferencing,
+	  with the model in eval mode and not applying any noise. The LC cmd (action[1]) coming out of the NN was well over
+	  1, and relied on clipping to get it into the acceptable action space. I chose these two agents as they had good
+	  values of both rmean and rmin in the training data _and_ rmin > 8 in the evaluation plot. I don't know how an
+	  agent can perform so well in evaluation mode and fail so misrably during inference.
+
+* run 8fc2d starting from level 0 (running level 1) checkpoint then getting promoted to level 4 after 60k time steps.
+	* Adjusted PBT params to perturb only every 100 iterations.
+	* Starting with the level 0 checkpoint is hoped to kick-start learniing a little sooner, and also to preserve more
+	  respect for speed controls.
+	* Adjusted reward structure so that crash, off road and stopping all get penalized at -10 points (was -50, -40 and
+	  -20, respectively). I saw lots of inference episodes that chose to stop, which gave it a better score than running
+	  off road or crashing. Also, the smaller magnitude may help it determine reward gradients in these regions.
+	* No good. One trial started with rmax spiking above 0 several times in the first 60k steps, but then it stayed at
+	  -10, along with all the other trials. PBT therefore had nothing to choose from and it never recovered.
+
+* Run ed794 started from the level 0 checkpoint but running level 0 training to allow the variable start locations near the
+  finish line. Otherwise, nothing changed from previous run.
+	* No good. I discovered that at each perturb cycle the env is getting regenerated at difficulty level 0, even thoubh
+	  there was a promotion to 4 previously. During perturbation new envs get generated, and they read the config dict,
+	  which reflects the original cmd line arg. This may explain why the long run last night took so long to converge;
+	  it just wasn't obvious that it was resetting.
+
+* Run ? started from the level 0 checkpoint but running level 0 training, as before. Promoting to level 4 after 60k steps.
+	* Fixed logic in curriculum_fn to ensure that it forces level 4 upon restart after a perturb cycle has occurred
+	  (uses the new PerturbationControl).
+
+3/28/23
+
+	* The pre-training didn't really help. After 60k steps the rmax fell to -10 for all trials. However, rmax gradually
+	  rose to +10 over 1M steps, showing some promise. But the rmean stayed near -10 until the ~800k steps or so, when
+	  some of the trials showed fluctuations up to -7.
+
+=========================================
+===== Began using the SAC algorithm =====
+=========================================
+
+* Had been using PPO up to this point, but it seems to be time for some more drastic changes to continue progressing.
+* Starting with mostly the default configs until I get a feel for it.
+* Cannot use any of the previously saved checkpoints. Also cannot use the existing checkpoint handling code in the
+  CdaCallbacks class (I will upgrade it in the future to do this).
+
+
+AI: try using discrete actions
 AI: track down where Trainable/Algorithm object is instantiated and its setup() method is called, since this happens at
     the beginning of each trial, and at each perturbation of each trial in PBT.
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?

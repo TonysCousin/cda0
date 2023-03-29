@@ -21,6 +21,21 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         self.action_space.high[0] /= SimpleHighwayRamp.MAX_ACCEL
 
 
+    def unscaled_reset(self, *,
+                seed    :   int = None,     #seed value for the PRNG
+                options :   object = None   #currently not recognized by the Env, but appears for syntactic compliance
+             ) -> Tuple[np.array, dict]:    #returns a scaled vector of observations usable by a NN plus an info dict
+
+        """Invokes the environment's reset method, but does not scale the resulting observations. This supports an
+            inference engine using the output directly in real world units.
+            CAUTION: intended to be used only for initial reset by an inference engine. The output will need to be
+                     scaled externally if it is to be fed into an NN.
+        """
+
+        obs, info = super().reset(options = options)
+        return obs, info
+
+
     def reset(self, *,
                 seed    :   int = None,     #seed value for the PRNG
                 options :   object = None   #currently not recognized by the Env, but appears for syntactic compliance

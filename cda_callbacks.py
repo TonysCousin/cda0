@@ -20,7 +20,6 @@ class CdaCallbacks (DefaultCallbacks):
 
         self.info = PerturbationController()
         self._checkpoint_path = self.info.get_checkpoint_path()
-        self._num_trials = self.info.get_num_trials()
         #print("///// CdaCallback instantiated! algo counter = ", self.info.get_algo_init_count())
 
 
@@ -39,6 +38,9 @@ class CdaCallbacks (DefaultCallbacks):
             and belongs to the one and only policy, named "default_policy".
         """
 
+        #TODO: skip for now, since this default_policy logic won't work for SAC
+        return
+
         # Update the initialize counter
         self.info.increment_algo_init()
 
@@ -47,16 +49,9 @@ class CdaCallbacks (DefaultCallbacks):
             print("///// CdaCallbacks detects checpoint path is None, so returning.")
             return
 
-        #TODO: this relationship is fragile - need to investigate how it may change as numbers of
-        #       rollout workers, eval workers, and other HPs change.
-        # Determine when the first perturbation cycle has been completed. On a single node running
-        # 2 trials simultaneously, there will be 14 of these objects created for every pair of trials
-        # being started.  This number will go up with each perturb cycle. So we want to allow reading
-        # from the checkpoint for the first 14*num_trials/2 objects, then no more.
-        max_instances = 14 * self._num_trials/2
-        if self.info.get_algo_init_count() > max_instances:
+        # Once perturbations begin we don't want to be loading checkpoints any more, so return
+        if self.info.has_perturb_begun():
             return
-
         print("///// CdaCallbacks restoring model from checkpoint ", self._checkpoint_path)
 
         # Get the initial weights from the newly created NN and sample some values

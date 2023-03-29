@@ -1,6 +1,7 @@
 from cmath import inf
 import sys
 import math
+import time
 import numpy as np
 import gym
 import ray
@@ -96,11 +97,15 @@ def main(argv):
     # Run the agent through a complete episode
     episode_reward = 0
     done = False
-    obs, _ = env.reset()
+    action = [0, 0]
+    raw_obs, _ = env.unscaled_reset()
+    graphics.update(action, raw_obs)
+    obs = env.scale_obs(raw_obs)
     step = 0
+    time.sleep(2)
     while not done:
         step += 1
-        action = algo.compute_single_action(obs, explore = False)
+        action = algo.compute_single_action(obs, explore = True)
         if step <= 5:
             if abs(action[1]) > 0.49:
                 action[1] = 0.0

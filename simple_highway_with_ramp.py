@@ -7,6 +7,7 @@ import numpy as np
 from ray.rllib.env.env_context import EnvContext
 from ray.rllib.env.apis.task_settable_env import TaskSettableEnv
 from ray.tune.logger import pretty_print
+from perturbation_control import PerturbationController
 
 class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
@@ -392,7 +393,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 # We want to sync the agent in lane 2 to force it to avoid a collision by positioning it right next to the neighbors
                 if ego_lane_id == 2:
                     ego_x = 0.0
-                    loc = int(self.prng.random()*2.0) + 3 #Choose all location 3 or 4 to get it used to falling behind the convoy
+                    #loc = int(self.prng.random()*2.0) + 3 #Choose all location 3 or 4 to get it used to falling behind the convoy
+                    loc = int(self.prng.random()*5.0)
                     ego_speed = self.initialize_ramp_vehicle_speed(loc)
                 else:
                     ego_x = self.prng.random() * 500.0
@@ -1012,18 +1014,18 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If there was a single- or multi-car crash or then set a penalty, larger for multi-car crash
             if crash:
-                reward = -50.0
+                reward = -10.0
                 explanation = "Crashed into a vehicle. "
 
             elif off_road:
-                reward = -40.0
+                reward = -10.0
                 explanation = "Ran off road. "
 
             # Else if the vehicle just stopped in the middle of the road then
             elif stopped:
 
-                # Subtract a penalty for no movement
-                reward = -20.0
+                # Subtract a penalty for no movement (needs to be as severe as off-road)
+                reward = -10.0
                 explanation = "Vehicle stopped. "
 
             # Else (episode ended successfully)
@@ -1118,6 +1120,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 ######################################################################################################
 ######################################################################################################
 
+perturb_ctrl = PerturbationController() #create this outside the function so it doesn't flail the disk as much
+
 
 def curriculum_fn(train_results:        dict,           #current status of training progress
                   task_settable_env:    TaskSettableEnv,#the env model that difficulties will be applied to
@@ -1126,40 +1130,44 @@ def curriculum_fn(train_results:        dict,           #current status of train
 
     """Callback that allows Ray.Tune to increase the difficulty level, based on the current training results."""
 
-    #print("///// curriculum_fn: train_results =")
-    #print(pretty_print(train_results))
-
-    """TODO: reconsider automated promotion logic. Currently commented out to allow manually setting
+    """NOTE: reconsider automated promotion logic. Skipping this logic allows manually setting
         the level as a constant for each Tune experiment. In this way, variable HPs, like annealing LR
         and noise levels can easily be set and scaled down through the course of a single level. It is
         not clear how to automate the resetting of these kinds of HPs.
     """
-    #return task_settable_env.get_task()
+    return task_settable_env.get_task()
 
     # If the mean reward is above the success threshold for the current phase then advance the phase
     assert task_settable_env is not None, "\n///// Unable to access task_settable_env in curriculum_fn."
     phase = task_settable_env.get_task()
     stopper = task_settable_env.get_stopper()
     assert stopper is not None, "\n///// Unable to access the stopper object in curriculum_fn."
-    value = train_results["episode_reward_mean"]
-    burn_in = task_settable_env.get_burn_in_iters()
     total_steps_sampled = task_settable_env.get_total_steps() #for a single copy of the environment
 
-    approx_steps_per_iter = 300.0 #for an individual environment, not across all workers
-    iter = int(total_steps_sampled / approx_steps_per_iter)
-
+    #value = train_results["episode_reward_mean"]
+    #burn_in = task_settable_env.get_burn_in_iters()
+    #approx_steps_per_iter = 300.0 #for an individual environment, not across all workers
+    #iter = int(total_steps_sampled / approx_steps_per_iter)
     #print("///// curriculum_fn: phase = {}, value = {}, approx_steps_per_iter = {}, iter = {}".format(phase, value, approx_steps_per_iter, iter))
     #print("/////                results num_env_steps_sampled = {}, env total steps = {}"
     #      .format(total_steps_sampled, task_settable_env.get_total_steps()))
 
-    # When threshold number of steps expires, advance from phase 0 to phase 4; this allows the agent to start
-    # figuring out where the finish line is, but otherwise do all training at the phase 4 difficulty.
-    if phase == 0  and  total_steps_sampled > 60000: #should correspond to just before first perturbation
-        print("///// curriculum_fn advancing phase from {} ".format(phase), end = "")
-        task_settable_env.set_task(4)
-        print("to {}".format(task_settable_env.get_task()))
+    # If there has been no perturbations performed yet (still prior to the first cycle) then
+    TARGET_PHASE = 4
+    if not perturb_ctrl.has_perturb_begun():
 
-    """This section is for normal curriculum progression
+        # When threshold number of steps expires, advance from phase 0 to phase 4; this allows the agent to start
+        # figuring out where the finish line is, but otherwise do all training at the phase 4 difficulty.
+        if phase < TARGET_PHASE  and  total_steps_sampled > 60000: #a little before perturbation
+            print("///// curriculum_fn advancing phase from {} to {}".format(phase, TARGET_PHASE))
+            task_settable_env.set_task(TARGET_PHASE)
+
+    # Else go straight to the target phase
+    else:
+        if phase != TARGET_PHASE:
+            task_settable_env.set_task(TARGET_PHASE)
+
+    """This section is for normal automated curriculum progression
     if iter >= burn_in  and  value >= stopper.get_success_thresholds()[phase]:
         print("\n///// curriculum_fn in phase {}: iter = {}, burn-in = {}, episode_reward_mean = {}"
               .format(phase, iter, burn_in, value))

@@ -210,3 +210,18 @@ class PerturbationController:
         if not success:
             raise IOError("///// PerturbationController.get_algo_init_count was unable to read counter in {}".format(self._filename2))
         return self._algo_init_count
+
+
+    def has_perturb_begun(self):
+        """Returns True if the first perturb cycle is either underway or complete (maybe additional cycles have completed also).
+            Returns False if training is still using the initial set of HPs.
+        """
+
+        #TODO: this relationship is fragile - need to investigate how it may change as numbers of
+        #       rollout workers, eval workers, and other HPs change.
+        # Determine when the first perturbation cycle has been completed. On a single node running
+        # 2 trials simultaneously, there will be 14 of these objects created for every pair of trials
+        # being started.  This number will go up with each perturb cycle. So we want to allow reading
+        # from the checkpoint for the first 14*num_trials/2 objects, then no more.
+        max_instances = 14 * self._num_trials/2
+        return self.get_algo_init_count() > max_instances
