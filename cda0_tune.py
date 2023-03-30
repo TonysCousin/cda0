@@ -26,6 +26,9 @@ from perturbation_control import PerturbationController
 # Identify a baseline checkpoint from which to continue training
 _checkpoint_path = None
 
+# Didn't quite finish training level 0
+#_checkpoint_path = "/home/starkj/projects/cda0/training/SAC/p256-128-v256-128/L0-32efc/trial10/checkpoint_001001"
+
 
 def main(argv):
 
@@ -51,7 +54,7 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        5.0,        2.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 100 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 1100
+    max_iterations      = 2000
     num_trials          = 16
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -86,11 +89,11 @@ def main(argv):
     # Add exploration noise params
     explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.25, 0.6) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = tune.uniform(0.1, 0.5) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
-    explore_config["final_scale"]               = 0.2 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = 1200000  #tune.choice([100000, 400000]) #was 900k
+    explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
+    explore_config["scale_timesteps"]           = 500000  #tune.choice([100000, 400000]) #was 900k
     cfg.exploration(explore = True, exploration_config = explore_config)
     #cfg.exploration(explore = False)
 
@@ -109,7 +112,7 @@ def main(argv):
                     num_gpus_per_trainer_worker = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
-    cfg.rollouts(   num_rollout_workers         = 0, #num remote workers _per trial_ (remember that there is a local worker also)
+    cfg.rollouts(   #num_rollout_workers         = 1, #num remote workers _per trial_ (remember that there is a local worker also)
                                                      # 0 forces rollouts to be done by local worker
                     num_envs_per_worker         = 1,
                     rollout_fragment_length     = 256, #timesteps pulled from a sampler
@@ -122,7 +125,7 @@ def main(argv):
                     evaluation_duration         = 15, #units specified next
                     evaluation_duration_unit    = "episodes",
                     evaluation_parallel_to_training = True, #True requires evaluation_num_workers > 0
-                    evaluation_num_workers      = 2, #TODO uncomment this after understanding local worker ops
+                    evaluation_num_workers      = 2,
     )
 
     # Debugging assistance
@@ -184,8 +187,8 @@ def main(argv):
 
     # ===== Final setup =========================================================================
 
-    print("\n///// {} training params are:\n".format(algo))
-    print(pretty_print(cfg.to_dict()))
+    #print("\n///// {} training params are:\n".format(algo))
+    #print(pretty_print(cfg.to_dict()))
 
     chkpt_int                                   = 10                    #num iters between storing new checkpoints
     perturb_int                                 = 100                   #num iters between policy perturbations (must be a multiple of chkpt period)
@@ -204,9 +207,9 @@ def main(argv):
                                                                         # then immediately moves on. If True and one trial dies, then PBT hangs and all
                                                                         # remaining trials go into perpetual PAUSED state.
                     hyperparam_mutations={                              #resample distributions
-                        "actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
-                        "critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
-                        "entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
+                        "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
                     },
     )
 

@@ -39,7 +39,7 @@ class CdaCallbacks (DefaultCallbacks):
         """
 
         #TODO: skip for now, since this default_policy logic won't work for SAC
-        return
+        #return
 
         # Update the initialize counter
         self.info.increment_algo_init()
@@ -80,6 +80,7 @@ class CdaCallbacks (DefaultCallbacks):
             ASSUMES that weights represents a single policy, not a dict of dicts.
         """
 
+        return
         # Assume the NN structure is at least [10, 10] with biases and at least 20 inputs and 1 output
         print("///// Sample NN weights: {}".format(descrip))
 

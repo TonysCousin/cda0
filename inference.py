@@ -5,9 +5,10 @@ import time
 import numpy as np
 import gym
 import ray
-import ray.rllib.algorithms.ppo as ppo
+#import ray.rllib.algorithms.ppo as ppo
 #import ray.rllib.algorithms.ddpg as ddpg
 #import ray.rllib.algorithms.td3  as td3
+import ray.rllib.algorithms.sac as sac
 from ray.tune.logger import pretty_print
 import pygame
 from pygame.locals import *
@@ -55,22 +56,27 @@ def main(argv):
                     "merge_relative_pos":   relative_pos, #neighbor vehicle that we want ego to be beside when starting in lane 2
                 }
 
+    # Algorithm-specific configs - NN structure needs to match the checkpoint being read
+    """
     cfg = ppo.PPOConfig()
     cfg.framework("torch").exploration(explore = False)
-
-    # DDPG - These need to be same as in the checkpoint being read!
-    """
-    config["actor_hiddens"]               = [512, 64]
-    config["critic_hiddens"]              = [512, 64]
-    """
-
-    # PPO - need to match checkpoint being read!
     model = cfg.to_dict()["model"]
     model["fcnet_hiddens"]                  = [256, 128]
     model["fcnet_activation"]               = "relu"
     model["post_fcnet_activation"]          = "linear"
     cfg.training(model = model)
-    #print("///// Model specified.  It is now...", cfg.to_dict()["model"])
+    """
+
+    cfg = sac.SACConfig()
+    cfg.framework("torch").exploration(explore = False)
+    cfg_dict = cfg.to_dict()
+    policy_config = cfg_dict["policy_model_config"]
+    policy_config["fcnet_hiddens"]              = [256, 128]
+    policy_config["fcnet_activation"]           = "relu"
+    q_config = cfg_dict["q_model_config"]
+    q_config["fcnet_hiddens"]                   = [256, 128]
+    q_config["fcnet_activation"]                = "relu"
+    cfg.training(policy_model_config = policy_config, q_model_config = q_config)
 
     cfg.environment(env = SimpleHighwayRampWrapper,
                     env_config = env_config

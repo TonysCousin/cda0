@@ -1135,13 +1135,14 @@ def curriculum_fn(train_results:        dict,           #current status of train
         and noise levels can easily be set and scaled down through the course of a single level. It is
         not clear how to automate the resetting of these kinds of HPs.
     """
-    return task_settable_env.get_task()
+
+    #return task_settable_env.get_task()
 
     # If the mean reward is above the success threshold for the current phase then advance the phase
     assert task_settable_env is not None, "\n///// Unable to access task_settable_env in curriculum_fn."
     phase = task_settable_env.get_task()
-    stopper = task_settable_env.get_stopper()
-    assert stopper is not None, "\n///// Unable to access the stopper object in curriculum_fn."
+    #stopper = task_settable_env.get_stopper()
+    #assert stopper is not None, "\n///// Unable to access the stopper object in curriculum_fn."
     total_steps_sampled = task_settable_env.get_total_steps() #for a single copy of the environment
 
     #value = train_results["episode_reward_mean"]
@@ -1153,12 +1154,12 @@ def curriculum_fn(train_results:        dict,           #current status of train
     #      .format(total_steps_sampled, task_settable_env.get_total_steps()))
 
     # If there has been no perturbations performed yet (still prior to the first cycle) then
-    TARGET_PHASE = 4
+    TARGET_PHASE = 3
     if not perturb_ctrl.has_perturb_begun():
 
         # When threshold number of steps expires, advance from phase 0 to phase 4; this allows the agent to start
         # figuring out where the finish line is, but otherwise do all training at the phase 4 difficulty.
-        if phase < TARGET_PHASE  and  total_steps_sampled > 60000: #a little before perturbation
+        if phase < TARGET_PHASE  and  total_steps_sampled > 80000: #a little before perturbation
             print("///// curriculum_fn advancing phase from {} to {}".format(phase, TARGET_PHASE))
             task_settable_env.set_task(TARGET_PHASE)
 

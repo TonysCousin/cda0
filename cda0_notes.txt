@@ -1537,7 +1537,37 @@ program as a system test.
 * Starting with mostly the default configs until I get a feel for it.
 * Cannot use any of the previously saved checkpoints. Also cannot use the existing checkpoint handling code in the
   CdaCallbacks class (I will upgrade it in the future to do this).
+* Updated the storage scheme for checkpoints, since I'm getting so many of them with too many attributes.
 
+* Run 32efc training level 0 starting from scratch (no usable checkpoints) with PBT perturbing every 100 iterations.
+
+3/29/23
+
+	* All trials terminated at 1100 iterations, having not achieved the success criteria. But all got pretty close,
+	  in the range of 5-7 for rmean.  Just needed a little more time.
+	* SAC seems to move through the iterations a lot faster than PPO.
+	* Saved the best checkpoint (trial 10) under SAC L0.
+
+* Run 9eb73 attempting to finish what the previous run started, so using its checkpoint, but still training level 0.
+	* Checkpoint restore using the existing CdaCallbacks code worked fine, with the sample printing turned off.
+	* Interesting that the first several iterations produce training rewards that look like the agent was never
+	  trained before.
+	* Training ended similarly to previous, with rmean values in the 6-8 range, but there were a couple spikes
+	  into the low 9s (just shy of the stopping condition). Even so, the best trial (7) when run in inference
+	  was really bad, changing lanes frequently, and thus making illegal ones often.
+
+
+*** Variables under manual control:
+	* batch size
+	* noise schedule
+	* replay buffer HPs
+	* PBT HPs
+	* training session duration, stopping criteria, checkpointing and curriculum structure
+	** learning algorithm
+	** NN structure
+	** action space design
+	** observation space design
+	** reward structure
 
 AI: try using discrete actions
 AI: track down where Trainable/Algorithm object is instantiated and its setup() method is called, since this happens at
