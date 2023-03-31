@@ -1554,7 +1554,20 @@ program as a system test.
 	  trained before.
 	* Training ended similarly to previous, with rmean values in the 6-8 range, but there were a couple spikes
 	  into the low 9s (just shy of the stopping condition). Even so, the best trial (7) when run in inference
-	  was really bad, changing lanes frequently, and thus making illegal ones often.
+	  was really bad, changing lanes frequently, and thus making illegal ones often. Hard to understand, given
+	  the rmean values, and even evaluation runs looked similarly good.
+
+* Run ? starting from scratch at level 0, then promoting to level 3
+	* Adjusted noise level downward.
+	* Turned on curriculum auto promotion from phase 0 to phase 3 after 80k steps.
+	* No good. rmean actually started dropping after the switch to level 3. A couple trials spiked to 
+	  rmean > 9.5 and terminated successfully. But inference on one of them was terrible.
+
+*** Switched to DISCRETE ACTION SPACE with 23 accel values.
+	* Turns out SAC can't handle a MultiDiscrete action space, so I also had to switch back to PPO.
+	* Did this on new branch discrete-actions off of alt-training.
+
+* Run b948a started from scratch training just level 0 using discrete action space.
 
 
 *** Variables under manual control:
@@ -1569,7 +1582,8 @@ program as a system test.
 	** observation space design
 	** reward structure
 
-AI: try using discrete actions
+AI: change coord system so that x is distance to finish line. Otherwise, comparing ego_x in lane 2 go nx_x in lane 1 is
+    too confusing, and maybe even wrong. Lanes shouldn't have separate coord systems.
 AI: track down where Trainable/Algorithm object is instantiated and its setup() method is called, since this happens at
     the beginning of each trial, and at each perturbation of each trial in PBT.
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?

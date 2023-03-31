@@ -5,10 +5,10 @@ import time
 import numpy as np
 import gym
 import ray
-#import ray.rllib.algorithms.ppo as ppo
+import ray.rllib.algorithms.ppo as ppo
 #import ray.rllib.algorithms.ddpg as ddpg
 #import ray.rllib.algorithms.td3  as td3
-import ray.rllib.algorithms.sac as sac
+#import ray.rllib.algorithms.sac as sac
 from ray.tune.logger import pretty_print
 import pygame
 from pygame.locals import *
@@ -55,9 +55,11 @@ def main(argv):
                     "neighbor_start_loc":   0.0, #dist downtrack from beginning of lane 1 for n3, m
                     "merge_relative_pos":   relative_pos, #neighbor vehicle that we want ego to be beside when starting in lane 2
                 }
+    env = SimpleHighwayRampWrapper(env_config)
+    #print("///// Environment configured. Params are:")
+    #print(pretty_print(cfg.to_dict()))
 
     # Algorithm-specific configs - NN structure needs to match the checkpoint being read
-    """
     cfg = ppo.PPOConfig()
     cfg.framework("torch").exploration(explore = False)
     model = cfg.to_dict()["model"]
@@ -65,8 +67,8 @@ def main(argv):
     model["fcnet_activation"]               = "relu"
     model["post_fcnet_activation"]          = "linear"
     cfg.training(model = model)
-    """
 
+    """
     cfg = sac.SACConfig()
     cfg.framework("torch").exploration(explore = False)
     cfg_dict = cfg.to_dict()
@@ -77,21 +79,16 @@ def main(argv):
     q_config["fcnet_hiddens"]                   = [256, 128]
     q_config["fcnet_activation"]                = "relu"
     cfg.training(policy_model_config = policy_config, q_model_config = q_config)
+    """
 
     cfg.environment(env = SimpleHighwayRampWrapper,
                     env_config = env_config
                    )
 
-    env = SimpleHighwayRampWrapper(env_config)
-    #print("///// Environment configured. Params are:")
-    #print(pretty_print(cfg.to_dict()))
-
     # Restore the selected checkpoint file
     # Note that the raw environment class is passed to the algo, but we are only using the algo to run the NN model,
     # not to run the environment, so any environment info we pass to the algo is irrelevant for this program.
     algo = cfg.build()
-    #algo = ppo.PPO(config = config, env = SimpleHighwayRampWrapper) #needs the env class, not the object created above
-
     algo.restore(checkpoint)
     print("///// Checkpoint {} successfully loaded.".format(checkpoint))
     if learning_level == 4  and  start_lane == 2:
@@ -111,10 +108,7 @@ def main(argv):
     time.sleep(2)
     while not done:
         step += 1
-        action = algo.compute_single_action(obs, explore = True)
-        if step <= 5:
-            if abs(action[1]) > 0.49:
-                action[1] = 0.0
+        action = algo.compute_single_action(obs, explore = False)
         raw_obs, reward, done, truncated, info = env.step(np.ndarray.tolist(action)) #obs returned is UNSCALED
         episode_reward += reward
 

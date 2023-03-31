@@ -6,9 +6,9 @@ from ray.tune.schedulers import PopulationBasedTraining
 from ray.tune.tune_config import TuneConfig
 from ray.tune.logger import pretty_print
 from ray.air import RunConfig
-#import ray.rllib.algorithms.ppo as ppo
+import ray.rllib.algorithms.ppo as ppo
 #import ray.rllib.algorithms.a2c as a2c
-import ray.rllib.algorithms.sac as sac
+#import ray.rllib.algorithms.sac as sac
 #import ray.rllib.algorithms.ddpg as ddpg
 
 from stop_logic import StopLogic
@@ -40,8 +40,8 @@ def main(argv):
     ray.init()
 
     # Define which learning algorithm we will use and set up is default config params
-    algo = "SAC"
-    cfg = sac.SACConfig()
+    algo = "PPO"
+    cfg = ppo.PPOConfig()
     cfg.framework("torch")
     cfg_dict = cfg.to_dict()
 
@@ -87,6 +87,7 @@ def main(argv):
     cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config, env_task_fn = curriculum_fn)
 
     # Add exploration noise params
+    """
     explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
     explore_config["stddev"]                    = tune.uniform(0.1, 0.5) #this param is specific to GaussianNoise
@@ -94,7 +95,8 @@ def main(argv):
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
     explore_config["scale_timesteps"]           = 500000  #tune.choice([100000, 400000]) #was 900k
-    cfg.exploration(explore = True, exploration_config = explore_config)
+    """
+    cfg.exploration(explore = True)
     #cfg.exploration(explore = False)
 
     # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
@@ -136,7 +138,6 @@ def main(argv):
     # Custom callbacks from the training algorithm
     cfg.callbacks(  CdaCallbacks)
 
-    """
     # ===== Training algorithm HPs for PPO =================================================
 
     # NOTE: lr_schedule is only defined for policy gradient algos
@@ -157,8 +158,8 @@ def main(argv):
     model_config["fcnet_hiddens"]               = [256, 128]
     model_config["fcnet_activation"]            = "relu"
     cfg.training(model = model_config)
-    """
 
+    """
     # ===== Training algorithm HPs for SAC ==================================================
 
     opt_config = cfg_dict["optimization"]
@@ -184,6 +185,7 @@ def main(argv):
                     policy_model_config         = policy_config,
                     q_model_config              = q_config,
     )
+    """
 
     # ===== Final setup =========================================================================
 

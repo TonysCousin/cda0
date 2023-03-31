@@ -2,7 +2,7 @@ from collections import deque
 from statistics import mean
 from typing import Tuple, Dict
 import gymnasium
-from gymnasium.spaces import Discrete, Box
+from gymnasium.spaces import MultiDiscrete, Box
 import numpy as np
 from ray.rllib.env.env_context import EnvContext
 from ray.rllib.env.apis.task_settable_env import TaskSettableEnv
@@ -52,12 +52,15 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         Observation space:  In this version the agent magically knows everything going on in the environment, including
         some connectivities of the lane geometry.  Its observation space is described in the __init__() method (all float32).
 
-        Action space:  continuous and contains the following elements in the vector (real world values, unscaled):
-            accel_cmd           - the desired forward acceleration, m/s^2
-            lane_change_cmd     - a pseudo-discrete value with the following meanings:
-                                    val < -0.5: change lanes left
-                                    -0.5 < val < 0.5: stay in lane
-                                    0.5 < val: change lanes right
+        Action space:  discrete and contains the following elements in the vector (real world values, unscaled):
+            accel_cmd           - the desired forward acceleration, m/s^2, represented as a 1-hot vector of length 23; values
+                                    are (in multiples of MAX_ACCEL):
+                                    -1.0, -0.8, -0.6, -0.5, -0.4, -0.3, -0.22, -0.15, -0.09, -0.05, -0.02, 0.0,
+                                    <and the reverse in the positive values>
+            lane_change_cmd     - a 1-hot vector of length 3 with the following possible values:
+                                    0 = change lanes left
+                                    1 = stay in lane
+                                    2 = change lanes right
 
         Lane connectivities are defined by three parameters, as shown in the following series of diagrams.  These
         parameters work the same whether they describe a lane on the right or left of the ego vehicle's lane, so we only
@@ -127,6 +130,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     #metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     OBS_SIZE                = 29
+    NUM_ACCEL_CMDS          = 23
     VEHICLE_LENGTH          = 20.0      #m
     MAX_SPEED               = 36.0      #vehicle's max achievable speed, m/s
     MAX_ACCEL               = 3.0       #vehicle's max achievable acceleration (fwd or backward), m/s^2
@@ -181,7 +185,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             self.vehicles.append(v)
 
         #
-        #..........Define the essential attributes required of any Env object: observation space and action space
+        #..........Define the observation space
         #
 
         # Indices into the observation vector (need to have all vehicles contiguous with ego being the first one)
@@ -271,14 +275,50 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         if self.debug == 2:
             print("///// observation_space = ", self.observation_space)
 
-        lower_act = np.array([-SimpleHighwayRamp.MAX_ACCEL, -1.0])
-        upper_act = np.array([ SimpleHighwayRamp.MAX_ACCEL,  1.0])
-        self.action_space = Box(low=lower_act, high=upper_act, dtype=np.float)
+        self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE) #will be returned from reset() and step()
+        self._verify_obs_limits("init after space defined")
+
+        #
+        #..........Define the action space
+        #
+
+        # Acceleration commands
+        self.accel_cmds = np.zeros([SimpleHighwayRamp.NUM_ACCEL_CMDS])
+        self.accel_cmds[ 0] = -1.0 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[ 1] = -0.8 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[ 2] = -0.6 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[ 3] = -0.5 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[ 4] = -0.4 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[ 5] = -0.3 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[ 6] = -0.22* SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[ 7] = -0.15* SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[ 8] = -0.09* SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[ 9] = -0.05* SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[10] = -0.02* SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[11] =  0.0 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[12] =  0.02* SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[13] =  0.05* SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[14] =  0.09* SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[15] =  0.15* SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[16] =  0.22* SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[17] =  0.3 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[18] =  0.4 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[19] =  0.5 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[20] =  0.6 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[21] =  0.8 * SimpleHighwayRamp.MAX_ACCEL
+        self.accel_cmds[22] =  1.0 * SimpleHighwayRamp.MAX_ACCEL
+
+        # Lateral control actions
+        self.LANE_CHANGE_LEFT = 0
+        self.STAY_IN_LANE = 1
+        self.LANE_CHANGE_RIGHT = 2
+        self.action_space = MultiDiscrete(np.array([SimpleHighwayRamp.NUM_ACCEL_CMDS, 3]))
         if self.debug == 2:
             print("///// action_space = ", self.action_space)
 
-        self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE) #will be returned from reset() and step()
-        self._verify_obs_limits("init after space defined")
+        #
+        #..........Remaining initializations
+        #
 
         # Create the roadway geometry
         self.roadway = Roadway(self.debug)
@@ -521,7 +561,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
 
     def step(self,
-                action  : list      #list of floats; 0 = accel cmd, m/s^2, 1 = lane chg cmd (-1 left, 0 none, +1 right)
+                action  : list      #list of ints; 0 = accel cmd index, 1 = lane chg cmd index
             ) -> Tuple[np.array, float, bool, bool, Dict]:
         """Executes a single time step of the environment.  Determines how the input actions will alter the
             simulated world and returns the resulting observations to the agent.
@@ -537,8 +577,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             print("      vehicles array contains:")
             for i, v in enumerate(self.vehicles):
                 v.print(i)
-        assert -SimpleHighwayRamp.MAX_ACCEL <= action[0] <= SimpleHighwayRamp.MAX_ACCEL, "Input accel cmd invalid: {:.2f}".format(action[0])
-        assert -1.0 <= action[1] <= 1.0, "Input lane change cmd is invalid: {:.2f}".format(action[1])
 
         self.total_steps += 1
         self.steps_since_reset += 1
@@ -560,7 +598,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             new_accel_cmd = 0.0 #non-ego vehicles are constant speed for now
             prev_accel_cmd = 0.0
             if i == 0: #this is the ego vehicle
-                new_accel_cmd = action[0]
+                new_accel_cmd = self.accel_cmds[action[0]]
                 prev_accel_cmd = self.obs[self.EGO_ACCEL_CMD_CUR]
             new_speed, new_x = v.advance_vehicle(new_accel_cmd, prev_accel_cmd)
             if new_x > SimpleHighwayRamp.SCENARIO_LENGTH:
@@ -589,15 +627,15 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # TODO future: replace instance variables lane_change_underway and lane_id with those in vehicle[0]
         ran_off_road = False
 
-        if action[1] < -0.5  or  action[1] > 0.5  or  self.lane_change_underway != "none":
+        if action[1] != self.STAY_IN_LANE  or  self.lane_change_underway != "none":
             if self.lane_change_underway == "none": #count should always be 0 in this case, so initiate a new count
-                if action[1] < -0.5:
+                if action[1] == self.LANE_CHANGE_LEFT:
                     self.lane_change_underway = "left"
                 else:
                     self.lane_change_underway = "right"
                 self.lane_change_count = 1
                 if self.debug > 0:
-                    print("      *** New lane change maneuver initiated. action[1] = {:.2f}, status = {}"
+                    print("      *** New lane change maneuver initiated. action[1] = {}, status = {}"
                             .format(action[1], self.lane_change_underway))
             else: #once a lane change is underway, contiinue until complete, regardless of new commands
                 self.lane_change_count += 1
@@ -669,8 +707,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Update the obs vector with the new state info
         self.obs[self.EGO_ACCEL_CMD_PREV2] = self.obs[self.EGO_ACCEL_CMD_PREV1]
         self.obs[self.EGO_ACCEL_CMD_PREV1] = self.obs[self.EGO_ACCEL_CMD_CUR]
-        self.obs[self.EGO_ACCEL_CMD_CUR] = action[0]
-        self.obs[self.EGO_LANE_CMD_CUR] = action[1]
+        self.obs[self.EGO_ACCEL_CMD_CUR] = self.accel_cmds[action[0]]
+        self.obs[self.EGO_LANE_CMD_CUR] = action[1] - 1 #maps to [-1, 0, 1]
         self.obs[self.EGO_LANE_ID] = new_ego_lane
         self.obs[self.EGO_LANE_REM] = new_ego_rem
         self.obs[self.EGO_SPEED] = new_ego_speed
@@ -1068,11 +1106,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             penalty = 0.0
             if norm_speed > 1.0:
                 diff = norm_speed - 1.0
-                penalty = high_speed_mult * diff*diff
+                #penalty = high_speed_mult * diff*diff
+                penalty = 0.1 * high_speed_mult * diff
                 explanation += "HIGH speed pen {:.4f}. ".format(penalty)
             else:
                 diff = 1.0 - norm_speed
-                penalty = low_speed_mult * diff*diff
+                #penalty = low_speed_mult * diff*diff
+                penalty = 0.4 * low_speed_mult * diff
                 explanation += "Low speed pen {:.4f}. ".format(penalty)
             reward -= penalty
 
@@ -1136,7 +1176,7 @@ def curriculum_fn(train_results:        dict,           #current status of train
         not clear how to automate the resetting of these kinds of HPs.
     """
 
-    #return task_settable_env.get_task()
+    return task_settable_env.get_task()
 
     # If the mean reward is above the success threshold for the current phase then advance the phase
     assert task_settable_env is not None, "\n///// Unable to access task_settable_env in curriculum_fn."
