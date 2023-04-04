@@ -1569,6 +1569,70 @@ program as a system test.
 
 * Run b948a started from scratch training just level 0 using discrete action space.
 
+3/31/23
+
+	* All trials eventually met the stop criteria, every one hitting the rmin threshold (6.0) before hitting
+	  the rmean threshold (9.5); the final rmin values were all in [8.1, 8.9].
+	* I did inference on trials 4 and 14 (best rmean) and found that #4 performs really well, so keeping it
+	  for future reference.
+
+* Run 1aa52 starting from the level 0 checkpoint just saved and training for level 2 using PPO and discrete actions.
+
+4/1/23
+
+	* 15 of the trials errored out, nearly at the same time, between 1M and 1.2M steps. The final trial ran to
+	  the limit of 2000 iterations and stopped. None scored more than rmean ~ 6.5, and none had rmin > -10.
+	* Sampling the error files, it seems they all just died of unknown segfaults.
+
+* Run bd6cc starting from the level 0 checkpoint and training for level 2 (PPO with discrete actions).
+	* Reduced sgd_minibatch_size from 64 to 16 to try getting a little more variation in rewards.
+	* Reduced the number of trials from 16 to 8 since they all have been closely packed togehter in the reward
+	  plots.
+	* None of the trials saw rmax > -10 prior to the first perturb cycle, so there seems to be no way it will
+	  learn anything.
+
+4/2/23
+
+* Lost most of a day due to power interruption, which somehow screws up the GPU driver.
+
+* Run d9e0d starting from the level 0 checkpoint and training for level 2 (PPO with discrete actions).
+	* Increased sgd_minibatch_size from 16 to 128.
+	* Using 10 trials.
+
+4/3/23
+
+	* All trials behaved very similarly, gradually improving to an asymptotic approach to rmean ~6 and
+	  rmax ~9 and rmin in the range -10 to -2 after 2000 iterations (2.7M steps). The rmax was still slowly
+	  increasing, so more time may have improved results slightly.
+	* The best result was trial 6, with ending rmean = 5.9 and rmax = 9.0. It used 
+		clip_param = 0.056
+		entropy_coeff = 0.0030
+		kl_coeff = 0.74
+		lr = 2.56e-5
+	* In inference, trial 6 performed really well, so it's a keeper, and the new baseline.
+	* I discovered that PBT was perturbing 3 variables that are for SAC, so weren't even being used.
+	  No wonder it took so long for this solution to perform well.
+
+* Run 0ed7f starting from the level 2 checkpoint (d9e0d) and training for level 3 (PPO with discrete actions).
+	* Fixed the PBT perturb params to use the PPO variables.
+
+4/4/23
+
+	* Got quite good results on 9 of 10 trials in < 1M steps. All of them beat the rmin criterion of 6
+	  while achieving rmean in the range of 8.
+	* Trial 6 performed the best, with rmean = 8.02, rmin = 6.00 and
+		clip_param = 0.27
+		entropy_coeff = 0.00071
+		kl_coeff = 0.80
+		lr = 1.61e-4
+	* Inference worked very well, so this is the new baseline.
+	* Realized that I need a reward deadband in the speed dimension. with none it is almost never choosing an
+	  accel cmd = 0, rather it constantly tries to tweak the behavior, which is unnecessary.
+
+* Run ? starting from the above level 3 checkpoint and training for level 4 (PPO with discrete actions).
+	* Adjusted reward function to allow a small deadband of speed just below the speed limit.
+	* Adjusted PBT schedule to perturb every 80 iterations instead of every 100.
+
 
 *** Variables under manual control:
 	* batch size

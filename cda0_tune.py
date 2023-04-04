@@ -29,6 +29,15 @@ _checkpoint_path = None
 # Didn't quite finish training level 0
 #_checkpoint_path = "/home/starkj/projects/cda0/training/SAC/p256-128-v256-128/L0-32efc/trial10/checkpoint_001001"
 
+# Completed level 0 solidly with PPO and discrete action space
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-b948a/trial04/checkpoint_000490"
+
+# Completed level 2 solidly with PPO and discrete action space on 4/3/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-d9e0d/trial06/checkpoint_002000"
+
+# Completed level 3 solidly with PPO and discrete actions pace on 4/4/23
+_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-0ed7f/trial06/checkpoint_000622"
+
 
 def main(argv):
 
@@ -50,12 +59,12 @@ def main(argv):
     # let_it_run can be a single value if it applies to all phases.
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
-    success_threshold   = [9.5,         9.5,        9.5,        9.0,        7.0]
-    failure_threshold   = [6.0,         6.0,        6.0,        5.0,        2.0]
+    success_threshold   = [9.5,         9.5,        9.5,        9.5,        9.5]
+    failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
-    burn_in_period      = 100 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 2000
-    num_trials          = 16
+    burn_in_period      = 80 #num iterations before we consider stopping or promoting to next level
+    max_iterations      = 1000
+    num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
     PerturbationController(_checkpoint_path, num_trials)
@@ -146,7 +155,7 @@ def main(argv):
                     train_batch_size            = 1024, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
                     lr                          = tune.loguniform(1e-6, 1e-3),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
-                    sgd_minibatch_size          = 64, #must be <= train_batch_size (and divide into it)
+                    sgd_minibatch_size          = 128, #must be <= train_batch_size (and divide into it)
                     entropy_coeff               = tune.uniform(0.0005, 0.008),
                     kl_coeff                    = tune.uniform(0.3, 0.8),
                     #clip_actions                = True,
@@ -193,7 +202,7 @@ def main(argv):
     #print(pretty_print(cfg.to_dict()))
 
     chkpt_int                                   = 10                    #num iters between storing new checkpoints
-    perturb_int                                 = 100                   #num iters between policy perturbations (must be a multiple of chkpt period)
+    perturb_int                                 = burn_in_period        #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation
@@ -209,9 +218,13 @@ def main(argv):
                                                                         # then immediately moves on. If True and one trial dies, then PBT hangs and all
                                                                         # remaining trials go into perpetual PAUSED state.
                     hyperparam_mutations={                              #resample distributions
-                        "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
-                        "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
-                        "optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
+                    #    "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
+                    #    "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
+                    #    "optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
+                        "lr"                                    :   tune.loguniform(1e-6, 1e-3),
+                        "entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
+                        "kl_coeff"                              :   tune.uniform(0.3, 0.8),
+                        "clip_param"                            :   tune.uniform(0.05, 0.4),
                     },
     )
 
@@ -243,6 +256,7 @@ def main(argv):
 
     # Execute the HP tuning job, beginning with a previous checkpoint, if one was specified in the CdaCallbacks.
     tuner = Tuner(algo, param_space = cfg.to_dict(), tune_config = tune_config, run_config = run_config)
+    #tuner = Tuner.restore(path="/home/starkj/ray_results/cda0")
     print("\n///// Tuner created.\n")
 
     result = tuner.fit()

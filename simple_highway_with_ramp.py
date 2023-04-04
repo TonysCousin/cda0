@@ -1109,8 +1109,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 #penalty = high_speed_mult * diff*diff
                 penalty = 0.1 * high_speed_mult * diff
                 explanation += "HIGH speed pen {:.4f}. ".format(penalty)
-            else:
-                diff = 1.0 - norm_speed
+            elif norm_speed < 0.96:
+                diff = 0.96 - norm_speed
                 #penalty = low_speed_mult * diff*diff
                 penalty = 0.4 * low_speed_mult * diff
                 explanation += "Low speed pen {:.4f}. ".format(penalty)
