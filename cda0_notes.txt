@@ -1653,6 +1653,21 @@ program as a system test.
 	  avoid a collision, so the generated initial speed will force it to learn to accept some penalties
 	  in the ramp speed profile in order to avoid a crash.
 
+4/5/23
+
+	* All trials ran to iteration limit. 
+	* The best trial at the end was #0, with rmean = 3.5. Second best was #9 at rmean = 2.9. The trial with
+	  largest rmean towards the end was #2 with rmean = 7.0 on a brief spike for one iteration around 1.98M
+	  steps, maybe ~1700 iterations. However, no checkpoint was stored near there.
+	* Inference on trial 0 works great on lanes 0 & 1. It works pretty well on lane 2, but it seems to have
+	  learned a simple behavior of always slowing down (to 24-25 m/s), then changing lanes, hoping the
+	  neighbors have already passed by then. This works well if it is timed for the end of the congestion,
+	  but usually results in a crash if it is timed for the beginning. Not a terrible policy, but it doesn't
+	  seem to be looking at the neighbor data dynamically. This could be because:
+		* the NN is too small to accommodate that level of thinking, or
+		* the observation space makes it too difficult to understand what is going on.
+	* Inference on trial 9 performed similarly, but a few more crashes.
+
 
 
 *** Variables under manual control:

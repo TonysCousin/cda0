@@ -36,10 +36,13 @@ _checkpoint_path = None
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-d9e0d/trial06/checkpoint_002000"
 
 # Completed level 3 solidly with PPO and discrete actions pace on 4/4/23
-_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-0ed7f/trial06/checkpoint_000622"
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-0ed7f/trial06/checkpoint_000622"
 
 # Completed level 4 moderately challenged with PPO and discrete action space on 4/4/23
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-2ce8a/trial03/checkpoint_001190"
+
+# Completed level 4 challenging course with PPO and discrete action space on 4/5/23
+_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-65cf4/trial00/checkpoint_002000"
 
 
 def main(argv):
