@@ -38,6 +38,9 @@ _checkpoint_path = None
 # Completed level 3 solidly with PPO and discrete actions pace on 4/4/23
 _checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-0ed7f/trial06/checkpoint_000622"
 
+# Completed level 4 moderately challenged with PPO and discrete action space on 4/4/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-2ce8a/trial03/checkpoint_001190"
+
 
 def main(argv):
 
@@ -63,7 +66,7 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 80 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 1000
+    max_iterations      = 2000
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -91,7 +94,7 @@ def main(argv):
     env_config["training"]                      = True
     env_config["randomize_start_dist"]          = True
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
-    env_config["neighbor_start_loc"]            = 320.0 #dist downtrack from beginning of lane 1 for n3, m
+    env_config["neighbor_start_loc"]            = 0.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
     cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config, env_task_fn = curriculum_fn)
 
@@ -240,8 +243,7 @@ def main(argv):
                     name                        = "cda0",
                     local_dir                   = "~/ray_results",
                     #stop                        = stopper,
-                    stop                        = {"episode_reward_min":        failure_threshold[difficulty_level],
-                                                   "episode_reward_mean":       success_threshold[difficulty_level],
+                    stop                        = {"episode_reward_mean":       success_threshold[difficulty_level],
                                                    "training_iteration":        max_iterations,
                                                    },
                     sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir

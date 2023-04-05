@@ -1,6 +1,8 @@
 from collections import deque
 from statistics import mean
 from typing import Tuple, Dict
+import math
+import time
 import gymnasium
 from gymnasium.spaces import MultiDiscrete, Box
 import numpy as np
@@ -432,10 +434,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             elif self.difficulty_level == 4:
                 # We want to sync the agent in lane 2 to force it to avoid a collision by positioning it right next to the neighbors
                 if ego_lane_id == 2:
-                    ego_x = 0.0
-                    #loc = int(self.prng.random()*2.0) + 3 #Choose all location 3 or 4 to get it used to falling behind the convoy
+                    ego_x = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH
                     loc = int(self.prng.random()*5.0)
-                    ego_speed = self.initialize_ramp_vehicle_speed(loc)
+                    ego_speed = self.initialize_ramp_vehicle_speed(loc, ego_x)
                 else:
                     ego_x = self.prng.random() * 500.0
                     ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
@@ -451,7 +452,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If difficulty level 4, then always use the config value for merge relative position
             if self.difficulty_level == 4  and  ego_lane_id == 2:
-                ego_speed = self.initialize_ramp_vehicle_speed(self.merge_relative_pos)
+                ego_speed = self.initialize_ramp_vehicle_speed(self.merge_relative_pos, ego_x)
             else:
                 ego_speed = self.prng.random() * 31.0 + 4.0 if self.init_ego_speed is None  else self.init_ego_speed
 
@@ -795,6 +796,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     def initialize_ramp_vehicle_speed(self,
                                       relative_pos    : int = 2,  #desired position of the ego vehicle relative to the 3 neighbors
                                                                   # at the time it reaches the merge area
+                                      ego_x           : float = 0.0 #ego vehicle's downtrack distance from start of the lane, m
                                      ) -> float:
         """Returns a speed to start the ego vehicle when it starts at the beginning of lane 2, such that when it arrives at the
             beginning of the merge area, assuming it continues at the same speed, it will approximately match the specified
@@ -808,7 +810,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             Note that this method only makes sense in difficulty level 4, where the neighbors start lined up in lane 1 (neighbor 1
             in front and neighbor 3 in the rear), and they travel at constant speed with no lane changes.  So predicting their
             arrival at the merge area is trivial.  Estimating the ego vehicle's nominal arrival at the merge area assumes that it
-            continues at its initial speed throughout the ramp length.
+            would try to achieve a max-reward trajectory, which is max accel until it hits speed limit, then stay at that speed.
         """
 
         L1_DIST_TO_MERGE = 800.0 #m, depends on code in Roadway class
@@ -823,22 +825,53 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc - headway) / self.neighbor_speed
         else:
             tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc) / self.neighbor_speed
+        #print("\n///// initialize_ramp_vehicle_speed: rel pos = {}, headway = {:.1f}, n start loc = {:.1f}, n spd = {:.1f}, tgt time = {:.1f}"
+        #      .format(relative_pos, headway, self.neighbor_start_loc, self.neighbor_speed, tgt_arrival_time))
 
         # Get a random offset from that arrival time and apply it
         time_headway = headway / self.neighbor_speed
-        offset = self.prng.normal(scale = 0.3*time_headway)
-        if relative_pos == 0:
+        offset = self.prng.normal(scale = 0.1*time_headway)
+        if relative_pos == 0: #in front of first neighbor
             offset -= 1.1 * time_headway
-        elif relative_pos == 4:
+        elif relative_pos == 4: #behind last neighbor
             offset += 1.1 * time_headway
+        tgt_arrival_time += offset
 
-        # Determine the ego vehicle's avg speed to give that time of arrival
-        desired_avg_speed = L2_DIST_TO_MERGE / (tgt_arrival_time + offset)
-        #print("\n///// initialize_ramp_vehicle_speed computed desired speed = {:.1f} for relative_pos = {}, tgt arrival = {:.1f} s"
-        #      .format(desired_avg_speed, relative_pos, tgt_arrival_time))
-        if desired_avg_speed > SimpleHighwayRamp.MAX_SPEED:
-            desired_avg_speed = SimpleHighwayRamp.MAX_SPEED
-        return desired_avg_speed
+        # If our desired arrival time is large enough then
+        v0 = SimpleHighwayRamp.ROAD_SPEED_LIMIT
+        #print("///// initialize_ramp_vehicle_speed: tgt time = {:.1f}, offset = {:.1f}, ego_x = {:.1f}".format(tgt_arrival_time, offset, ego_x))
+        if tgt_arrival_time > (L2_DIST_TO_MERGE - ego_x)/SimpleHighwayRamp.ROAD_SPEED_LIMIT:
+
+            # Solve quadratic equation (smaller root) to determine the ramp vehicle's starting speed, assuming that it will
+            # accelerate at the max rate until it reaches speed limit, then stays at that speed (this would maximize its reward for
+            # the pre-merge part of the episode, so it will have a desire to stay close to this trajectory).
+            vf = SimpleHighwayRamp.ROAD_SPEED_LIMIT
+            qa = -0.5 / SimpleHighwayRamp.MAX_ACCEL
+            qb = vf / SimpleHighwayRamp.MAX_ACCEL
+            qc = vf*tgt_arrival_time - 0.5*vf*vf/SimpleHighwayRamp.MAX_ACCEL - (L2_DIST_TO_MERGE - ego_x)
+            #print("///// initialize_ramp_vehicle_speed: qa = {:.4f}, qb = {:.4f}, qc = {:.4f}, tgt time = {:.1f}"
+            #    .format(qa, qb, qc, tgt_arrival_time))
+            root_part = math.sqrt(qb*qb - 4.0*qa*qc)
+            v0 = (-qb + root_part) / 2.0 / qa
+            if v0 <= 0.0  or  v0 > SimpleHighwayRamp.ROAD_SPEED_LIMIT:
+                v0 = -qb - root_part / 2.0 / qa
+                if v0 <= 0.0  or  v0 > SimpleHighwayRamp.ROAD_SPEED_LIMIT:
+                    v0 = 0.5*SimpleHighwayRamp.ROAD_SPEED_LIMIT #neither root works, pick something not crazy
+                    print("///// initialize_ramp_vehicle_speed: CAUTION - neither v0 root was acceptable!")
+
+            #print("///// initialize_ramp_vehicle_speed computed desired speed = {:.1f} for relative_pos = {}, tgt arrival = {:.1f} s"
+            #    .format(v0, relative_pos, tgt_arrival_time))
+
+        else: #ego will have to start faster than speed limit to hit the selected relative position
+            v0 = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - SimpleHighwayRamp.ROAD_SPEED_LIMIT) + SimpleHighwayRamp.ROAD_SPEED_LIMIT
+            #print("///// initialize_ramp_vehicle_speed: can't do quadratic. Choosing v0 = {:.1f}".format(v0))
+
+        if v0 > SimpleHighwayRamp.MAX_SPEED:
+            v0 = SimpleHighwayRamp.MAX_SPEED
+        elif v0 <= 0.0:
+            v0 = 0.3
+
+        return v0
 
 
     ##### internal methods #####
@@ -1121,14 +1154,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 penalty = 0.1 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
                 reward -= penalty
                 explanation += "Lane chg pen {:.4f}. ".format(penalty)
-
-            # Penalty for lane change command not near one of the quantized action values
-            lcc = self.obs[self.EGO_LANE_CMD_CUR]
-            term = abs(lcc) - 0.5
-            penalty = 0.0004*(1.0 - 4.0*term*term)
-            reward -= penalty
-            if penalty > 0.0001:
-                explanation += "LCcmd pen {:.4f}. ".format(penalty)
 
         if self.debug > 0:
             print("///// reward returning {:.4f} due to crash = {}, off_road = {}, stopped = {}"

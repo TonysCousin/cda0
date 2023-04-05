@@ -1629,9 +1629,30 @@ program as a system test.
 	* Realized that I need a reward deadband in the speed dimension. with none it is almost never choosing an
 	  accel cmd = 0, rather it constantly tries to tweak the behavior, which is unnecessary.
 
-* Run ? starting from the above level 3 checkpoint and training for level 4 (PPO with discrete actions).
+* Run 319ad starting from the above level 3 checkpoint and training for level 4 (PPO with discrete actions).
 	* Adjusted reward function to allow a small deadband of speed just below the speed limit.
 	* Adjusted PBT schedule to perturb every 80 iterations instead of every 100.
+	* No good. All trials roughly consolidated around rmean of -4. Inference on one was pitiful on lane 2 (it
+	  consistently made illegal lane change in first time step).
+
+* Run 2ce8a repeated previous run, but with 2000 iteration limit. Maybe different prng draws will find something.
+	* Worked well! A couple trials found a high rmax before the first perturbation, and the others soon
+	  followed. After 1200 iterations all trials were still active, but tightly bunched around rmean ~8.2,
+	  with many iterations showing rmin ~+8.
+	* Trial 3 was the only one that showed a consistently high rmin of 7+ for an extended time (over 140k
+	  steps), so I chose this one to keep.
+	* Inference on this trial showed good performance on all lanes. However, it revealed that my assumptions
+	  in the reset() method were poor for setting the initial speed when in lane 2. Instead of staying
+	  close to that speed on average, it immediately accelerated to get up to the speed limit (training
+	  taught it this will maximize reward, crash notwithstanding). 
+
+* Run 65cf4 repeated previous run, but with initial conditions improved. Starting with same level 3 checkpoint and
+  training for level 4 (PPO with discrete actions).
+	* I enhanced the initialize_ramp_vehicle_speed() to assume max accel then stay at speed limit as the
+	  nominially desired trajectory (without neighbors). This is the trajectory it will need to alter to
+	  avoid a collision, so the generated initial speed will force it to learn to accept some penalties
+	  in the ramp speed profile in order to avoid a crash.
+
 
 
 *** Variables under manual control:
