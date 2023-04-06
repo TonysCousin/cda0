@@ -47,7 +47,6 @@ class StopLogic(Stopper):
             else:
                 let_it_run = [let_it_run] * self.num_phases
 
-        self.cur_phase = 0
         self.max_ep_timesteps = max_ep_timesteps
         self.max_iterations = max_iterations
         self.required_min_timesteps = min_timesteps #num required before declaring failure

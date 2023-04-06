@@ -1668,6 +1668,15 @@ program as a system test.
 		* the observation space makes it too difficult to understand what is going on.
 	* Inference on trial 9 performed similarly, but a few more crashes.
 
+*** These results are good enough for my objectives for level 4.  Need to start moving on.
+
+* Run e6215 just for grins...training level 4 from scratch (no checkpoint) using PPO and discrete action space, but
+  also with a larger NN ([400, 256]) to see if that is a factor in how it learned in the previous run.
+	* Since it won't have much chance to learn plan speed control on lane 2, I changed the reset() method to
+	  hold back the neighbor vehicles 10% of the time.
+	* Initial try had all trials running at rmean = -10 since it never learned how to steer straight. Turned
+	  on the curriculum_fn to do 80k steps at level 0 then promote to level 4 and ran again.
+
 
 
 *** Variables under manual control:

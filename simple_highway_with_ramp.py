@@ -461,7 +461,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         n_speed = 0.0
         if self.difficulty_level == 4: #steady speed vehicles in lane 1
             n_loc = self.neighbor_start_loc
-            n_speed = self.neighbor_speed
+            n_speed = self.neighbor_speed if self.prng.random() < 0.9 else 0.0
             if self.neighbor_print_latch:
                 print("///// reset worker {}: Neighbor vehicles on the move in level 4. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
                         .format(self.rollout_id, self.episode_count, self.total_steps, n_loc, n_speed))
@@ -1121,39 +1121,29 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             if self.difficulty_level > 0:
                 # If ego vehicle acceleration is jerky, then apply a penalty (worst case 0.003)
                 jerk = (self.obs[self.EGO_ACCEL_CMD_CUR] - self.obs[self.EGO_ACCEL_CMD_PREV1]) / self.time_step_size
-                penalty = 0.002 * jerk*jerk
+                penalty = 0.004 * jerk*jerk
                 reward -= penalty
                 if penalty > 0.0001:
                     explanation += "Jerk pen {:.4f}. ".format(penalty)
 
-            # Penalty for exceeding roadway speed limit - in some cases, this triggers a cancellation of the
-            # eventual completion award (similar punishment to stopping the episode, but without changing the
-            # physical environment)
-            high_speed_mult = 10.0
-            low_speed_mult = 0.8
+            # Penalty for deviating from roadway speed limit
+            speed_mult = 0.5
             if self.difficulty_level == 1  or  self.difficulty_level == 2:
-                high_speed_mult = 20.0
-                low_speed_mult = 3.0
+                speed_mult = 1.0
 
             norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT #1.0 = speed limit
+            diff = abs(norm_speed - 1.0)
             penalty = 0.0
-            if norm_speed > 1.0:
-                diff = norm_speed - 1.0
-                #penalty = high_speed_mult * diff*diff
-                penalty = 0.1 * high_speed_mult * diff
-                explanation += "HIGH speed pen {:.4f}. ".format(penalty)
-            elif norm_speed < 0.96:
-                diff = 0.96 - norm_speed
-                #penalty = low_speed_mult * diff*diff
-                penalty = 0.4 * low_speed_mult * diff
-                explanation += "Low speed pen {:.4f}. ".format(penalty)
+            if diff > 0.02:
+                penalty = speed_mult*(diff - 0.02)
+                explanation += "spd pen {:.4f}".format(penalty)
             reward -= penalty
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
                 penalty = 0.1 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
                 reward -= penalty
-                explanation += "Lane chg pen {:.4f}. ".format(penalty)
+                explanation += "Ln chg pen {:.4f}. ".format(penalty)
 
         if self.debug > 0:
             print("///// reward returning {:.4f} due to crash = {}, off_road = {}, stopped = {}"
@@ -1201,7 +1191,7 @@ def curriculum_fn(train_results:        dict,           #current status of train
         not clear how to automate the resetting of these kinds of HPs.
     """
 
-    return task_settable_env.get_task()
+    #return task_settable_env.get_task()
 
     # If the mean reward is above the success threshold for the current phase then advance the phase
     assert task_settable_env is not None, "\n///// Unable to access task_settable_env in curriculum_fn."
@@ -1219,7 +1209,7 @@ def curriculum_fn(train_results:        dict,           #current status of train
     #      .format(total_steps_sampled, task_settable_env.get_total_steps()))
 
     # If there has been no perturbations performed yet (still prior to the first cycle) then
-    TARGET_PHASE = 3
+    TARGET_PHASE = 4
     if not perturb_ctrl.has_perturb_begun():
 
         # When threshold number of steps expires, advance from phase 0 to phase 4; this allows the agent to start

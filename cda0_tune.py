@@ -11,7 +11,7 @@ import ray.rllib.algorithms.ppo as ppo
 #import ray.rllib.algorithms.sac as sac
 #import ray.rllib.algorithms.ddpg as ddpg
 
-from stop_logic import StopLogic
+from stop_simple import StopSimple
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
 from simple_highway_with_ramp import curriculum_fn
 from cda_callbacks import CdaCallbacks
@@ -42,7 +42,7 @@ _checkpoint_path = None
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-2ce8a/trial03/checkpoint_001190"
 
 # Completed level 4 challenging course with PPO and discrete action space on 4/5/23
-_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-65cf4/trial00/checkpoint_002000"
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-65cf4/trial00/checkpoint_002000"
 
 
 def main(argv):
@@ -75,17 +75,12 @@ def main(argv):
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
     PerturbationController(_checkpoint_path, num_trials)
 
-    # Define the stopping logic for non-PBT runs
-    stopper = StopLogic(max_ep_timesteps        = 400,
-                        max_iterations          = max_iterations,
-                        min_timesteps           = min_timesteps,
-                        avg_over_latest         = burn_in_period,
-                        success_threshold       = success_threshold,
-                        failure_threshold       = failure_threshold,
-                        degrade_threshold       = 0.25,
-                        compl_std_dev           = 0.05,
-                        let_it_run              = let_it_run,
-                    )
+    # Define the stopping logic for PBT runs - this requires mean reward to stay at the threshold for multiple consiecutive
+    # iterations, rather than just stopping on an outlier spike.
+    stopper = StopSimple(max_iterations     = max_iterations,
+                         avg_over_latest    = 5,
+                         success_threshold  = success_threshold[difficulty_level]
+                        )
 
     # Define the custom environment for Ray
     env_config = {}
@@ -170,7 +165,7 @@ def main(argv):
 
     # Add dict for model structure
     model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = [256, 128]
+    model_config["fcnet_hiddens"]               = [400, 256] #[256, 128]
     model_config["fcnet_activation"]            = "relu"
     cfg.training(model = model_config)
 
@@ -245,10 +240,10 @@ def main(argv):
     run_config = RunConfig(
                     name                        = "cda0",
                     local_dir                   = "~/ray_results",
-                    #stop                        = stopper,
-                    stop                        = {"episode_reward_mean":       success_threshold[difficulty_level],
-                                                   "training_iteration":        max_iterations,
-                                                   },
+                    stop                        = stopper,
+                    #stop                        = {"episode_reward_mean":       success_threshold[difficulty_level],
+                    #                               "training_iteration":        max_iterations,
+                    #                               },
                     sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
                     verbose                     = 3, #3 is default
                     checkpoint_config           = air.CheckpointConfig(

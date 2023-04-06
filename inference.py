@@ -63,7 +63,7 @@ def main(argv):
     cfg = ppo.PPOConfig()
     cfg.framework("torch").exploration(explore = False)
     model = cfg.to_dict()["model"]
-    model["fcnet_hiddens"]                  = [256, 128]
+    model["fcnet_hiddens"]                  = [400, 256] #[256, 128]
     model["fcnet_activation"]               = "relu"
     model["post_fcnet_activation"]          = "linear"
     cfg.training(model = model)
