@@ -1670,13 +1670,43 @@ program as a system test.
 
 *** These results are good enough for my objectives for level 4.  Need to start moving on.
 
-* Run e6215 just for grins...training level 4 from scratch (no checkpoint) using PPO and discrete action space, but
-  also with a larger NN ([400, 256]) to see if that is a factor in how it learned in the previous run.
-	* Since it won't have much chance to learn plan speed control on lane 2, I changed the reset() method to
-	  hold back the neighbor vehicles 10% of the time.
-	* Initial try had all trials running at rmean = -10 since it never learned how to steer straight. Turned
-	  on the curriculum_fn to do 80k steps at level 0 then promote to level 4 and ran again.
+* just for grins...training level 4 from scratch (no checkpoint) using PPO and discrete action space, but
+  also with a larger NN ([400, 256]) to see if that is a factor in how it learned in the previous run. I'm doing this
+  to kill time while I take care of other life priorities.
+	* Run e6215
+		* Since it won't have much chance to learn plan speed control on lane 2, I changed the reset() method to
+		  hold back the neighbor vehicles 10% of the time when in level 4.
+		* Initial try had all trials running at rmean = -10 since it never learned how to steer straight. Turned
+		  on the curriculum_fn to do 80k steps at level 0 then promote to level 4 and ran again.
 
+4/6/23
+
+		* It didn't do much. Most trials held rmean ~-6 and then spiked up to +10 for a single iteration, triggering
+		  the stop criterion without really learning enough. So I...
+
+	* Run 1e8ce repeated the above for-fun run, but with a new stopper that forces rmean to exceed the success threshold
+	  (on average) for at least 5 iterations before declaring done. Also changed the speed penalty to be symmetrical
+	  instead of heavily weighting the high-speed performance.
+		* Didn't work. All trials stayed at rmean = -10 except for a handful of spikes > 0, but no real learning.
+
+	* Run c5c7e repeated the above for-fun run, but only does the curriculum transition from level 0 to level 3 so that
+	  it can properly learn the basic speed control and lane change tasks. Then it will be introduced to neighbor
+	  vehicles, which will now have somewhat randomized starting distance and speed.
+
+4/8/23
+
+	* Run 86ab5 training just level 0 since it seems the automatic curriculum is not working so well (it isnlt learning
+	  level 3 stuff, and each perturb cycle spikes the rmean to 10 because new envs are created at level 0).
+	* Run ??? training level 3 starting at the above level 0 checkpoint.
+		* Didn't work. All trials leveled out ~ rmean = -4.
+	* Run 88c1e training level 2, starting from the prev level 0 checkpoint.
+		* Worked well. All trials leveled out with rmean ~6.
+	* Run 2e382 continued the training for level 3, based on the above level 2 checkpoint (trial 9).
+		* No good. All trials had volatile rmean in the range of -7 to -3.
+		* Inference on a couple trials showed good performance on lanes 0 & 1, but couldn't get strted on lane 2,
+		  as if it had never been trained on lane 2. I added print stmts to confirm that most of the level 3
+		  episodes start on lane 2 during training runs, and other starting values are reasonable.
+		* Ran a second training run with same settings to confirm that prng wasn't being wonky. No good again.
 
 
 *** Variables under manual control:

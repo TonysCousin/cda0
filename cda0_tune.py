@@ -44,6 +44,12 @@ _checkpoint_path = None
 # Completed level 4 challenging course with PPO and discrete action space on 4/5/23
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-65cf4/trial00/checkpoint_002000"
 
+# Completed level 0 with PPO and discrete actions and large NN on 4/8/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L0-86ab5/trial05/checkpoint_000523"
+
+# Completed level 2 with PPO and discrete actions in large NN on 4/8/23
+_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L2-88c1e/trial09/checkpoint_000800"
+
 
 def main(argv):
 
@@ -68,8 +74,8 @@ def main(argv):
     success_threshold   = [9.5,         9.5,        9.5,        9.5,        9.5]
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
-    burn_in_period      = 80 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 2000
+    burn_in_period      = 100 #num iterations before we consider stopping or promoting to next level
+    max_iterations      = 800
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles

@@ -406,7 +406,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             print("\n///// SimpleHighwayRamp.reset: incoming options is: ", options)
             raise ValueError("reset() called with options, but options are not used in this environment.")
 
-        # If we are in a training run at difficulty level 0, then choose widely randomized initial conditions
         ego_lane_id = None
         ego_x = None
         ego_speed = None
@@ -414,6 +413,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         if self.training:
             ego_lane_id = self._select_init_lane() #covers all difficulty levels
 
+            # If we are in a training run at difficulty level 0, then choose widely randomized initial conditions
             if self.difficulty_level == 0:
                 ego_x = 0.0
                 if self.randomize_start_dist:
@@ -460,8 +460,10 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         n_loc = 0.0
         n_speed = 0.0
         if self.difficulty_level == 4: #steady speed vehicles in lane 1
-            n_loc = self.neighbor_start_loc
-            n_speed = self.neighbor_speed if self.prng.random() < 0.9 else 0.0
+            n_loc = max(self.neighbor_start_loc + self.prng.random()*3.0*SimpleHighwayRamp.VEHICLE_LENGTH, 0.0)
+            n_speed = self.neighbor_speed * (self.prng.random()*0.2 + 0.9) #assigned speedd +/- 10%
+            if self.prng.random() > 0.9: #sometimes there will be no neighbor vehicles participating
+                n_speed = 0.0
             if self.neighbor_print_latch:
                 print("///// reset worker {}: Neighbor vehicles on the move in level 4. Episode {}, step {}, loc = {:.1f}, speed = {:.1f}"
                         .format(self.rollout_id, self.episode_count, self.total_steps, n_loc, n_speed))
@@ -985,7 +987,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             s.set_environment_model(self)
             self.stopper = s
         except KeyError as e:
-            print("///// INFO: Stopper not specified in environment config.")
+            pass #print("///// INFO: Stopper not specified in environment config.")
 
 
     def _select_init_lane(self) -> int:
@@ -1191,14 +1193,14 @@ def curriculum_fn(train_results:        dict,           #current status of train
         not clear how to automate the resetting of these kinds of HPs.
     """
 
-    #return task_settable_env.get_task()
+    return task_settable_env.get_task()
 
     # If the mean reward is above the success threshold for the current phase then advance the phase
     assert task_settable_env is not None, "\n///// Unable to access task_settable_env in curriculum_fn."
     phase = task_settable_env.get_task()
     #stopper = task_settable_env.get_stopper()
     #assert stopper is not None, "\n///// Unable to access the stopper object in curriculum_fn."
-    total_steps_sampled = task_settable_env.get_total_steps() #for a single copy of the environment
+    total_steps_sampled = task_settable_env.get_total_steps() #resets after a perturbation
 
     #value = train_results["episode_reward_mean"]
     #burn_in = task_settable_env.get_burn_in_iters()
@@ -1209,12 +1211,12 @@ def curriculum_fn(train_results:        dict,           #current status of train
     #      .format(total_steps_sampled, task_settable_env.get_total_steps()))
 
     # If there has been no perturbations performed yet (still prior to the first cycle) then
-    TARGET_PHASE = 4
+    TARGET_PHASE = 3
     if not perturb_ctrl.has_perturb_begun():
 
         # When threshold number of steps expires, advance from phase 0 to phase 4; this allows the agent to start
         # figuring out where the finish line is, but otherwise do all training at the phase 4 difficulty.
-        if phase < TARGET_PHASE  and  total_steps_sampled > 80000: #a little before perturbation
+        if phase < TARGET_PHASE  and  total_steps_sampled > 70000: #MUST OCCUR PRIOR TO FIRST PERTURB CYCLE
             print("///// curriculum_fn advancing phase from {} to {}".format(phase, TARGET_PHASE))
             task_settable_env.set_task(TARGET_PHASE)
 
