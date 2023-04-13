@@ -48,7 +48,29 @@ _checkpoint_path = None
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L0-86ab5/trial05/checkpoint_000523"
 
 # Completed level 2 with PPO and discrete actions in large NN on 4/8/23
-_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L2-88c1e/trial09/checkpoint_000800"
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L2-88c1e/trial09/checkpoint_000800"
+
+# Completed level 0 with PPO and discrete actions in [256, 128] NN using symmetrical speed penalty on 4/10/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-5f786/trial01/checkpoint_000412"
+
+# Completed level 2 with PPO and discrete actions in [256, 128] NN using symmetrical speed penalty on 4/10/23
+
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-c23d4/trial08/checkpoint_000800"
+
+# Completed level 3 with PPO and discrete actions in [256, 128] NN using symmetrical speed penalty on 4/10/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-9e59e/trial07/checkpoint_001000"
+
+# Comopleted level 4 with mediocre success; PPO, discrete actions, [256, 128] NN, symmetrical speed penalty, 4/11/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-75472/trial05/checkpoint_001000"
+
+# Completed level 0 with PPO, discrete actions, NN [400, 256], symmetrical speed penalsy, 4/11/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L0-cc914/trial00/checkpoint_000330"
+
+# Completed level 2 with PPO, discrete actions, NN [400, 256], symmetrical speed penalty, 4/12/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L2-9b389/trial07/checkpoint_000800"
+
+# TEMPORARY level 3 partially solved with NN [400, 256] on 4/12
+_checkpoint_path = "/home/starkj/ray_results/cda0/trial05/checkpoint_000740"
 
 
 def main(argv):
@@ -104,6 +126,8 @@ def main(argv):
 
     # Add exploration noise params
     """
+    explore_config = cfg_dict["exploration_config"]
+    #print("///// Explore config:\n", pretty_print(explore_config))
     explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
     explore_config["stddev"]                    = tune.uniform(0.1, 0.5) #this param is specific to GaussianNoise

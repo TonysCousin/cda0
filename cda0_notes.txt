@@ -1567,6 +1567,10 @@ program as a system test.
 	* Turns out SAC can't handle a MultiDiscrete action space, so I also had to switch back to PPO.
 	* Did this on new branch discrete-actions off of alt-training.
 
+=======================
+===== Back to PPO =====
+=======================
+
 * Run b948a started from scratch training just level 0 using discrete action space.
 
 3/31/23
@@ -1668,7 +1672,11 @@ program as a system test.
 		* the observation space makes it too difficult to understand what is going on.
 	* Inference on trial 9 performed similarly, but a few more crashes.
 
-*** These results are good enough for my objectives for level 4.  Need to start moving on.
+*** The above results are good enough for my objectives for level 4.  Need to start moving on.
+
+=============================
+===== For fun larger NN =====
+=============================
 
 * just for grins...training level 4 from scratch (no checkpoint) using PPO and discrete action space, but
   also with a larger NN ([400, 256]) to see if that is a factor in how it learned in the previous run. I'm doing this
@@ -1683,19 +1691,17 @@ program as a system test.
 
 		* It didn't do much. Most trials held rmean ~-6 and then spiked up to +10 for a single iteration, triggering
 		  the stop criterion without really learning enough. So I...
-
 	* Run 1e8ce repeated the above for-fun run, but with a new stopper that forces rmean to exceed the success threshold
 	  (on average) for at least 5 iterations before declaring done. Also changed the speed penalty to be symmetrical
 	  instead of heavily weighting the high-speed performance.
 		* Didn't work. All trials stayed at rmean = -10 except for a handful of spikes > 0, but no real learning.
-
 	* Run c5c7e repeated the above for-fun run, but only does the curriculum transition from level 0 to level 3 so that
 	  it can properly learn the basic speed control and lane change tasks. Then it will be introduced to neighbor
 	  vehicles, which will now have somewhat randomized starting distance and speed.
 
 4/8/23
 
-	* Run 86ab5 training just level 0 since it seems the automatic curriculum is not working so well (it isnlt learning
+	* Run 86ab5 training just level 0 since it seems the automatic curriculum is not working so well (it isn't learning
 	  level 3 stuff, and each perturb cycle spikes the rmean to 10 because new envs are created at level 0).
 	* Run ??? training level 3 starting at the above level 0 checkpoint.
 		* Didn't work. All trials leveled out ~ rmean = -4.
@@ -1707,6 +1713,70 @@ program as a system test.
 		  as if it had never been trained on lane 2. I added print stmts to confirm that most of the level 3
 		  episodes start on lane 2 during training runs, and other starting values are reasonable.
 		* Ran a second training run with same settings to confirm that prng wasn't being wonky. No good again.
+
+4/9/23
+
+	* Run df4c6 rerun of level 3 training starting from level 2 checkpoint above.
+		* Realized the prev run included lots of changes, so backed out everything in the env model (using the
+		  simple_highway_with_ramp file from the master branch), but still using the larger NN and new stopper.
+		* Still no good. rmean leveled out quickly in the range -7 to -3 for all trials. Same story as above.
+		* Tentatively concluding that the [400, 256] NN structure isn't going to work here.
+	* Run bce56 going back to the NN of [256, 128], but with the new logic for speed penalty. Training level 3
+	  starting from the level 2 checkpoint made on 4/3 (d9e0d). This run should be contrasted against run 0ed7f
+	  done on 4/3.
+		* Also leveled out noisily between -7 and -3. It appears it's the baseline whose training is bad.
+
+4/10/23
+
+	* Run 5f786 starting from scratch to train level 0 on a [256, 128] NN using the new, symmetrical speed penalty.
+		* All trials moved to rmean ~ +10 quickly. I kept trial01 for future use.
+	* Run c23d4 training level 2 from previous level 0 checkpoint usiing symmetrical speed penalty.
+		* Worked well. Trial 8 was best, and being saved.
+	* Run 9e59e training level 3 from the previous level 2 checkpoint using symmetrical speed penalty.
+		* Performed very well. All trials reached rmean ~8 by 600k steps. Lots of frequent spikes of rmin up
+		  to the 0 to +4 range in the last half of the run (up to 1.3M steps).
+		* Trial 7 was best, and worked very well in inference on all 3 lanes. Saved for reference.
+
+4/11/23
+
+	* Run 75472 training level 4 from previous level 3 checkpoint using symmetrical speed penalty. This one also
+	  includes the new variability in neighbor vehicle initial positions and speeds, which should give the agent
+	  a more generalized understanding of how to interpret their motion and avoid them.
+		* Learning was mediocre. After ~700k steps all trials maintained a noisy rmean between -2 and +2,
+		  but never seemed to learn more. Run stopped after 1000 iterations.
+		* The best trial was 5, which I saved for future reference.
+		* Inference shows that it learned a simple policy (in lane 2) of "slow down to 26 m/s and hope that
+		  the neighbors go past, then change lanes". If it comes in near the front of the pack it doesn't
+		  try to speed up and get in front. It accepts the crash.
+
+**	* Now to re-try the larger NN to see if that resolves the problems noted above. I now have the symmetrical
+	  speed penalties and the variable initial conditions for the neighbor vehicles. But need to start training
+	  the whole shebang from scratch.
+	* Run cc914 training level 0 from scratch with [400, 256] NN, symmetrical speed penalty.
+		* Two trials terminated early, after 300 iterations, achieving nearly perfect scores. All the others
+		  performed well by the end of 800 iterations, with rmean ~8. Saving the best, trial 0.
+	* Run 9b3a9 training level 2 starting from previous level 0 checkpoint with NN [400, 256] and sym speed pen.
+
+4/12/23
+
+		* Worked well. Saved trial 7 as reference. All trials reached rmean ~8.
+	* Run 2e253 training level 3 starting from previous level 2 checkpoint with NN [400, 256] and sym speed pen.
+		* No good. After 400k steps all trials settled into a noisy, flat rmean between -6 and -4, with
+		  rmax almost 10 all the way, but rmin never above -10.
+		* This feels just like the results on 4/8 and 4/9 with the larger NN. And none of the perturbed
+		  HPs converged to a dominant value, each one is still all over the place at 800 iterations.
+	* Run cc955 duplicating the above run just to give it more random initialized trials to see if one catches.
+		* No good - identical results as previous. It would appear that the larger NN is incapable of
+		  learning at this level, as NN size is the only difference from the success in run 9e59e on 4/10.
+
+4/13/23
+
+		* Extended this run by starting from one of its best late checkpoints (trial 5 at iteration 740),
+		  which had rmean = -3.5. Letting it run for an additional 800 iterations (run 878ef) on level 3.
+			* This run generated the same results, so I have to conclude that this NN structure just
+			  isn't going to work for level 3. I don't understand why making a network larger would
+			  compromise its ability to learn. I would expect it to learn better, even though it may
+			  take longer.
 
 
 *** Variables under manual control:
