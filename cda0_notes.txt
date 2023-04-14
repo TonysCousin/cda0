@@ -1681,6 +1681,7 @@ program as a system test.
 * just for grins...training level 4 from scratch (no checkpoint) using PPO and discrete action space, but
   also with a larger NN ([400, 256]) to see if that is a factor in how it learned in the previous run. I'm doing this
   to kill time while I take care of other life priorities.
+	* The runs in this section are not on the clock, as they are just playing and general education.
 	* Run e6215
 		* Since it won't have much chance to learn plan speed control on lane 2, I changed the reset() method to
 		  hold back the neighbor vehicles 10% of the time when in level 4.
@@ -1777,6 +1778,27 @@ program as a system test.
 			  isn't going to work for level 3. I don't understand why making a network larger would
 			  compromise its ability to learn. I would expect it to learn better, even though it may
 			  take longer.
+
+==================================
+===== New observation vector =====
+==================================
+
+* Based on the experiments of past few days, and some introspection, it seems the agent is having a hard time
+  understanding the neighbors' states and what it means for it. So I modified the observation space to provide it
+  a more intuitive picture. 
+	* Working in the new new-obs Git branch, off of the adv-level4 branch from develop.
+	* Removed neighbor distance remaining (not being used)
+	* Replaced neighbor X (distance downtrack), which could be confusing since each lane has a different 
+	  origin), with delta distance downtrack (the neighbor's distance ahead of the ego vehicle)
+	* Replaced neighbor speed with delta speed above that of the ego vehicle. This will magnify small diffs
+	  so that they have a bigger impact.
+	* Eliminated the ego vehicle ID as a variable input to the NN (always set to 0) so that it can't learn
+	  specialized behavior just on this value, and forces it to look at the other inputs more.
+	* I considered changing the roadway code so that everything uses the same X origin, but decided it would
+	  be riskier and take more time. Using the adjusted downtrack dist is pretty safe, if a little slower
+	  and a little more confusing for the reader.
+
+* Run 31b3b training level 0 with the new obs; back to NN [256, 128] and using symmetrical speed penalties
 
 
 *** Variables under manual control:

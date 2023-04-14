@@ -44,12 +44,6 @@ _checkpoint_path = None
 # Completed level 4 challenging course with PPO and discrete action space on 4/5/23
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-65cf4/trial00/checkpoint_002000"
 
-# Completed level 0 with PPO and discrete actions and large NN on 4/8/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L0-86ab5/trial05/checkpoint_000523"
-
-# Completed level 2 with PPO and discrete actions in large NN on 4/8/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L2-88c1e/trial09/checkpoint_000800"
-
 # Completed level 0 with PPO and discrete actions in [256, 128] NN using symmetrical speed penalty on 4/10/23
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-5f786/trial01/checkpoint_000412"
 
@@ -62,15 +56,6 @@ _checkpoint_path = None
 
 # Comopleted level 4 with mediocre success; PPO, discrete actions, [256, 128] NN, symmetrical speed penalty, 4/11/23
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-75472/trial05/checkpoint_001000"
-
-# Completed level 0 with PPO, discrete actions, NN [400, 256], symmetrical speed penalsy, 4/11/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L0-cc914/trial00/checkpoint_000330"
-
-# Completed level 2 with PPO, discrete actions, NN [400, 256], symmetrical speed penalty, 4/12/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p400-256/L2-9b389/trial07/checkpoint_000800"
-
-# TEMPORARY level 3 partially solved with NN [400, 256] on 4/12
-_checkpoint_path = "/home/starkj/ray_results/cda0/trial05/checkpoint_000740"
 
 
 def main(argv):
@@ -117,6 +102,7 @@ def main(argv):
     env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 0
+    env_config["verify_obs"]                    = False
     env_config["training"]                      = True
     env_config["randomize_start_dist"]          = True
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
@@ -195,7 +181,7 @@ def main(argv):
 
     # Add dict for model structure
     model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = [400, 256] #[256, 128]
+    model_config["fcnet_hiddens"]               = [256, 128]
     model_config["fcnet_activation"]            = "relu"
     cfg.training(model = model_config)
 

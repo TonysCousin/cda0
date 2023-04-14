@@ -131,7 +131,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     metadata = {"render_modes": None}
     #metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    OBS_SIZE                = 29
+    OBS_SIZE                = 26
     NUM_ACCEL_CMDS          = 23
     VEHICLE_LENGTH          = 20.0      #m
     MAX_SPEED               = 36.0      #vehicle's max achievable speed, m/s
@@ -194,32 +194,29 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.EGO_LANE_ID        =  0 #index of the lane the agent is occupying
         self.EGO_X              =  1 #agent's distance downtrack in that lane (center of bounding box), m
         self.EGO_SPEED          =  2 #agent's forward speed, m/s
-        self.EGO_LANE_REM       =  3 #distance remaining in the agent's current lane, m
-        self.N1_LANE_ID         =  4 #neighbor vehicle 1, index of the lane occupied by that vehicle
-        self.N1_X               =  5 #neighbor vehicle 1, vehicle's dist downtrack in its current lane (center of bounding box), m
-        self.N1_SPEED           =  6 #neighbor vehicle 1, vehicle's forward speed, m/s
-        self.N1_LANE_REM        =  7 #neighbor vehicle 1, distance remaining in that vehicle's current lane, m
-        self.N2_LANE_ID         =  8 #neighbor vehicle 2, index of the lane occupied by that vehicle
-        self.N2_X               =  9 #neighbor vehicle 2, vehicle's dist downtrack in its current lane (center of bounding box), m
-        self.N2_SPEED           = 10 #neighbor vehicle 2, vehicle's forward speed, m/s
-        self.N2_LANE_REM        = 11 #neighbor vehicle 2, distance remaining in that vehicle's current lane, m
-        self.N3_LANE_ID         = 12 #neighbor vehicle 3, index of the lane occupied by that vehicle
-        self.N3_X               = 13 #neighbor vehicle 3, vehicle's dist downtrack in its current lane (center of bounding box), m
-        self.N3_SPEED           = 14 #neighbor vehicle 3, vehicle's forward speed, m/s
-        self.N3_LANE_REM        = 15 #neighbor vehicle 3, distance remaining in that vehicle's current lane, m
-        self.EGO_ACCEL_CMD_CUR  = 16 #agent's most recent accel_cmd, m/s^2
-        self.EGO_ACCEL_CMD_PREV1= 17 #agent's next most recent accel_cmd (1 time step old), m/s^2
-        self.EGO_ACCEL_CMD_PREV2= 18 #agent's next most recent accel_cmd (2 time steps old), m/s^2
-        self.EGO_LANE_CMD_CUR   = 19 #agent's most recent lane_change_cmd
-        self.STEPS_SINCE_LN_CHG = 20 #num time steps since the previous lane change was initiated
-        self.ADJ_LN_LEFT_ID     = 21 #index of the lane that is/will be adjacent to the left of ego lane (-1 if none)
-        self.ADJ_LN_LEFT_CONN_A = 22 #dist from agent to where adjacent lane first joins ego lane, m
-        self.ADJ_LN_LEFT_CONN_B = 23 #dist from agent to where adjacent lane separates from ego lane, m
-        self.ADJ_LN_LEFT_REM    = 24 #dist from agent to end of adjacent lane, m
-        self.ADJ_LN_RIGHT_ID    = 25 #index of the lane that is/will be adjacent to the right of ego lane (-1 if none)
-        self.ADJ_LN_RIGHT_CONN_A= 26 #dist from agent to where adjacent lane first joins ego lane, m
-        self.ADJ_LN_RIGHT_CONN_B= 27 #dist from agent to where adjacent lane separates from ego lane, m
-        self.ADJ_LN_RIGHT_REM   = 28 #dist from agent to end of adjacent lane, m
+        self.N1_LANE_ID         =  3 #neighbor vehicle 1, index of the lane occupied by that vehicle
+        self.N1_DELTAX          =  4 #neighbor vehicle 1, dist downtrack of ego vehicle (centers of bounding boxes), m
+        self.N1_DELTA_SPEED     =  5 #neighbor vehicle 1, vehicle's delta speed above that of ego vehicle, m/s
+        self.N2_LANE_ID         =  6 #neighbor vehicle 2, index of the lane occupied by that vehicle
+        self.N2_DELTAX          =  7 #neighbor vehicle 2, dist downtrack of ego vehicle (centers of bounding boxes), m
+        self.N2_DELTA_SPEED     =  8 #neighbor vehicle 2, vehicle's delta speed above that of ego vehicle, m/s
+        self.N3_LANE_ID         =  9 #neighbor vehicle 3, index of the lane occupied by that vehicle
+        self.N3_DELTAX          = 10 #neighbor vehicle 3, dist downtrack of ego vehicle (centers of bounding boxes), m
+        self.N3_DELTA_SPEED     = 11 #neighbor vehicle 3, vehicle's delta speed above that of ego vehicle, m/s
+        self.EGO_LANE_REM       = 12 #distance remaining in the agent's current lane, m
+        self.EGO_ACCEL_CMD_CUR  = 13 #agent's most recent accel_cmd, m/s^2
+        self.EGO_ACCEL_CMD_PREV1= 14 #agent's next most recent accel_cmd (1 time step old), m/s^2
+        self.EGO_ACCEL_CMD_PREV2= 15 #agent's next most recent accel_cmd (2 time steps old), m/s^2
+        self.EGO_LANE_CMD_CUR   = 16 #agent's most recent lane_change_cmd
+        self.STEPS_SINCE_LN_CHG = 17 #num time steps since the previous lane change was initiated
+        self.ADJ_LN_LEFT_ID     = 18 #index of the lane that is/will be adjacent to the left of ego lane (-1 if none)
+        self.ADJ_LN_LEFT_CONN_A = 19 #dist from agent to where adjacent lane first joins ego lane, m
+        self.ADJ_LN_LEFT_CONN_B = 20 #dist from agent to where adjacent lane separates from ego lane, m
+        self.ADJ_LN_LEFT_REM    = 21 #dist from agent to end of adjacent lane, m
+        self.ADJ_LN_RIGHT_ID    = 22 #index of the lane that is/will be adjacent to the right of ego lane (-1 if none)
+        self.ADJ_LN_RIGHT_CONN_A= 23 #dist from agent to where adjacent lane first joins ego lane, m
+        self.ADJ_LN_RIGHT_CONN_B= 24 #dist from agent to where adjacent lane separates from ego lane, m
+        self.ADJ_LN_RIGHT_REM   = 25 #dist from agent to end of adjacent lane, m
         #Note:  lane IDs are always non-negative; if adj_ln_*_id is -1 then the other respective values on that side
         #       are meaningless, as there is no lane.
         #TODO future: replace this kludgy vehicle-specific observations with general obs on lane occupancy
@@ -231,8 +228,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         lower_obs[self.EGO_ACCEL_CMD_PREV2] = -SimpleHighwayRamp.MAX_ACCEL
         lower_obs[self.EGO_LANE_CMD_CUR]    = -1.0
         lower_obs[self.N1_LANE_ID]          = -1.0
+        lower_obs[self.N1_DELTAX]           = -SimpleHighwayRamp.SCENARIO_LENGTH
+        lower_obs[self.N1_DELTA_SPEED]      = -SimpleHighwayRamp.MAX_SPEED
         lower_obs[self.N2_LANE_ID]          = -1.0
+        lower_obs[self.N2_DELTAX]           = -SimpleHighwayRamp.SCENARIO_LENGTH
+        lower_obs[self.N2_DELTA_SPEED]      = -SimpleHighwayRamp.MAX_SPEED
         lower_obs[self.N3_LANE_ID]          = -1.0
+        lower_obs[self.N3_DELTAX]           = -SimpleHighwayRamp.SCENARIO_LENGTH
+        lower_obs[self.N3_DELTA_SPEED]      = -SimpleHighwayRamp.MAX_SPEED
         lower_obs[self.ADJ_LN_LEFT_ID]      = -1.0
         lower_obs[self.ADJ_LN_LEFT_CONN_A]  = -SimpleHighwayRamp.SCENARIO_LENGTH
         lower_obs[self.ADJ_LN_LEFT_CONN_B]  = -SimpleHighwayRamp.SCENARIO_LENGTH
@@ -246,19 +249,16 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         upper_obs[self.EGO_LANE_ID]         = 6.0
         upper_obs[self.EGO_X]               = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.EGO_LANE_REM]        = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         upper_obs[self.N1_LANE_ID]          = 6.0
-        upper_obs[self.N1_X]                = SimpleHighwayRamp.SCENARIO_LENGTH
-        upper_obs[self.N1_SPEED]            = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.N1_LANE_REM]         = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+        upper_obs[self.N1_DELTAX]           = SimpleHighwayRamp.SCENARIO_LENGTH
+        upper_obs[self.N1_DELTA_SPEED]      = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.N2_LANE_ID]          = 6.0
-        upper_obs[self.N2_X]                = SimpleHighwayRamp.SCENARIO_LENGTH
-        upper_obs[self.N2_SPEED]            = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.N2_LANE_REM]         = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+        upper_obs[self.N2_DELTAX]           = SimpleHighwayRamp.SCENARIO_LENGTH
+        upper_obs[self.N2_DELTA_SPEED]      = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.N3_LANE_ID]          = 6.0
-        upper_obs[self.N3_X]                = SimpleHighwayRamp.SCENARIO_LENGTH
-        upper_obs[self.N3_SPEED]            = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.N3_LANE_REM]         = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
+        upper_obs[self.N3_DELTAX]           = SimpleHighwayRamp.SCENARIO_LENGTH
+        upper_obs[self.N3_DELTA_SPEED]      = SimpleHighwayRamp.MAX_SPEED
+        upper_obs[self.EGO_LANE_REM]        = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         upper_obs[self.EGO_ACCEL_CMD_CUR]   = SimpleHighwayRamp.MAX_ACCEL
         upper_obs[self.EGO_ACCEL_CMD_PREV1] = SimpleHighwayRamp.MAX_ACCEL
         upper_obs[self.EGO_ACCEL_CMD_PREV2] = SimpleHighwayRamp.MAX_ACCEL
@@ -284,7 +284,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         #..........Define the action space
         #
 
-        # Acceleration commands
+        # Discrete acceleration commands
         self.accel_cmds = np.zeros([SimpleHighwayRamp.NUM_ACCEL_CMDS])
         self.accel_cmds[ 0] = -1.0 * SimpleHighwayRamp.MAX_ACCEL
         self.accel_cmds[ 1] = -0.8 * SimpleHighwayRamp.MAX_ACCEL
@@ -473,15 +473,16 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1, and always start at the same location
         #TODO: revise this for levels 4+
-        self.vehicles[1].lane_id = 1
+        n_lane_id = 1
+        self.vehicles[1].lane_id = n_lane_id
         self.vehicles[1].dist_downtrack = n_loc + 6.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
         self.vehicles[1].speed = n_speed
         self.vehicles[1].lane_change_status = "none"
-        self.vehicles[2].lane_id = 1
+        self.vehicles[2].lane_id = n_lane_id
         self.vehicles[2].dist_downtrack = n_loc + 3.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
         self.vehicles[2].speed = n_speed
         self.vehicles[2].lane_change_status = "none"
-        self.vehicles[3].lane_id = 1
+        self.vehicles[3].lane_id = n_lane_id
         self.vehicles[3].dist_downtrack = n_loc + 0.0 #at end of the line of 3 neighbors
         self.vehicles[3].speed = n_speed
         self.vehicles[3].lane_change_status = "none"
@@ -525,26 +526,20 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.ADJ_LN_RIGHT_CONN_B]  = rb
         self.obs[self.ADJ_LN_RIGHT_REM]     = r_rem
         self.obs[self.STEPS_SINCE_LN_CHG]   = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
-        self._verify_obs_limits("reset after populating main obs")
+        self._verify_obs_limits("reset after populating main obs with ego stuff")
 
+        #TODO: enhance this for levels 5+ so neighbors have different lanes
+        adj_ego_loc = self.vehicles[0].dist_downtrack + self.roadway.adjust_downtrack_dist(ego_lane_id, n_lane_id)
         self.obs[self.N1_LANE_ID]           = self.vehicles[1].lane_id
-        self.obs[self.N1_X]                 = self.vehicles[1].dist_downtrack
-        self.obs[self.N1_SPEED]             = self.vehicles[1].speed
-        self.obs[self.N1_LANE_REM]          = self.roadway.get_total_lane_length(self.vehicles[1].lane_id) - self.vehicles[1].dist_downtrack
+        self.obs[self.N1_DELTAX]            = self.vehicles[1].dist_downtrack - adj_ego_loc
+        self.obs[self.N1_DELTA_SPEED]       = self.vehicles[1].speed - ego_speed
         self.obs[self.N2_LANE_ID]           = self.vehicles[2].lane_id
-        self.obs[self.N2_X]                 = self.vehicles[2].dist_downtrack
-        self.obs[self.N2_SPEED]             = self.vehicles[2].speed
-        self.obs[self.N2_LANE_REM]          = self.roadway.get_total_lane_length(self.vehicles[2].lane_id) - self.vehicles[2].dist_downtrack
+        self.obs[self.N2_DELTAX]            = self.vehicles[2].dist_downtrack - adj_ego_loc
+        self.obs[self.N2_DELTA_SPEED]       = self.vehicles[2].speed - ego_speed
         self.obs[self.N3_LANE_ID]           = self.vehicles[3].lane_id
-        self.obs[self.N3_X]                 = self.vehicles[3].dist_downtrack
-        self.obs[self.N3_SPEED]             = self.vehicles[3].speed
-        self.obs[self.N3_LANE_REM]          = self.roadway.get_total_lane_length(self.vehicles[3].lane_id) - self.vehicles[3].dist_downtrack
-
-        #if self.total_steps % 10000 == 0:
-        #   print("///// reset on worker {}: total_steps = {}, steps_since_reset = {}, episodes = {}"
-        #           .format(self.rollout_id, self.total_steps, self.steps_since_reset, self.episode_count))
-        #   print("      level = {}, ego_lane_id = {}, max_distance = {:.1f}, n_speed = {:.1f}, num_crashes = {}"
-        #           .format(self.difficulty_level, ego_lane_id, max_distance, n_speed, self.num_crashes))
+        self.obs[self.N3_DELTAX]            = self.vehicles[3].dist_downtrack - adj_ego_loc
+        self.obs[self.N3_DELTA_SPEED]       = self.vehicles[3].speed - ego_speed
+        self._verify_obs_limits("reset after populating neighbor vehicles in obs")
 
         # Other persistent data
         self.lane_change_underway = "none"
@@ -593,12 +588,17 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Move all of the neighbor vehicles downtrack (ASSUMES all vehicles are represented contiguously in the obs vector).
         # This doesn't account for possible lane changes, which are handled seperately in the next section.
+        # CAUTION: this block depends on the structure of the obs vector indexes for each of the vehicles. Ego vehicle must be
+        #           the first one in the loop.
+        new_ego_speed = 0.0 #initialize these here to ensure they are in scope througout the method
+        new_ego_x = 0.0
+        new_ego_rem = 0.0
         for i, v in enumerate(self.vehicles):
-            obs_idx = self.EGO_LANE_ID + 4*i
+            obs_idx = self.EGO_LANE_ID + 3*i
             lane_id = v.lane_id
             if self.debug > 1:
                 print("      Advancing vehicle {} with obs_idx = {}, lane_id = {}".format(i, obs_idx, lane_id))
-            new_accel_cmd = 0.0 #non-ego vehicles are constant speed for now
+            new_accel_cmd = 0.0 #non-ego vehicles are constant speed
             prev_accel_cmd = 0.0
             if i == 0: #this is the ego vehicle
                 new_accel_cmd = self.accel_cmds[action[0]]
@@ -612,15 +612,22 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             if self.debug > 1:
                 print("      Vehicle {} advanced with new_accel_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}"
                         .format(i, new_accel_cmd, new_speed, new_x))
-            new_rem, _, _, _, _, _, _, _, _ = self.roadway.get_current_lane_geom(lane_id, new_x)
-            self.obs[obs_idx + 1] = new_x
-            self.obs[obs_idx + 2] = new_speed
-            self.obs[obs_idx + 3] = new_rem
 
-        # Pull out the ego vehicle stuff separately
-        new_ego_speed = self.obs[self.EGO_SPEED]
-        new_ego_x = self.obs[self.EGO_X]
-        new_ego_rem = self.obs[self.EGO_LANE_REM]
+            if i == 0: #ego vehicle
+                self.obs[obs_idx + 1] = new_x
+                self.obs[obs_idx + 2] = new_speed
+                new_ego_x = new_x
+                new_ego_speed = new_speed
+            else:
+                self.obs[obs_idx + 1] = new_x - new_ego_x
+                self.obs[obs_idx + 2] = new_speed - new_ego_speed
+                # Neighbor vehicles don't track distance remaining
+
+        # Update the distance remaining for the ego vehicle in its current lane (this will be slightly negative if vehicle
+        # ran off the end of a terminating lane, but that condition is tested further down)
+        new_ego_rem, _, _, _, _, _, _, _, _ = self.roadway.get_current_lane_geom(int(self.obs[self.EGO_LANE_ID]), new_ego_x)
+        self.obs[self.EGO_LANE_REM] = new_ego_rem
+        self._verify_obs_limits("step after moving vehicles forward")
 
         # Determine if we are beginning or continuing a lane change maneuver.
         # Accept a lane change command that lasts for several time steps or only one time step.  Once the first
@@ -724,6 +731,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.ADJ_LN_RIGHT_CONN_A] = ra
         self.obs[self.ADJ_LN_RIGHT_CONN_B] = rb
         self.obs[self.ADJ_LN_RIGHT_REM] = r_rem
+        self._verify_obs_limits("step after updating obs vector")
 
         # Check that none of the vehicles have crashed into each other, accounting for a lane change in progress
         # taking up both lanes
@@ -907,6 +915,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             db = None
         if db is not None  and  db != ""  and  0 <= int(db) <= 2:
             self.debug = int(db)
+
+        self.verify_obs = False
+        try:
+            vo = config["verify_obs"]
+            self.verify_obs = vo
+        except KeyError as e:
+            pass
 
         self.training = False
         try:
@@ -1159,6 +1174,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                           ):
         """Checks that each element of the observation vector is within the limits of the observation space."""
 
+        if not self.verify_obs:
+            return
+
         lo = self.observation_space.low
         hi = self.observation_space.high
 
@@ -1169,7 +1187,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         except AssertionError as e:
             print(e)
-            print("///// Full obs vector content at {}:".format(tag))
+            print("///// Full obs vector content at: {}:".format(tag))
             for j in range(SimpleHighwayRamp.OBS_SIZE):
                 print("      {:2d}: {}".format(j, self.obs[j]))
 

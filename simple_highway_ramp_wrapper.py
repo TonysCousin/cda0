@@ -92,22 +92,19 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         else:
             neighbor_lane = -1
 
-        scaled[self.EGO_LANE_ID]        = ego_lane_id
+        scaled[self.EGO_LANE_ID]        = 0 #the NN should not see this, as it may bias some decisions, and it can't interpret it anyway
         scaled[self.EGO_X]              = obs[self.EGO_X]               / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
         scaled[self.EGO_SPEED]          = obs[self.EGO_SPEED]           / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
         scaled[self.EGO_LANE_REM]       = min(obs[self.EGO_LANE_REM]    / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
         scaled[self.N1_LANE_ID]         = neighbor_lane
-        scaled[self.N1_X]               = obs[self.N1_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
-        scaled[self.N1_SPEED]           = obs[self.N1_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
-        scaled[self.N1_LANE_REM]        = min(obs[self.N1_LANE_REM]     / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
+        scaled[self.N1_DELTAX]          = obs[self.N1_DELTAX]           / SimpleHighwayRamp.SCENARIO_LENGTH     #range [-1, 1]
+        scaled[self.N1_DELTA_SPEED]     = obs[self.N1_DELTA_SPEED]      / SimpleHighwayRamp.MAX_SPEED           #range [-1, 1]
         scaled[self.N2_LANE_ID]         = neighbor_lane
-        scaled[self.N2_X]               = obs[self.N2_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
-        scaled[self.N2_SPEED]           = obs[self.N2_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
-        scaled[self.N2_LANE_REM]        = min(obs[self.N2_LANE_REM]     / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
+        scaled[self.N2_DELTAX]          = obs[self.N2_DELTAX]           / SimpleHighwayRamp.SCENARIO_LENGTH     #range [-1, 1]
+        scaled[self.N2_DELTA_SPEED]     = obs[self.N2_DELTA_SPEED]      / SimpleHighwayRamp.MAX_SPEED           #range [-1, 1]
         scaled[self.N3_LANE_ID]         = neighbor_lane
-        scaled[self.N3_X]               = obs[self.N3_X]                / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
-        scaled[self.N3_SPEED]           = obs[self.N3_SPEED]            / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
-        scaled[self.N3_LANE_REM]        = min(obs[self.N3_LANE_REM]     / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
+        scaled[self.N3_DELTAX]          = obs[self.N3_DELTAX]           / SimpleHighwayRamp.SCENARIO_LENGTH     #range [-1, 1]
+        scaled[self.N3_DELTA_SPEED]     = obs[self.N3_DELTA_SPEED]      / SimpleHighwayRamp.MAX_SPEED           #range [-1, 1]
         scaled[self.EGO_ACCEL_CMD_CUR]  = obs[self.EGO_ACCEL_CMD_CUR]   / SimpleHighwayRamp.MAX_ACCEL           #range [-1, 1]
         scaled[self.EGO_ACCEL_CMD_PREV1]= obs[self.EGO_ACCEL_CMD_PREV1] / SimpleHighwayRamp.MAX_ACCEL           #range [-1, 1]
         scaled[self.EGO_ACCEL_CMD_PREV2]= obs[self.EGO_ACCEL_CMD_PREV2] / SimpleHighwayRamp.MAX_ACCEL           #range [-1, 1]
