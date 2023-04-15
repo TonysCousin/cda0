@@ -57,6 +57,14 @@ _checkpoint_path = None
 # Comopleted level 4 with mediocre success; PPO, discrete actions, [256, 128] NN, symmetrical speed penalty, 4/11/23
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-75472/trial05/checkpoint_001000"
 
+# ===== Items below are for the new observation structure, built on 4/13/23 =====
+
+# Completed level 0, NN [256, 128], PPO, discrete actions on 4/14/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-31b3b/trial09/checkpoint_000477"
+
+# Completed level 2 on 4/14/23
+_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-6428b/trial02/checkpoint_000800"
+
 
 def main(argv):
 

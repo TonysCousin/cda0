@@ -131,13 +131,13 @@ def main(argv):
         obs = env.scale_obs(raw_obs)
 
         print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, rem = {:4.0f}, r = {:7.4f} {}"
-                .format(step, action[0], action[1], raw_obs[0], raw_obs[2], raw_obs[1], raw_obs[3], reward, info["reward_detail"]))
+                .format(step, action[0], action[1], raw_obs[0], raw_obs[2], raw_obs[1], raw_obs[12], reward, info["reward_detail"]))
         print("      lft ln: Id = {:2.0f}, conn_a = {:6.0f}, conn_b = {:6.0f}, rem = {:6.0f}"
-                .format(raw_obs[21], raw_obs[22], raw_obs[23], raw_obs[24]))
+                .format(raw_obs[18], raw_obs[19], raw_obs[20], raw_obs[21]))
         print("      rgt ln: Id = {:2.0f}, conn_a = {:6.0f}, conn_b = {:6.0f}, rem = {:6.0f}"
-                .format(raw_obs[25], raw_obs[26], raw_obs[27], raw_obs[28]))
+                .format(raw_obs[22], raw_obs[23], raw_obs[24], raw_obs[25]))
         print("   SC lft ln: Id = {:2.0f}, conn_a = {:7.4f}, conn_b = {:7.4f}, rem = {:7.4f}, ego rem = {:.4f}"
-                .format(obs[21], obs[22], obs[23], obs[24], obs[3]))
+                .format(obs[18], obs[19], obs[20], obs[21], obs[12]))
 
         if done:
             print("///// Episode complete: {}. Total reward = {:.2f}".format(info["reason"], episode_reward))
@@ -336,24 +336,24 @@ class Graphics:
                            ) -> tuple:
         """Returns the map coordinates of the indicated vehicle based on its lane ID and distance downtrack.
 
+            ASSUMES that this method is called first for the ego vehicle, then updates each of the neighbors in
+            each update loop.
+
             CAUTION: these calcs are hard-coded to the specific roadway geometry in this code,
             it is not a general solution.
         """
         assert 0 <= vehicle_id <= 3, "///// _get_vehicle_coords: invalid vehicle_id = {}".format(vehicle_id)
-        lane_id_idx = self.env.EGO_LANE_ID  + 4*vehicle_id
-        x_idx = self.env.EGO_X              + 4*vehicle_id
+        lane_id_idx = self.env.EGO_LANE_ID  + 3*vehicle_id
+        x_idx = self.env.EGO_X              + 3*vehicle_id
 
         x = None
         y = None
-        lane = obs[lane_id_idx]
-        if lane == 0:
-            x = obs[x_idx]
-            y = self.env.roadway.lanes[0].segments[0][1]
-        elif lane == 1:
-            x = obs[x_idx]
-            y = self.env.roadway.lanes[1].segments[0][1]
+        ddt = self.env.get_vehicle_dist_downtrack(vehicle_id) #get this directly from env since obs only has delta X
+        lane = int(obs[lane_id_idx])
+        if lane < 2:
+            x = ddt
+            y = self.env.roadway.lanes[lane].segments[0][1]
         else:
-            ddt = obs[x_idx]
             if ddt < self.env.roadway.lanes[2].segments[0][4]: #vehicle is in seg 0
                 seg0x0 = self.env.roadway.lanes[2].segments[0][0]
                 seg0y0 = self.env.roadway.lanes[2].segments[0][1]

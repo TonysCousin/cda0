@@ -1799,6 +1799,14 @@ program as a system test.
 	  and a little more confusing for the reader.
 
 * Run 31b3b training level 0 with the new obs; back to NN [256, 128] and using symmetrical speed penalties
+	* Worked very well, with all trials passing rmean > 9.5 and several having rmin > 8 for several iterations.
+	  (note that all the changes don't impact this level, except for agent not seeing its own lane ID.)
+
+* Run 6428b training level 2 from the previously saved level 0 checkpoint.
+	* Good. All trials had rmean > 2 before 500k steps, then gradually climbed to between 6 & 8, with rmin
+	  often shooting above -10. Best trial was 2, which I kept for reference. Inference on it is fine.
+
+* Run 1579d training level 3 from the previously saved level 2 checkpoint.
 
 
 *** Variables under manual control:

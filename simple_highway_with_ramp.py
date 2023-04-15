@@ -798,6 +798,15 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         return self.total_steps
 
 
+    def get_vehicle_dist_downtrack(self,
+                                   vehicle_id   : int   #index of the vehicle of interest
+                                  ) -> float:
+        """Returns the indicated vehicle's distance downtrack from its lane beginning, in m."""
+
+        assert 0 <= vehicle_id < 4, "///// SimpleHighwayRamp.get_vehicle_dist_downtrack: illegal vehicle_id entered: {}".format(vehicle_id)
+        return self.vehicles[vehicle_id].dist_downtrack
+
+
     def close(self):
         """Closes any resources that may have been used during the simulation."""
         pass #this method not needed for this version
