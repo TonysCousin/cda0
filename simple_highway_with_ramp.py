@@ -414,11 +414,11 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             ego_lane_id = self._select_init_lane() #covers all difficulty levels
 
             # If we are in a training run at difficulty level 0, then choose widely randomized initial conditions
-            if self.difficulty_level == 0:
+            if self.difficulty_level < 4:
                 ego_x = 0.0
                 if self.randomize_start_dist:
                     physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
-                    initial_steps = 1000000 #num steps to wait before starting to shrink the max distance
+                    initial_steps = 60000 #num steps to wait before starting to shrink the max distance
                     if self.total_steps <= initial_steps:
                         max_distance = physical_limit
                     else:
@@ -1022,6 +1022,12 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             return int(self.prng.random()*2) #select 0 or 1
 
         # Levels 3 & 4 need to emphasizes lots of experience in lane 2
+        elif self.difficulty_level == 3:
+            if self.prng.random() < 0.5:
+                return 2
+            else:
+                return int(self.prng.random()*2) #select 0 or 1
+
         elif self.difficulty_level < 5:
             if self.prng.random() < 0.7:
                 return 2

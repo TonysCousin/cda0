@@ -57,13 +57,17 @@ _checkpoint_path = None
 # Comopleted level 4 with mediocre success; PPO, discrete actions, [256, 128] NN, symmetrical speed penalty, 4/11/23
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-75472/trial05/checkpoint_001000"
 
-# ===== Items below are for the new observation structure, built on 4/13/23 =====
+
+########## Items below are for the new observation structure, built on 4/13/23 ##########
 
 # Completed level 0, NN [256, 128], PPO, discrete actions on 4/14/23
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-31b3b/trial09/checkpoint_000477"
 
 # Completed level 2 on 4/14/23
-_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-6428b/trial02/checkpoint_000800"
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-6428b/trial02/checkpoint_000800"
+
+# Completed level 3, NN [256, 128], PPO, discrete actions on 4/20/23
+_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-6ad8f/trial02/checkpoint_001205"
 
 
 def main(argv):
@@ -90,7 +94,7 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 100 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 800
+    max_iterations      = 1500
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles

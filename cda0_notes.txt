@@ -1792,7 +1792,7 @@ program as a system test.
 	  origin), with delta distance downtrack (the neighbor's distance ahead of the ego vehicle)
 	* Replaced neighbor speed with delta speed above that of the ego vehicle. This will magnify small diffs
 	  so that they have a bigger impact.
-	* Eliminated the ego vehicle ID as a variable input to the NN (always set to 0) so that it can't learn
+	* Eliminated the ego vehicle lane ID as a variable input to the NN (always set to 0) so that it can't learn
 	  specialized behavior just on this value, and forces it to look at the other inputs more.
 	* I considered changing the roadway code so that everything uses the same X origin, but decided it would
 	  be riskier and take more time. Using the adjusted downtrack dist is pretty safe, if a little slower
@@ -1807,6 +1807,32 @@ program as a system test.
 	  often shooting above -10. Best trial was 2, which I kept for reference. Inference on it is fine.
 
 * Run 1579d training level 3 from the previously saved level 2 checkpoint.
+	* No good. All iters quickly settled into rmean between -6 and -3 up to 800 iterations.
+
+4/18/23
+
+* Run 3cf40 training level 3 again, this time starting from level 0 checkpoint.
+
+4/19/23
+
+	* No good. As before, rmean in -6 to -3 range, through 1000 iterations, although rmax ~10 for all.
+
+* run 3ec58 training level 3, starting directly from scratch.
+	* Considered changing the randomized start dist for level 0 to apply, but with PBT it risks always
+	  randomizing no matter how mature the training has become.
+	* Nothing doing. All rmax = -10.
+
+* run 6ad8f training level 3 starting from scratch, same as previous. However...
+	* Change env code to randomize initial agent position for first 60k steps in levels 0-3; also reduced
+	  initial lane ID emphasis on lane 2 (for level 3) from 70% to only 50%.
+
+4/20/23
+
+	* Worked well. rmeans leveled out a 2 to 4 until 800k steps, then they jumped up again until ~1200k
+	  steps, where they leveled off between 7 and 9.5. Best was trial 2, ending early at rmean = 9.5.
+
+* Run f024c training level 4 starting from the previous level 3 checkpoint (6ad8f) with NN [256, 128], PPO
+  and discrete actions with the new observation space.
 
 
 *** Variables under manual control:
