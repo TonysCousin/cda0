@@ -67,7 +67,10 @@ _checkpoint_path = None
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-6428b/trial02/checkpoint_000800"
 
 # Completed level 3, NN [256, 128], PPO, discrete actions on 4/20/23
-_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-6ad8f/trial02/checkpoint_001205"
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-6ad8f/trial02/checkpoint_001205"
+
+# Completed level 4 with decent success, NN [256, 128], PPO, discrete actions on 4/22/23
+_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-c4c9f/trial00/checkpoint_001350"
 
 
 def main(argv):
@@ -94,7 +97,7 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 100 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 1500
+    max_iterations      = 1000
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -182,10 +185,10 @@ def main(argv):
     # NOTE: all items below lr_schedule are PPO-specific
     cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
                     train_batch_size            = 1024, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    lr                          = tune.loguniform(1e-6, 1e-3),
+                    lr                          = tune.loguniform(1e-6, 3e-4),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 128, #must be <= train_batch_size (and divide into it)
-                    entropy_coeff               = tune.uniform(0.0005, 0.008),
+                    entropy_coeff               = tune.uniform(0.0005, 0.01),
                     kl_coeff                    = tune.uniform(0.3, 0.8),
                     #clip_actions                = True,
                     clip_param                  = tune.uniform(0.05, 0.4),

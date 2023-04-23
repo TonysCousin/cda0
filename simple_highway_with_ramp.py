@@ -466,7 +466,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         n_loc = 0.0
         n_speed = 0.0
         if self.difficulty_level == 4: #steady speed vehicles in lane 1
-            n_loc = max(self.neighbor_start_loc + self.prng.random()*3.0*SimpleHighwayRamp.VEHICLE_LENGTH, 0.0)
+            n_loc = max(self.neighbor_start_loc + self.prng.random()*6.0*SimpleHighwayRamp.VEHICLE_LENGTH, 0.0)
             n_speed = self.neighbor_speed * (self.prng.random()*0.2 + 0.9) #assigned speedd +/- 10%
             if self.prng.random() > 0.9: #sometimes there will be no neighbor vehicles participating
                 n_speed = 0.0
@@ -504,8 +504,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         if ego_lane_id == 1:
             min_loc = self.vehicles[3].dist_downtrack - 4.0*SimpleHighwayRamp.VEHICLE_LENGTH
             max_loc = self.vehicles[1].dist_downtrack + 10.0*SimpleHighwayRamp.VEHICLE_LENGTH
-            if min_loc < ego_x < max_loc:
+            midway = 0.5*(max_loc - min_loc) + min_loc
+            if midway < ego_x < max_loc:
                 ego_x = max_loc
+                if self.debug > 0:
+                    print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
+            elif min_loc < ego_x <= midway:
+                ego_x = min_loc
                 if self.debug > 0:
                     print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
         #print("///// reset: training = {}, ego_lane_id = {}, ego_x = {:.2f}, ego_speed = {:.2f}".format(self.training, ego_lane_id, ego_x, ego_speed))
@@ -867,7 +872,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         #print("///// initialize_ramp_vehicle_speed: tgt time = {:.1f}, offset = {:.1f}, ego_x = {:.1f}".format(tgt_arrival_time, offset, ego_x))
         if tgt_arrival_time > (L2_DIST_TO_MERGE - ego_x)/SimpleHighwayRamp.ROAD_SPEED_LIMIT:
 
-            # Solve quadratic equation (smaller root) to determine the ramp vehicle's starting speed, assuming that it will
+            # Solve quadratic equation to determine the ramp vehicle's starting speed, assuming that it will
             # accelerate at the max rate until it reaches speed limit, then stays at that speed (this would maximize its reward for
             # the pre-merge part of the episode, so it will have a desire to stay close to this trajectory).
             vf = SimpleHighwayRamp.ROAD_SPEED_LIMIT
@@ -881,8 +886,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             if v0 <= 0.0  or  v0 > SimpleHighwayRamp.ROAD_SPEED_LIMIT:
                 v0 = (-qb - root_part) / 2.0 / qa
                 if v0 <= 0.0  or  v0 > SimpleHighwayRamp.ROAD_SPEED_LIMIT:
-                    v0 = 0.5*SimpleHighwayRamp.ROAD_SPEED_LIMIT #neither root works, pick something not crazy
-                    print("///// initialize_ramp_vehicle_speed: CAUTION - neither v0 root was acceptable!")
+                    # Neither root works, which means target time is probably too long to be able to solve with max acceleration.
+                    # So pick a random slow speed to at least get close to what is desired.
+                    v0 = self.prng.random() * 0.3*SimpleHighwayRamp.ROAD_SPEED_LIMIT
 
             #print("///// initialize_ramp_vehicle_speed computed desired speed = {:.1f} for relative_pos = {}, tgt arrival = {:.1f} s"
             #    .format(v0, relative_pos, tgt_arrival_time))

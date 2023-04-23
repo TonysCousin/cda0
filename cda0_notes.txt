@@ -1830,9 +1830,66 @@ program as a system test.
 
 	* Worked well. rmeans leveled out a 2 to 4 until 800k steps, then they jumped up again until ~1200k
 	  steps, where they leveled off between 7 and 9.5. Best was trial 2, ending early at rmean = 9.5.
+	* It appears it is experiencing some problems starting from a pre-trained checkpoint (catastrophic
+	  forgetting?).
 
 * Run f024c training level 4 starting from the previous level 3 checkpoint (6ad8f) with NN [256, 128], PPO
   and discrete actions with the new observation space.
+	* After 1400 iterations, all trials were stuck in a run with rmean between -3 and -1. Inference on
+	  trial 2 at this point showed that it had learned to avoid a crash by going full throttle all the
+	  time; when in lane 2 it just outran the neighbors, and its reward was ~-0.5, much better than that
+	  for a crash. It also hit full throttle in the other lanes as well, so not seeing opportunities.
+
+* Run ba89e training level 4 from scratch (extending the randomized positions for first 60k steps to this level).
+	* Adjusted random lane assignment for level 4 from 70% on lane to to 50% on lane 2.
+	* Also adjusted LR range top end from 1e-3 to 3e-4
+	* Adjusted entropy_coeff range top end from 0.008 to 0.01
+
+4/21/23
+
+	* Moderately successful. For all trials, rmean very gradually made a noisy climb to between +1 and +4
+	  at 1500 iterations. It may still have momentum to keep going.
+	* Best trial at end was 0, with rmean = 3.9, rmin = -10. Inference proved very bad, with illegal lane
+	  changes everywhere.
+	* I noticed that the code change made to randomize starting position was not what I had intended, and
+	  produced substandard training conditions relative to neighbor positioning.
+
+* Run c4c9f training level 4 from scratch as a re-do of the previous run.
+	* Fixed code for level 4 randomized initial location to use the actual level 4 logic for the other
+	  initializations also.
+
+4/22/23
+
+	* Training for 1500 iterations saw noisy rmean end in the range +3 to +7, but appearing to be on a
+	  slow, upward trend. I suspect another 1500 iterations may be able to improve it.
+	* Trial 0 had the highest rmean toward the end (~7 at checkpoint 1350). Inference on it worked well
+	  for lanes 0 & 1, but most runs on lane 2 had illegal lane change in first couple steps.
+	* Trial 9 performed similarly.
+
+* Run fabc8 training level 4 as a direct continuation of the above run, starting with its trial00 checkpoint
+  1350. No other changes made.
+
+4/23/23
+
+	* Good. Didn't get much learning improvement over the previous run. All trials leveled out quickly
+	  in a range of rmean in +5 to +8 (after 200k steps) and rmin stayed at -10 except for a few spikes.
+	* Best trial was #0. Inference shows that it performs well in lanes 0 & 1, and often does well in
+	  lane 2. But at least 50% of runs on lane 2 have illegal lane change on the first step, always to
+	  the right. Almost all of these occur when initial speed is really low (< 7 m/s). For some reason
+	  these mostly seem to occur when specifying relative positions 2 or 3.
+	* Found a code defect in initialize_ramp_vehicle_speed() solving the quadratic equation, which could
+	  explain some unexpected starting speeds, and maybe the lack of training at the very low speeds.
+	  Also found that reset() is initializing ego_x differently in inference than in training, such that
+	  inference is trying values that were never trained.
+	* Realized, during this fix, that many times there is no solution for initial speed, because there is
+	  too much time available, even if initial speed is 0. In order to meet the target time in many cases
+	  the accel would have to be less than max allowed. This is why a trained agent always tries to get
+	  in front of the neighbor platoon - it has very little experience getting behind it.
+
+* Run 7f4e2 training level 4 starting from checkpoint L4-c4c9f, as a re-run of the previous run.
+	* Applied fixes to both defects noted above.
+	* Increased the possible downtrack starting range for neighbor vehicles, given the propensity for
+	  their arrival time to be too long, thus encouraging the agent to learn to get behind them sometimes.
 
 
 *** Variables under manual control:
