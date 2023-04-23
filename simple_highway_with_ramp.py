@@ -441,6 +441,12 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     ego_x = self.prng.random() * 500.0
                     ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
 
+                # Code block inspired from above to support training level 4 from scratch - it needs to learn how to find the finish line
+                initial_steps = 60000 #num steps to wait before starting to shrink the max distance
+                if self.randomize_start_dist  and  self.total_steps <= initial_steps:
+                    physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
+                    ego_x = self.prng.random() * physical_limit
+
             else: #levels 5 and up
                 ego_x = self.prng.random() * 500.0
                 ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
@@ -448,7 +454,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Else, we are doing inference, so allow coonfigrable overrides if present
         else:
             ego_lane_id = int(self.prng.random()*3) if self.init_ego_lane is None  else  self.init_ego_lane
-            ego_x = self.prng.random() * 200.0 if self.init_ego_x is None  else  self.init_ego_x
+            ego_x = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH if self.init_ego_x is None  else  self.init_ego_x
 
             # If difficulty level 4, then always use the config value for merge relative position
             if self.difficulty_level == 4  and  ego_lane_id == 2:
@@ -873,7 +879,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             root_part = math.sqrt(qb*qb - 4.0*qa*qc)
             v0 = (-qb + root_part) / 2.0 / qa
             if v0 <= 0.0  or  v0 > SimpleHighwayRamp.ROAD_SPEED_LIMIT:
-                v0 = -qb - root_part / 2.0 / qa
+                v0 = (-qb - root_part) / 2.0 / qa
                 if v0 <= 0.0  or  v0 > SimpleHighwayRamp.ROAD_SPEED_LIMIT:
                     v0 = 0.5*SimpleHighwayRamp.ROAD_SPEED_LIMIT #neither root works, pick something not crazy
                     print("///// initialize_ramp_vehicle_speed: CAUTION - neither v0 root was acceptable!")
@@ -1029,7 +1035,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 return int(self.prng.random()*2) #select 0 or 1
 
         elif self.difficulty_level < 5:
-            if self.prng.random() < 0.7:
+            if self.prng.random() < 0.5:
                 return 2
             else:
                 return int(self.prng.random()*2) #select 0 or 1
