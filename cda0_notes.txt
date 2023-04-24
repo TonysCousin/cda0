@@ -1890,6 +1890,16 @@ program as a system test.
 	* Applied fixes to both defects noted above.
 	* Increased the possible downtrack starting range for neighbor vehicles, given the propensity for
 	  their arrival time to be too long, thus encouraging the agent to learn to get behind them sometimes.
+	* Training performed about the same as before, as did inference runs. Not worth keeping.
+	* Found & fixed a defect (after training) in initializing ego_x when in lane 1; it sometimes put the
+	  vehicle at a negative start distance.
+
+AI next moves:
+- use SAC with combined action space
+- implement level 5 with random lanes & crash avoidance neighbors
+- study graph ML
+- study path planning to replace near-sighted agent
+- switch to raster map
 
 
 *** Variables under manual control:

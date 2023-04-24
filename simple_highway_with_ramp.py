@@ -502,7 +502,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # more room if going in front of the neighbors, as ego has limited accel and may be starting much slower than they are.
         #TODO: when difficulty levels > 3 are implemented, this needs to account for vehicles in other lanes also.
         if ego_lane_id == 1:
-            min_loc = self.vehicles[3].dist_downtrack - 4.0*SimpleHighwayRamp.VEHICLE_LENGTH
+            min_loc = max(self.vehicles[3].dist_downtrack - 4.0*SimpleHighwayRamp.VEHICLE_LENGTH, 0.0)
             max_loc = self.vehicles[1].dist_downtrack + 10.0*SimpleHighwayRamp.VEHICLE_LENGTH
             midway = 0.5*(max_loc - min_loc) + min_loc
             if midway < ego_x < max_loc:
