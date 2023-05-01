@@ -1130,9 +1130,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # If the episode is done then
         if done:
 
-            # If there was a single- or multi-car crash or then set a penalty, larger for multi-car crash
+            # If there was a multi-car crash or off-roading (single-car crash) then set a penalty, larger for multi-car crash
             if crash:
-                reward = -10.0
+                reward = -20.0
                 explanation = "Crashed into a vehicle. "
 
             elif off_road:

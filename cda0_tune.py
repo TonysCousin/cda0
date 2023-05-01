@@ -70,7 +70,7 @@ _checkpoint_path = None
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-6ad8f/trial02/checkpoint_001205"
 
 # Completed level 4 with decent success, NN [256, 128], PPO, discrete actions on 4/22/23
-_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-c4c9f/trial00/checkpoint_001350"
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-c4c9f/trial00/checkpoint_001350"
 
 
 def main(argv):
@@ -97,7 +97,7 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 100 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 1000
+    max_iterations      = 1500
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -196,7 +196,7 @@ def main(argv):
 
     # Add dict for model structure
     model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = [256, 128]
+    model_config["fcnet_hiddens"]               = [256, 256, 128]
     model_config["fcnet_activation"]            = "relu"
     cfg.training(model = model_config)
 

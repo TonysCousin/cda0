@@ -1929,7 +1929,7 @@ program as a system test.
 4/29/23
 
 * I got some mentoring time from Kevin, who made several suggestions on how to change the approach.
-	1 Use PPO or SAC
+	1 Use PPO or SAC - I will use PPO for now, since it has been working well for me.
 	2 Use continuous action space, and discretize lane change action like I did originally.
 	3 Change the action space to reflect the agent's goals, not the process of getting there. Instead of
 	  accel and lane change, use speed and lane ID. Not sure how to generalize the lane ID part, but for
@@ -1940,10 +1940,15 @@ program as a system test.
 	5 Be sure to penalize sudden, large changes in any action command (this is currently in place).
 	6 Keep the NN small, and go a little deeper (try 3 layers).
 
-AI next moves:
-- Add HPs for search: grad_clip, target_network_update_freq, twin_q
-- Change penalty for crash to -20.
+* Merged the git branch adv-level4 into develop, which now reflects the best of the above work in PPO.
+  Created new branch "new-obs-actions" off of develop for this next phase of work.
 
+* Run 72102 training level 4 from scratch, with suggestions #1 and #6 implemented (PPO).
+	* NN structure is now [256, 256, 128].
+
+
+
+Near-term considerations:
 - implement level 5 with random lanes & crash avoidance neighbors
 - study graph ML
 - study path planning to replace near-sighted agent
