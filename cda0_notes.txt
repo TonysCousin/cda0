@@ -1894,8 +1894,56 @@ program as a system test.
 	* Found & fixed a defect (after training) in initializing ego_x when in lane 1; it sometimes put the
 	  vehicle at a negative start distance.
 
+===============================
+===== SAC algorithm again =====
+===============================
+
+* Converted the environment code to use a flattened, 1D Discrete action space, since SAC can't handle a
+  MultiDiscrete. The action space involves 51 actions, made by slimming down the number of acceleration choices
+  from 23 to 17, and repeating them for each of the 3 lane change commands.
+	* Reenabled the commented-out SAC model config variables in the tune program. Also changed up the HPs
+	  used in the PBT scheduler.
+
+* Run f4e8f training level 4 from scratch. All HPs remain unchanged from the PPO runs, except those that are
+  algorithm-specific.
+
+4/24/23
+
+	* Terrible. rmax bounced rapidly between -10 and +10, but rmean never got above -10 for any trial.
+
+* Run eb83b training level 4 from scratch. Adding search ranges to more HPs (tau, initial_alpha, n_step).
+	* Similar performance. I killed it early.
+	* It appears that each 100 iterations the variable start distance gets re-instated (using a step
+	  counter that is being reset by the perturb cycle), then after the next 60k steps, the rmax drops to
+	  -10 for the remainer of that 100 iters.
+
+* Run f576c training level 4 from scratch, but this time went back to PPO while still using the new 1D action
+  space. This is to verify that the action space is not causing problems.
+	* Also added a perturb_ctrl action to reset() to ensure that once the first perturb cycle occurs there
+	  will be no more randomized initial positions.
+
+=========================================================
+===== Restructuring with advice from Kevin Albarado =====
+=========================================================
+
+4/29/23
+
+* I got some mentoring time from Kevin, who made several suggestions on how to change the approach.
+	1 Use PPO or SAC
+	2 Use continuous action space, and discretize lane change action like I did originally.
+	3 Change the action space to reflect the agent's goals, not the process of getting there. Instead of
+	  accel and lane change, use speed and lane ID. Not sure how to generalize the lane ID part, but for
+	  now, worth trying to see how well it works.
+	4 Change the obs space to get closer to the raster-type approach I have been considering already, so
+	  that the agent will look at spatial cells near it to figure out what is going on in the immediate
+	  vicinity.
+	5 Be sure to penalize sudden, large changes in any action command (this is currently in place).
+	6 Keep the NN small, and go a little deeper (try 3 layers).
+
 AI next moves:
-- use SAC with combined action space
+- Add HPs for search: grad_clip, target_network_update_freq, twin_q
+- Change penalty for crash to -20.
+
 - implement level 5 with random lanes & crash avoidance neighbors
 - study graph ML
 - study path planning to replace near-sighted agent

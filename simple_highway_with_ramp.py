@@ -11,6 +11,9 @@ from ray.rllib.env.apis.task_settable_env import TaskSettableEnv
 from ray.tune.logger import pretty_print
 from perturbation_control import PerturbationController
 
+perturb_ctrl = PerturbationController() #create this outside the class and curriculum function so both can access it
+
+
 class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
     """This is a 2-lane highway with a single on-ramp on the right side.  It is called "simple" because it does not use
@@ -416,7 +419,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # If we are in a training run at difficulty level 0, then choose widely randomized initial conditions
             if self.difficulty_level < 4:
                 ego_x = 0.0
-                if self.randomize_start_dist:
+                if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
                     physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                     initial_steps = 60000 #num steps to wait before starting to shrink the max distance
                     if self.total_steps <= initial_steps:
@@ -1221,8 +1224,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
 ######################################################################################################
 ######################################################################################################
-
-perturb_ctrl = PerturbationController() #create this outside the function so it doesn't flail the disk as much
 
 
 def curriculum_fn(train_results:        dict,           #current status of training progress
