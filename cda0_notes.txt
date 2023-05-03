@@ -1945,6 +1945,21 @@ program as a system test.
 
 * Run 72102 training level 4 from scratch, with suggestions #1 and #6 implemented (PPO).
 	* NN structure is now [256, 256, 128].
+	* Changed penalty for crash (with another vehicle) from -10 to -20 so it is worse than runnin off road.
+
+5/2/23
+
+	* After ~500k steps all trials settled into a noisy steady state where rmean fluctuates between
+	  +1 and +5 and rmin fluctuates between -20 and -10.
+	* Inference on best trial shows most runs on lane 2 drive off road in the first time step.
+
+* Code mods for uniform coordinate system - replacing the concept of measuring a vehicle's location relative
+  to its current lane's start point, since each lane may start at a different X value. Going forward, all
+  vehicle locations will be represented as X coordinates, regarless of which lane it is in. 
+	* Updated Roadway and Lane classes to support this concpet change.
+	* Changed all the rest of the environment code to convert from DDT to X coordinates.
+	* Ran a bit with debugging set to 1 and saw nothing crazy in the log.
+	* Ran a training job with same settings as previous one, to demonstrate that it performs the same.
 
 
 
