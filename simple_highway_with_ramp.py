@@ -58,15 +58,16 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         Observation space:  In this version the agent magically knows everything going on in the environment, including
         some connectivities of the lane geometry.  Its observation space is described in the __init__() method (all floats).
 
-        Action space:  discrete and contains the following elements in the vector (real world values, unscaled):
-            accel_cmd           - the desired forward acceleration, m/s^2, represented as a 1-hot vector of length 23; values
-                                    are (in multiples of MAX_ACCEL):
-                                    -1.0, -0.8, -0.6, -0.5, -0.4, -0.3, -0.22, -0.15, -0.09, -0.05, -0.02, 0.0,
-                                    <and the reverse in the positive values>
-            lane_change_cmd     - a 1-hot vector of length 3 with the following possible values:
-                                    0 = change lanes left
-                                    1 = stay in lane
-                                    2 = change lanes right
+        Action space:  continuous, with the following elements (real world values, unscaled):
+            target_speed        - the desired forward speed, m/s. Values are in [0, MAX_SPEED].
+            target_lane         - indicator of the ID of the currently desired lane, offset by 1. Since this is a float,
+                                    and needs to be kept in [-1, 1], we will interpret it loosely as the lane ID - 1,
+                                    which can then represent 3 possible choices.  Specifically,
+                                    [-1, -0.5)      = lane 0
+                                    [-0.5, +0.5]    = lane 1
+                                    (0.5, 1]        = lane 2
+                                    If a lane is chosen that doesn't exist at the current X location, it will be treated
+                                    as an illegal lane change maneuver.
 
         Lane connectivities are defined by three parameters that define the adjacent lane, as shown in the following
         series of diagrams.  These parameters work the same whether they describe a lane on the right or left of the
@@ -138,7 +139,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     #metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
     OBS_SIZE                = 26
-    NUM_ACCEL_CMDS          = 23
     VEHICLE_LENGTH          = 20.0      #m
     MAX_SPEED               = 36.0      #vehicle's max achievable speed, m/s
     MAX_ACCEL               = 3.0       #vehicle's max achievable acceleration (fwd or backward), m/s^2
@@ -290,37 +290,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         #..........Define the action space
         #
 
-        # Discrete acceleration commands
-        self.accel_cmds = np.zeros([SimpleHighwayRamp.NUM_ACCEL_CMDS])
-        self.accel_cmds[ 0] = -1.0 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[ 1] = -0.8 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[ 2] = -0.6 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[ 3] = -0.5 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[ 4] = -0.4 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[ 5] = -0.3 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[ 6] = -0.22* SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[ 7] = -0.15* SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[ 8] = -0.09* SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[ 9] = -0.05* SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[10] = -0.02* SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[11] =  0.0 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[12] =  0.02* SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[13] =  0.05* SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[14] =  0.09* SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[15] =  0.15* SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[16] =  0.22* SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[17] =  0.3 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[18] =  0.4 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[19] =  0.5 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[20] =  0.6 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[21] =  0.8 * SimpleHighwayRamp.MAX_ACCEL
-        self.accel_cmds[22] =  1.0 * SimpleHighwayRamp.MAX_ACCEL
-
-        # Lateral control actions
-        self.LANE_CHANGE_LEFT = 0
-        self.STAY_IN_LANE = 1
-        self.LANE_CHANGE_RIGHT = 2
-        self.action_space = MultiDiscrete(np.array([SimpleHighwayRamp.NUM_ACCEL_CMDS, 3]))
+        lower_action = np.array([-SimpleHighwayRamp.MAX_ACCEL, -1.0])
+        upper_action = np.array([ SimpleHighwayRamp.MAX_ACCEL,  1.0])
+        self.action_space = Box(low=lower_action, high=upper_action, dtype=np.float)
         if self.debug == 2:
             print("///// action_space = ", self.action_space)
 
@@ -401,7 +373,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         """
 
         if self.debug > 0:
-            print("///// Entering reset")
+            print("\n///// Entering reset")
 
         # We need the following line to seed self.np_random
         #super().reset(seed=seed) #apparently gym 0.26.1 doesn't implement this method in base class!
@@ -577,7 +549,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
 
     def step(self,
-                action  : list      #list of ints; 0 = accel cmd index, 1 = lane chg cmd index
+                action  : list      #list of floats; 0 = speed command, 1 = desired lane
             ) -> Tuple[np.array, float, bool, bool, Dict]:
         """Executes a single time step of the environment.  Determines how the input actions will alter the
             simulated world and returns the resulting observations to the agent.
@@ -589,7 +561,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         """
 
         if self.debug > 0:
-            print("///// Entering step(): action = ", action)
+            print("\n///// Entering step(): action = ", action)
             print("      vehicles array contains:")
             for i, v in enumerate(self.vehicles):
                 v.print(i)
@@ -616,20 +588,22 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             lane_id = v.lane_id
             if self.debug > 1:
                 print("      Advancing vehicle {} with obs_idx = {}, lane_id = {}".format(i, obs_idx, lane_id))
-            new_accel_cmd = 0.0 #non-ego vehicles are constant speed
-            prev_accel_cmd = 0.0
+            new_speed_cmd = self.neighbor_speed #non-ego vehicles are constant speed
+            cur_speed = self.neighbor_speed
+            prev_speed = self.neighbor_speed
             if i == 0: #this is the ego vehicle
-                new_accel_cmd = self.accel_cmds[action[0]]
-                prev_accel_cmd = self.obs[self.EGO_ACCEL_CMD_CUR]
-            new_speed, new_x = v.advance_vehicle(new_accel_cmd, prev_accel_cmd)
+                new_speed_cmd = action[0]
+                cur_speed = self.obs[self.EGO_SPEED]
+                prev_speed = self.obs[self.EGO_SPEED_PREV]
+            new_speed, new_x = v.advance_vehicle(new_speed_cmd, cur_speed, prev_speed)
             if new_x > SimpleHighwayRamp.SCENARIO_LENGTH:
                 new_x = SimpleHighwayRamp.SCENARIO_LENGTH #limit it to avoid exceeding NN input validation rules
                 if i == 0: #the ego vehicle has crossed the finish line; episode is now complete
                     done = True
                     return_info["reason"] = "Success; end of scenario"
             if self.debug > 1:
-                print("      Vehicle {} advanced with new_accel_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}"
-                        .format(i, new_accel_cmd, new_speed, new_x))
+                print("      Vehicle {} advanced with new_speed_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}"
+                        .format(i, new_speed_cmd, new_speed, new_x))
 
             if i == 0: #ego vehicle
                 self.obs[obs_idx + 1] = new_x
@@ -654,6 +628,18 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # It's legal, but not desirable, to command opposite lane change directions in consecutive time steps.
         # TODO future: replace instance variables lane_change_underway and lane_id with those in vehicle[0]
         ran_off_road = False
+
+
+
+
+
+
+
+JOHN - compute desired LC action from action[1] and update logic below
+
+
+
+
 
         if action[1] != self.STAY_IN_LANE  or  self.lane_change_underway != "none":
             if self.lane_change_underway == "none": #count should always be 0 in this case, so initiate a new count
@@ -1562,21 +1548,41 @@ class Vehicle:
 
 
     def advance_vehicle(self,
-                        new_accel_cmd   : float,    #newest fwd accel command, m/s^2
-                        prev_accel_cmd  : float     #fwd accel command from prev time step, m/s^2
-                       ):
+                        new_speed_cmd   : float,    #the newly commanded speed, m/s
+                        cur_speed       : float,    #the current actual speed, m/s
+                        prev_speed      : float     #actual speed at the previous time step, m/s
+                       ) -> tuple(float, float):
         """Advances a vehicle's forward motion for one time step according to the vehicle dynamics model.
             Note that this does not consider lateral motion, which needs to be handled elsewhere.
 
             Returns: tuple of (new speed (m/s), new X location (m))
         """
 
-        # Determine new jerk, accel, speed & location of the ego vehicle
+        # Determine the current & previous effective accelerations
+        cur_accel_cmd = (new_speed_cmd - cur_speed) / self.time_step_size
+        prev_accel = (cur_speed - prev_speed) / self.time_step_size
+        print("///// Vehicle.advance_vehicle(speeds): new_speed_cmd = {:.1f}, cur_speed = {:.1f}, prev_speed = {:.1f}, cur_accel_cmd = {:.2f}, prev_accel = {:.2f}"
+              .format(new_speed_cmd, cur_speed, prev_speed, cur_accel_cmd, prev_accel))
+        return self.advance_vehicle(cur_accel_cmd, prev_accel)
+
+
+    def advance_vehicle(self,
+                        new_accel_cmd   : float,    #newest fwd accel command, m/s^2
+                        prev_accel_cmd  : float     #fwd accel command from prev time step, m/s^2
+                       ) -> tuple(float, float):
+        """Advances a vehicle's forward motion for one time step according to the vehicle dynamics model.
+            Note that this does not consider lateral motion, which needs to be handled elsewhere.
+
+            Returns: tuple of (new speed (m/s), new X location (m))
+        """
+
+        # Determine new jerk, accel, speed & location of the vehicle
         new_jerk = (new_accel_cmd - prev_accel_cmd) / self.time_step_size
         if new_jerk < -self.max_jerk:
             new_jerk = -self.max_jerk
         elif new_jerk > self.max_jerk:
             new_jerk = self.max_jerk
+        print("///// Vehicle.advance_vehicle(accels): new_jerk = {:.3f}".format(new_jerk))
 
         new_accel = min(max(prev_accel_cmd + self.time_step_size*new_jerk, -SimpleHighwayRamp.MAX_ACCEL), SimpleHighwayRamp.MAX_ACCEL)
         new_speed = min(max(self.speed + self.time_step_size*new_accel, 0.0), SimpleHighwayRamp.MAX_SPEED) #vehicle won't start moving backwards

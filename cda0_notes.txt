@@ -1960,6 +1960,7 @@ program as a system test.
 	* Changed all the rest of the environment code to convert from DDT to X coordinates.
 	* Ran a bit with debugging set to 1 and saw nothing crazy in the log.
 	* Ran a training job with same settings as previous one, to demonstrate that it performs the same.
+	  Results were pretty much like the previous run, so I'm comfortable moving forward.
 
 
 
