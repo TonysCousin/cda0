@@ -98,7 +98,7 @@ def main(argv):
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 100 #num iterations before we consider stopping or promoting to next level
     max_iterations      = 1500
-    num_trials          = 10
+    num_trials          = 1
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
     PerturbationController(_checkpoint_path, num_trials)
@@ -116,7 +116,7 @@ def main(argv):
     #env_config["stopper"]                       = stopper #object must be instantiated above
     env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
-    env_config["debug"]                         = 0
+    env_config["debug"]                         = 1
     env_config["verify_obs"]                    = False
     env_config["training"]                      = True
     env_config["randomize_start_dist"]          = True

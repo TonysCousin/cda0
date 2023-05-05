@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Dict
 from ray.rllib.env.env_context import EnvContext
 
 from simple_highway_with_ramp import SimpleHighwayRamp
@@ -44,8 +44,9 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
 
 
     def step(self,
-                action  :   list            #list of actions output from an NN
-            ) -> Tuple[np.array, list, list, dict]: #returns scaled obs, rewards, dones and infos, where obs are scaled for NN consumption
+                action  :   list                            #list of actions output from an NN
+            ) -> Tuple[np.array, float, bool, bool, Dict]:  #returns scaled obs, rewards, dones truncated flag, and infos,
+                                                            # where obs are scaled for NN consumption
 
         """Passes the discrete actions to the environment to advance it one step and to gather new observations and rewards.
 
@@ -57,7 +58,13 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
             sent back to the NN for the next time step, if that action is to be taken.
         """
 
-        raw_obs, r, d, t, i = super().step(action)
+        # Unscale the action values
+        ua = [None]*2
+        ua[0] = action[0] * SimpleHighwayRamp.MAX_SPEED #Desired speed, m/s
+        ua[1] = action[1]                               #Desired lane - 1
+
+        # Step the environment
+        raw_obs, r, d, t, i = super().step(ua)
         if self.training:
             o = self.scale_obs(raw_obs)
         else:

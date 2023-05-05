@@ -4,7 +4,7 @@ from typing import Tuple, Dict
 import math
 import time
 import gymnasium
-from gymnasium.spaces import MultiDiscrete, Box
+from gymnasium.spaces import Box
 import numpy as np
 from ray.rllib.env.env_context import EnvContext
 from ray.rllib.env.apis.task_settable_env import TaskSettableEnv
@@ -12,6 +12,12 @@ from ray.tune.logger import pretty_print
 from perturbation_control import PerturbationController
 
 perturb_ctrl = PerturbationController() #create this outside the class and curriculum function so both can access it
+
+
+class LaneChange:
+    CHANGE_LEFT     = -1
+    STAY_IN_LANE    = 0
+    CHANGE_RIGHT    = 1
 
 
 class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
@@ -152,7 +158,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     MAX_STEPS_SINCE_LC      = 60        #largest num time steps we will track since previous lane change
     NUM_DIFFICULTY_LEVELS   = 5         #num levels of environment difficulty for the agent to learn; see descrip above
 
-
     def __init__(self,
                  config:        EnvContext,             #dict of config params
                  seed:          int             = None, #seed for PRNG
@@ -209,6 +214,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.N3_LANE_ID         =  9 #neighbor vehicle 3, index of the lane occupied by that vehicle
         self.N3_DELTAX          = 10 #neighbor vehicle 3, dist downtrack of ego vehicle (centers of bounding boxes), m
         self.N3_DELTA_SPEED     = 11 #neighbor vehicle 3, vehicle's delta speed above that of ego vehicle, m/s
+        self.EGO_SPEED_PREV     = 12 #agent's actual speed in previous time step, m/s
+
         self.EGO_LANE_REM       = 12 #distance remaining in the agent's current lane, m
         self.EGO_ACCEL_CMD_CUR  = 13 #agent's most recent accel_cmd, m/s^2
         self.EGO_ACCEL_CMD_PREV1= 14 #agent's next most recent accel_cmd (1 time step old), m/s^2
@@ -290,8 +297,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         #..........Define the action space
         #
 
-        lower_action = np.array([-SimpleHighwayRamp.MAX_ACCEL, -1.0])
-        upper_action = np.array([ SimpleHighwayRamp.MAX_ACCEL,  1.0])
+        lower_action = np.array([0.0, -1.0])
+        upper_action = np.array([ SimpleHighwayRamp.MAX_SPEED,  1.0])
         self.action_space = Box(low=lower_action, high=upper_action, dtype=np.float)
         if self.debug == 2:
             print("///// action_space = ", self.action_space)
@@ -595,7 +602,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 new_speed_cmd = action[0]
                 cur_speed = self.obs[self.EGO_SPEED]
                 prev_speed = self.obs[self.EGO_SPEED_PREV]
-            new_speed, new_x = v.advance_vehicle(new_speed_cmd, cur_speed, prev_speed)
+            new_speed, new_x = v.advance_vehicle_spd(new_speed_cmd, cur_speed, prev_speed)
             if new_x > SimpleHighwayRamp.SCENARIO_LENGTH:
                 new_x = SimpleHighwayRamp.SCENARIO_LENGTH #limit it to avoid exceeding NN input validation rules
                 if i == 0: #the ego vehicle has crossed the finish line; episode is now complete
@@ -628,29 +635,23 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # It's legal, but not desirable, to command opposite lane change directions in consecutive time steps.
         # TODO future: replace instance variables lane_change_underway and lane_id with those in vehicle[0]
         ran_off_road = False
+        desired_lane = int(math.floor(action[1] + 0.5)) + 1 #maps [-1, 1] into (0, 1, 2)
+        lc_cmd = LaneChange.STAY_IN_LANE
+        if desired_lane < self.obs[self.EGO_LANE_ID]: #could be different by 1 or 2; assumes lane IDs increase left-to-right
+            lc_cmd = LaneChange.CHANGE_LEFT
+        elif desired_lane > self.obs[self.EGO_LANE_ID]:
+            lc_cmd = LaneChange.CHANGE_RIGHT
 
-
-
-
-
-
-
-JOHN - compute desired LC action from action[1] and update logic below
-
-
-
-
-
-        if action[1] != self.STAY_IN_LANE  or  self.lane_change_underway != "none":
+        if lc_cmd != LaneChange.STAY_IN_LANE  or  self.lane_change_underway != "none":
             if self.lane_change_underway == "none": #count should always be 0 in this case, so initiate a new count
-                if action[1] == self.LANE_CHANGE_LEFT:
+                if lc_cmd == LaneChange.CHANGE_LEFT:
                     self.lane_change_underway = "left"
                 else:
                     self.lane_change_underway = "right"
                 self.lane_change_count = 1
                 if self.debug > 0:
-                    print("      *** New lane change maneuver initiated. action[1] = {}, status = {}"
-                            .format(action[1], self.lane_change_underway))
+                    print("      *** New lane change maneuver initiated. lc_cmd = {}, status = {}"
+                            .format(lc_cmd, self.lane_change_underway))
             else: #once a lane change is underway, contiinue until complete, regardless of new commands
                 self.lane_change_count += 1
 
@@ -718,8 +719,8 @@ JOHN - compute desired LC action from action[1] and update logic below
         # Update the obs vector with the new state info
         self.obs[self.EGO_ACCEL_CMD_PREV2] = self.obs[self.EGO_ACCEL_CMD_PREV1]
         self.obs[self.EGO_ACCEL_CMD_PREV1] = self.obs[self.EGO_ACCEL_CMD_CUR]
-        self.obs[self.EGO_ACCEL_CMD_CUR] = self.accel_cmds[action[0]]
-        self.obs[self.EGO_LANE_CMD_CUR] = action[1] - 1 #maps to [-1, 0, 1]
+        self.obs[self.EGO_ACCEL_CMD_CUR] = 0 #TODO dummy
+        self.obs[self.EGO_LANE_CMD_CUR] = lc_cmd - 1 #maps to [-1, 0, 1]
         self.obs[self.EGO_LANE_ID] = new_ego_lane
         self.obs[self.EGO_LANE_REM] = new_ego_rem
         self.obs[self.EGO_SPEED] = new_ego_speed
@@ -788,9 +789,7 @@ JOHN - compute desired LC action from action[1] and update logic below
 
 
     def get_burn_in_iters(self):
-        """Returns the number of burn-in iterations configured. This quantity is not yet used in this
-            environment, but the environment needs to be able to make it available to other components.
-        """
+        """Returns the number of burn-in iterations configured."""
         return self.burn_in_iters
 
 
@@ -1044,7 +1043,6 @@ JOHN - compute desired LC action from action[1] and update logic below
             else:
                 return int(self.prng.random()*2) #select 0 or 1
 
-        # Levels 4 and up should choose any lane equally
         else:
             return int(self.prng.random()*3)
 
@@ -1340,7 +1338,7 @@ class Roadway:
     def get_current_lane_geom(self,
                                 lane_id         : int   = 0,    #ID of the lane in question
                                 x_loc           : float = 0.0   #ego vehicle's location in the X coordinate, m
-                             ) -> tuple:
+                             ) -> Tuple[float, int, float, float, float, int, float, float, float]:
         """Determines all of the variable roadway geometry relative to the given vehicle location.
             Returns a tuple of (remaining dist in this lane,
                                 ID of left neighbor ln (or -1 if none),
@@ -1547,11 +1545,11 @@ class Vehicle:
         self.speed = 0.0
 
 
-    def advance_vehicle(self,
+    def advance_vehicle_spd(self,
                         new_speed_cmd   : float,    #the newly commanded speed, m/s
                         cur_speed       : float,    #the current actual speed, m/s
                         prev_speed      : float     #actual speed at the previous time step, m/s
-                       ) -> tuple(float, float):
+                       ) -> Tuple[float, float]:
         """Advances a vehicle's forward motion for one time step according to the vehicle dynamics model.
             Note that this does not consider lateral motion, which needs to be handled elsewhere.
 
@@ -1561,15 +1559,15 @@ class Vehicle:
         # Determine the current & previous effective accelerations
         cur_accel_cmd = (new_speed_cmd - cur_speed) / self.time_step_size
         prev_accel = (cur_speed - prev_speed) / self.time_step_size
-        print("///// Vehicle.advance_vehicle(speeds): new_speed_cmd = {:.1f}, cur_speed = {:.1f}, prev_speed = {:.1f}, cur_accel_cmd = {:.2f}, prev_accel = {:.2f}"
+        print("///// Vehicle.advance_vehicle_spd: new_speed_cmd = {:.1f}, cur_speed = {:.1f}, prev_speed = {:.1f}, cur_accel_cmd = {:.2f}, prev_accel = {:.2f}"
               .format(new_speed_cmd, cur_speed, prev_speed, cur_accel_cmd, prev_accel))
-        return self.advance_vehicle(cur_accel_cmd, prev_accel)
+        return self.advance_vehicle_acc(cur_accel_cmd, prev_accel)
 
 
-    def advance_vehicle(self,
+    def advance_vehicle_acc(self,
                         new_accel_cmd   : float,    #newest fwd accel command, m/s^2
                         prev_accel_cmd  : float     #fwd accel command from prev time step, m/s^2
-                       ) -> tuple(float, float):
+                       ) -> Tuple[float, float]:
         """Advances a vehicle's forward motion for one time step according to the vehicle dynamics model.
             Note that this does not consider lateral motion, which needs to be handled elsewhere.
 
@@ -1582,7 +1580,7 @@ class Vehicle:
             new_jerk = -self.max_jerk
         elif new_jerk > self.max_jerk:
             new_jerk = self.max_jerk
-        print("///// Vehicle.advance_vehicle(accels): new_jerk = {:.3f}".format(new_jerk))
+        print("///// Vehicle.advance_vehicle_acc: new_jerk = {:.3f}".format(new_jerk))
 
         new_accel = min(max(prev_accel_cmd + self.time_step_size*new_jerk, -SimpleHighwayRamp.MAX_ACCEL), SimpleHighwayRamp.MAX_ACCEL)
         new_speed = min(max(self.speed + self.time_step_size*new_accel, 0.0), SimpleHighwayRamp.MAX_SPEED) #vehicle won't start moving backwards
