@@ -1967,6 +1967,12 @@ program as a system test.
 	* Modified the action space from [accel cmd, LC cmd] to [desired speed, desired lane ID]. This
 	  satisfies suggestions #2 and #3.
 
+5/7/23
+
+	* Modified the obs space so that it includes a grid of zones surrounding the ego vehicle, rather
+	  than looking at data on specific neighbor and specific roadway geometry. This satisfies suggestions
+	  #4 and #5.
+
 
 
 Near-term considerations:

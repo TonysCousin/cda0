@@ -116,7 +116,7 @@ def main(argv):
     #env_config["stopper"]                       = stopper #object must be instantiated above
     env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
-    env_config["debug"]                         = 1
+    env_config["debug"]                         = 2
     env_config["verify_obs"]                    = True
     env_config["training"]                      = True
     env_config["randomize_start_dist"]          = True

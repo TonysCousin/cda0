@@ -48,7 +48,9 @@ def main(argv):
 
     # Set up the environment
     env_config = {  "time_step_size":       0.5,
-                    "debug":                0,
+                    "debug":                2,              #TODO
+                    "training":             True,           #TODO remove
+                    "verify_obs":           True,           #TODO remove
                     "difficulty_level":     learning_level,
                     "init_ego_lane":        start_lane,
                     "neighbor_speed":       29.1,
@@ -58,6 +60,20 @@ def main(argv):
     env = SimpleHighwayRampWrapper(env_config)
     #print("///// Environment configured. Params are:")
     #print(pretty_print(cfg.to_dict()))
+
+
+
+
+
+
+    env.reset()
+    exit()
+
+
+
+
+
+
 
     # Algorithm-specific configs - NN structure needs to match the checkpoint being read
     cfg = ppo.PPOConfig()
