@@ -117,7 +117,7 @@ def main(argv):
     env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 1
-    env_config["verify_obs"]                    = False
+    env_config["verify_obs"]                    = True
     env_config["training"]                      = True
     env_config["randomize_start_dist"]          = True
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels

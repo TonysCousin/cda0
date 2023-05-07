@@ -1962,6 +1962,11 @@ program as a system test.
 	* Ran a training job with same settings as previous one, to demonstrate that it performs the same.
 	  Results were pretty much like the previous run, so I'm comfortable moving forward.
 
+5/4/23
+
+	* Modified the action space from [accel cmd, LC cmd] to [desired speed, desired lane ID]. This
+	  satisfies suggestions #2 and #3.
+
 
 
 Near-term considerations:
