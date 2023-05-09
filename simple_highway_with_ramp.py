@@ -316,6 +316,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         upper_obs[self.EGO_X]               = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_SPEED_PREV]      = SimpleHighwayRamp.MAX_SPEED
+        upper_obs[self.EGO_DESIRED_SPEED]   = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_LANE_REM]        = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         upper_obs[self.EGO_DESIRED_LN]      = SimpleHighwayRamp.NUM_LANES - 1
         upper_obs[self.STEPS_SINCE_LN_CHG]  = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
@@ -340,8 +341,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         #..........Define the action space
         #
 
-        lower_action = np.array([0.0, -1.0])
-        upper_action = np.array([ SimpleHighwayRamp.MAX_SPEED,  1.0])
+        lower_action = np.array([0.0, 0.0])
+        upper_action = np.array([ SimpleHighwayRamp.MAX_SPEED,  2.0])
         self.action_space = Box(low=lower_action, high=upper_action, dtype=np.float)
         if self.debug == 2:
             print("///// action_space = ", self.action_space)
@@ -443,6 +444,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # Some tests & comments may seem obtuse as a result.
 
             # If we are at difficulty level 0-3, then choose widely randomized initial conditions
+            # NOTE: ego_x is initially chosen as a distance downtrack from lane begin; needs to be converted to X coordinate later
             if self.difficulty_level < 4:
                 ego_x = 0.0
                 if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
@@ -491,6 +493,10 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             else:
                 ego_speed = self.prng.random() * 31.0 + 4.0 if self.init_ego_speed is None  else  self.init_ego_speed
 
+        # Ensure that we have the real X coordinate of the ego vehicle (above was just choosing dist downtrack, and not all lanes start at 0)
+        if ego_lane_id == 2:
+            ego_x += self.roadway.get_lane_start_x(2)
+
         # If this difficulty level uses neighbor vehicles then initialize their speed and starting point
         n_loc = 0.0
         n_speed = 0.0
@@ -505,6 +511,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 self.neighbor_print_latch = False
         elif self.difficulty_level > 4:
             raise NotImplementedError("///// Neighbor vehicle motion not defined for difficulty level {}".format(self.difficulty_level))
+        if self.debug > 1:
+            print("///// reset: ego defined: lane = {}, x = {:.1f}, speed = {:.1f}".format(ego_lane_id, ego_x, ego_speed))
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1
         #TODO: revise this for levels 4+
@@ -539,11 +547,11 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             if midway < ego_x < max_loc:
                 ego_x = max_loc
                 if self.debug > 0:
-                    print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
+                    print("///// reset adjusting lane 1 agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
             elif min_loc < ego_x <= midway:
                 ego_x = min_loc
                 if self.debug > 0:
-                    print("///// reset initializing agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
+                    print("///// reset adjusting lane 1 agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
         #print("///// reset: training = {}, ego_lane_id = {}, ego_x = {:.2f}, ego_speed = {:.2f}".format(self.training, ego_lane_id, ego_x, ego_speed))
         self._verify_obs_limits("reset after initializing local vars")
 
@@ -566,7 +574,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self._update_obs_zones()
 
         # Other persistent data
-        self.vehicles[0].lane_change_status = "none"
         self.lane_change_count = 0
         self.steps_since_reset = 0
         self.stopped_count = 0
@@ -1066,6 +1073,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         ego_lane_id = self.vehicles[0].lane_id
         ego_x = self.vehicles[0].x
         ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_x)
+        if self.debug > 1:
+            print("///// Entering update_obs_zones: ego_lane_id = {}, ego_x = {:.1f}, ego_rem = {:.1f}, base = {}"
+                  .format(ego_lane_id, ego_x, ego_rem, base))
 
         # Determine pavement existence and reachability in each zone
         # CAUTION: this block is dependent on the specific roadway geometry for this experiment, and is not generalized
@@ -1106,7 +1116,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 self.obs[offset + 1] = 1.0 #reachable
 
         # Loop through the neighbor vehicles
-        for neighbor_idx in range(1, SimpleHighwayRamp.NUM_NEIGHBORS):
+        for neighbor_idx in range(1, SimpleHighwayRamp.NUM_NEIGHBORS + 1):
             nv = self.vehicles[neighbor_idx]
 
             # Find which zone column it is in (relative lane), if any (could be 2 lanes away) (ego is in column 1, lanes are 0-indexed, left-to-right)
@@ -1129,6 +1139,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If the neighbor is too far away, no further consideration needed
             if column < 0  or  column > 2  or  row == 0:
+                if self.debug > 1:
+                    print("///// update_obs_zones: found neighbor {} too far away, with column {}, row {}, x = {:.1f}, dist_ahead_of_ego = {:.1f}"
+                          .format(neighbor_idx, column, row, nv.x, dist_ahead_of_ego))
                 continue
 
             # Neighbor is within our obs zone grid.
@@ -1149,24 +1162,30 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 if row < 4:
                     zone = 3*(row - 1) + column + 1
                 else:
-                    assert column == 1, "///// ERROR: update_obs_zones found column = {}, row = {} for neighbor {}".format(column, row, neighbor_idx)
-                    zone = 8
+                    if column == 1:
+                        zone = 8
+                    else:
+                        if self.debug > 1:
+                            print("///// update_obs_zones: found a neighbor beside zone 8: column = {}, dist_ahead_of_ego = {:.1f}"
+                                  .format(column, dist_ahead_of_ego))
+                        continue
 
                 offset = base + (zone - 1)*num_zone_fields
 
                 # Since we've identified a neighbor vehicle in this zone, flag it as occupied
-                self.obs[base + offset + 2] = 1.0
+                self.obs[offset + 2] = 1.0
 
                 # Set the neighbor's relative location within the zone
                 zone_rear_x = ego_x + ((2.0 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH
                 rel_x = (nv.x - zone_rear_x) / SimpleHighwayRamp.OBS_ZONE_LENGTH
-                self.obs[base + offset + 3] = rel_x
+                self.obs[offset + 3] = rel_x
 
                 # Set the neighbor's relative speed
-                self.obs[base + offset + 4] = (nv.speed - self.vehicles[0].speed) / SimpleHighwayRamp.ROAD_SPEED_LIMIT
+                self.obs[offset + 4] = (nv.speed - self.vehicles[0].speed) / SimpleHighwayRamp.ROAD_SPEED_LIMIT
 
                 if self.debug > 1:
-                    print("///// update_obs_zones: neighbor {} has column = {}, row = {}, zone = {}, offset = {}".format(neighbor_idx, column, row, zone, offset))
+                    print("///// update_obs_zones: neighbor {} has column = {}, row = {}, zone = {}, zone_rear = {:.1f}, rel_x = {:.2f}, ego speed = {:.1f}"
+                          .format(neighbor_idx, column, row, zone, zone_rear_x, rel_x, self.vehicles[0].speed))
 
         if self.debug > 1:
             print("///// update_obs_zones complete.")

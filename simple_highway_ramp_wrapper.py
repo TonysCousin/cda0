@@ -61,7 +61,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         # Unscale the action values
         ua = [None]*2
         ua[0] = action[0] * SimpleHighwayRamp.MAX_SPEED #Desired speed, m/s
-        ua[1] = action[1]                               #Desired lane - 1
+        ua[1] = action[1] + 1.0                         #Desired lane, in {0, 1, 2}
 
         # Step the environment
         raw_obs, r, d, t, i = super().step(ua)
