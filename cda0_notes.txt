@@ -1973,6 +1973,12 @@ program as a system test.
 	  than looking at data on specific neighbor and specific roadway geometry. This satisfies suggestions
 	  #4 and #5.
 
+5/9/23
+
+	* Misc testing & fixing defects. Still have a problem with obs[6] sometimes being out of bounds.
+	  I think I need to redefine the obs space only in terms of the scaled values, not the raw - need
+	  to experiment with this.
+
 
 
 Near-term considerations:

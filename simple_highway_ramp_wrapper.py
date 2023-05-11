@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from typing import Tuple, Dict
 from ray.rllib.env.env_context import EnvContext
@@ -48,7 +49,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
             ) -> Tuple[np.array, float, bool, bool, Dict]:  #returns scaled obs, rewards, dones truncated flag, and infos,
                                                             # where obs are scaled for NN consumption
 
-        """Passes the discrete actions to the environment to advance it one step and to gather new observations and rewards.
+        """Passes the actions (after unscaling) to the environment to advance it one step and to gather new observations and rewards.
 
             If the "training" config param is True, then the return obs needs the resulting observations scaled,
             such that it will be usable as input to a NN.  The rewards, dones and info structures are not modfied.
@@ -59,12 +60,13 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         """
 
         # Unscale the action values
-        ua = [None]*2
-        ua[0] = action[0] * SimpleHighwayRamp.MAX_SPEED #Desired speed, m/s
-        ua[1] = action[1] + 1.0                         #Desired lane, in {0, 1, 2}
+        #ua = [None]*2
+        #ua[0] = action[0] * SimpleHighwayRamp.MAX_SPEED #Desired speed, m/s
+        #ua[1] = math.floor(action[1] + 0.5) + 1.0       #maps desired lane from [-1, 1] into (0, 1, 2)
+        #print("///// WRAPPER step: action = ", action, ", ua = ", ua)
 
         # Step the environment
-        raw_obs, r, d, t, i = super().step(ua)
+        raw_obs, r, d, t, i = super().step(action)
         if self.training:
             o = self.scale_obs(raw_obs)
         else:

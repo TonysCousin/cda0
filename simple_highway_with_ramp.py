@@ -300,6 +300,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         max_rel_speed = SimpleHighwayRamp.MAX_SPEED / SimpleHighwayRamp.ROAD_SPEED_LIMIT
         lower_obs = np.zeros((SimpleHighwayRamp.OBS_SIZE)) #most values are 0, so only the others are explicitly set below
+        lower_obs[self.EGO_LANE_ID]         = -1.0
         lower_obs[self.NEIGHBOR_IN_EGO_ZONE]= -1.0
         lower_obs[self.Z1_REL_SPEED]        = -max_rel_speed
         lower_obs[self.Z2_REL_SPEED]        = -max_rel_speed
@@ -341,8 +342,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         #..........Define the action space
         #
 
-        lower_action = np.array([0.0, 0.0])
-        upper_action = np.array([ SimpleHighwayRamp.MAX_SPEED,  2.0])
+        # Specify these for what the NN will deliver, not world scale
+        lower_action = np.array([-1.0, -1.0])
+        upper_action = np.array([ 1.0,  1.0])
         self.action_space = Box(low=lower_action, high=upper_action, dtype=np.float)
         if self.debug == 2:
             print("///// action_space = ", self.action_space)
@@ -541,8 +543,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # more room if going in front of the neighbors, as ego has limited accel and may be starting much slower than they are.
         #TODO: when difficulty levels > 3 are implemented, this needs to account for vehicles in other lanes also.
         if ego_lane_id == 1:
-            min_loc = max(self.vehicles[3].x - 4.0*SimpleHighwayRamp.VEHICLE_LENGTH, 0.0)
-            max_loc = self.vehicles[1].x + 10.0*SimpleHighwayRamp.VEHICLE_LENGTH
+            min_loc = max(self.vehicles[3].x - 3.0*SimpleHighwayRamp.VEHICLE_LENGTH, 0.0)
+            max_loc = self.vehicles[1].x + 6.0*SimpleHighwayRamp.VEHICLE_LENGTH
             midway = 0.5*(max_loc - min_loc) + min_loc
             if midway < ego_x < max_loc:
                 ego_x = max_loc
@@ -587,7 +589,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
 
     def step(self,
-                action  : list      #list of floats; 0 = speed command, 1 = desired lane
+                action  : list      #list of floats; 0 = speed command, 1 = desired lane, scaled
             ) -> Tuple[np.array, float, bool, bool, Dict]:
         """Executes a single time step of the environment.  Determines how the input actions will alter the
             simulated world and returns the resulting observations to the agent.
@@ -614,6 +616,11 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         done = False
         return_info = {"reason": "Unknown"}
 
+        # Unscale the action inputs (both actions are in [-1, 1])
+        desired_speed = (action[0] + 1.0)/2.0 * SimpleHighwayRamp.MAX_SPEED
+        desired_lane = int(math.floor(action[1] + 0.5) + 1.0)
+        assert 0 <= desired_lane <= 2, "///// step ERROR: desired_lane = {}, action[1] = {}".format(desired_lane, action[1])
+
         # Move all of the vehicles downtrack. This doesn't account for possible lane changes, which are handled seperately in the next section.
         for i, v in enumerate(self.vehicles):
             lane_id = v.lane_id
@@ -623,7 +630,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             cur_speed = self.neighbor_speed
             prev_speed = self.neighbor_speed
             if i == 0: #this is the ego vehicle
-                new_speed_cmd = action[0]
+                new_speed_cmd = desired_speed
                 cur_speed = v.speed
                 prev_speed = self.obs[self.EGO_SPEED_PREV]
             new_speed, new_x = v.advance_vehicle_spd(new_speed_cmd, cur_speed, prev_speed)
@@ -637,7 +644,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.EGO_X] = new_x
         self.obs[self.EGO_SPEED_PREV] = self.obs[self.EGO_SPEED]
         self.obs[self.EGO_SPEED] = new_speed
-        self.obs[self.EGO_DESIRED_SPEED] = action[0]
+        self.obs[self.EGO_DESIRED_SPEED] = desired_speed
         new_ego_x = new_x
         if new_ego_x >= SimpleHighwayRamp.SCENARIO_LENGTH:
             done = True
@@ -655,7 +662,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # lane change commands until the underway maneuver is complete, which takes several time steps.
         # It's legal, but not desirable, to command opposite lane change directions in consecutive time steps.
         ran_off_road = False
-        desired_lane = int(math.floor(action[1] + 0.5)) + 1 #maps [-1, 1] into (0, 1, 2)
         lc_cmd = LaneChange.STAY_IN_LANE
         if desired_lane < self.vehicles[0].lane_id: #could be different by 1 or 2; assumes lane IDs increase left-to-right
             lc_cmd = LaneChange.CHANGE_LEFT

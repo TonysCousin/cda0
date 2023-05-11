@@ -60,20 +60,7 @@ def main(argv):
     env = SimpleHighwayRampWrapper(env_config)
     #print("///// Environment configured. Params are:")
     #print(pretty_print(cfg.to_dict()))
-
-
-
-
-
-
     env.reset()
-    exit()
-
-
-
-
-
-
 
     # Algorithm-specific configs - NN structure needs to match the checkpoint being read
     cfg = ppo.PPOConfig()
