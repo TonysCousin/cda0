@@ -1979,6 +1979,18 @@ program as a system test.
 	  I think I need to redefine the obs space only in terms of the scaled values, not the raw - need
 	  to experiment with this.
 
+5/11/23
+11:52 - 12:44 = 0:52
+21:17 - 21:47 = 0:30
+22:00 - 22:20 = 0:20
+
+	* Created new branch, scaled-space, from new-obs-actions to play with scaling the obs space.
+	  Found that I can't do much with the derived class because it needs to overwrite the parent's member
+	  observation_space variable. Aborted this idea.
+	* Completed testing and began a new run...
+
+* Run c6e1e first training run with the new observations & action space, using PPO.
+
 
 
 Near-term considerations:

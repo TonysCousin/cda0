@@ -2,6 +2,7 @@ import math
 import numpy as np
 from typing import Tuple, Dict
 from ray.rllib.env.env_context import EnvContext
+from gymnasium.spaces import Box
 
 from simple_highway_with_ramp import SimpleHighwayRamp
 from simple_highway_with_ramp import SimpleHighwayRamp

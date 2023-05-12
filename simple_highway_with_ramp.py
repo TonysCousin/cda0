@@ -298,9 +298,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.Z9_ZONE_X          = 52 #occupant's X location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
         self.Z9_REL_SPEED       = 53 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
+        # Gymnasium requires a member variable named observation_space. Since we are dealing with world scale values here, we
+        # will need a wrapper to scale the observations for NN input. That wrapper will also need to use self.observation_space.
+        # So here we must anticipate that scaling and leave the limits open enough to accommodate it.
         max_rel_speed = SimpleHighwayRamp.MAX_SPEED / SimpleHighwayRamp.ROAD_SPEED_LIMIT
         lower_obs = np.zeros((SimpleHighwayRamp.OBS_SIZE)) #most values are 0, so only the others are explicitly set below
-        lower_obs[self.EGO_LANE_ID]         = -1.0
+        lower_obs[self.EGO_LANE_ID]         = -1.0 #should be in [0, 2], but will be scaled to [-1, 1]
+        lower_obs[self.EGO_DESIRED_LN]      = -1.0 #should be in [0, 2], but will be scaled to [-1, 1]
         lower_obs[self.NEIGHBOR_IN_EGO_ZONE]= -1.0
         lower_obs[self.Z1_REL_SPEED]        = -max_rel_speed
         lower_obs[self.Z2_REL_SPEED]        = -max_rel_speed
@@ -622,6 +626,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         assert 0 <= desired_lane <= 2, "///// step ERROR: desired_lane = {}, action[1] = {}".format(desired_lane, action[1])
 
         # Move all of the vehicles downtrack. This doesn't account for possible lane changes, which are handled seperately in the next section.
+        new_ego_x = None
+        new_ego_speed = None
         for i, v in enumerate(self.vehicles):
             lane_id = v.lane_id
             if self.debug > 1:
@@ -634,26 +640,23 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 cur_speed = v.speed
                 prev_speed = self.obs[self.EGO_SPEED_PREV]
             new_speed, new_x = v.advance_vehicle_spd(new_speed_cmd, cur_speed, prev_speed)
-            if new_x > SimpleHighwayRamp.SCENARIO_LENGTH:
-                new_x = SimpleHighwayRamp.SCENARIO_LENGTH #limit it to avoid exceeding NN input validation rules
+            if i == 0:
+                new_ego_x = new_x
+                new_ego_speed = new_speed
+                if new_ego_x > SimpleHighwayRamp.SCENARIO_LENGTH:
+                    new_ego_x = SimpleHighwayRamp.SCENARIO_LENGTH #limit it to avoid exceeding NN input validation rules
             if self.debug > 1:
                 print("      Vehicle {} advanced with new_speed_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}"
                         .format(i, new_speed_cmd, new_speed, new_x))
 
         # Update ego vehicle obs vector
-        self.obs[self.EGO_X] = new_x
+        self.obs[self.EGO_X] = new_ego_x
         self.obs[self.EGO_SPEED_PREV] = self.obs[self.EGO_SPEED]
-        self.obs[self.EGO_SPEED] = new_speed
+        self.obs[self.EGO_SPEED] = new_ego_speed
         self.obs[self.EGO_DESIRED_SPEED] = desired_speed
-        new_ego_x = new_x
         if new_ego_x >= SimpleHighwayRamp.SCENARIO_LENGTH:
             done = True
             return_info["reason"] = "Success; end of scenario"
-
-        # Update the distance remaining for the ego vehicle in its current lane (this will be slightly negative if vehicle
-        # ran off the end of a terminating lane, but that condition is tested further down)
-        new_ego_rem, _, _, _, _, _, _, _, _ = self.roadway.get_current_lane_geom(int(self.vehicles[0].lane_id), new_ego_x)
-        self.obs[self.EGO_LANE_REM] = new_ego_rem
         self._verify_obs_limits("step after moving vehicles forward")
 
         # Determine if we are beginning or continuing a lane change maneuver.
@@ -1713,8 +1716,8 @@ class Vehicle:
         # Determine the current & previous effective accelerations
         cur_accel_cmd = (new_speed_cmd - cur_speed) / self.time_step_size
         prev_accel = (cur_speed - prev_speed) / self.time_step_size
-        print("///// Vehicle.advance_vehicle_spd: new_speed_cmd = {:.1f}, cur_speed = {:.1f}, prev_speed = {:.1f}, cur_accel_cmd = {:.2f}, prev_accel = {:.2f}"
-              .format(new_speed_cmd, cur_speed, prev_speed, cur_accel_cmd, prev_accel))
+        #print("///// Vehicle.advance_vehicle_spd: new_speed_cmd = {:.1f}, cur_speed = {:.1f}, prev_speed = {:.1f}, cur_accel_cmd = {:.2f}, prev_accel = {:.2f}"
+        #      .format(new_speed_cmd, cur_speed, prev_speed, cur_accel_cmd, prev_accel))
         return self.advance_vehicle_acc(cur_accel_cmd, prev_accel)
 
 
@@ -1734,7 +1737,7 @@ class Vehicle:
             new_jerk = -self.max_jerk
         elif new_jerk > self.max_jerk:
             new_jerk = self.max_jerk
-        print("///// Vehicle.advance_vehicle_acc: new_jerk = {:.3f}".format(new_jerk))
+        #print("///// Vehicle.advance_vehicle_acc: new_jerk = {:.3f}".format(new_jerk))
 
         new_accel = min(max(prev_accel_cmd + self.time_step_size*new_jerk, -SimpleHighwayRamp.MAX_ACCEL), SimpleHighwayRamp.MAX_ACCEL)
         new_speed = min(max(self.speed + self.time_step_size*new_accel, 0.0), SimpleHighwayRamp.MAX_SPEED) #vehicle won't start moving backwards
