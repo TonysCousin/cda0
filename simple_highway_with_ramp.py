@@ -1,6 +1,6 @@
 from collections import deque
 from statistics import mean
-from typing import Tuple, Dict
+from typing import Tuple, Dict, List
 import math
 import time
 import gymnasium
@@ -818,7 +818,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         """Returns the indicated vehicle's distance downtrack from its lane beginning, in m.
             Used for inference, which needs real DDT, not X location.
         """
-        #TODO: reconcile graphics X vs roadway X, given that one is not on an angle, and apparent speeds are therefore different.
 
         assert 0 <= vehicle_id < 4, "///// SimpleHighwayRamp.get_vehicle_dist_downtrack: illegal vehicle_id entered: {}".format(vehicle_id)
 
@@ -827,6 +826,12 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         if lane_id == 2:
             ddt -= self.roadway.get_lane_start_x(lane_id)
         return ddt
+
+
+    def get_vehicle_data(self) -> List:
+        """Returns a list of all the vehicles in the scenario, with the ego vehicle as the first item."""
+
+        return self.vehicles
 
 
     def close(self):
@@ -1553,6 +1558,7 @@ class Roadway:
         """
 
         #TODO: remove this method once new geometry is fully tested
+        print("\n\n\n////////// adjust_downtrack_dist ENTERED //////////\n\n\n")
         return 0.0
 
 

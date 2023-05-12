@@ -2,6 +2,7 @@ from cmath import inf
 import sys
 import math
 import time
+from typing import List
 import numpy as np
 import gym
 import ray
@@ -48,9 +49,7 @@ def main(argv):
 
     # Set up the environment
     env_config = {  "time_step_size":       0.5,
-                    "debug":                2,              #TODO
-                    "training":             True,           #TODO remove
-                    "verify_obs":           True,           #TODO remove
+                    "debug":                0,
                     "difficulty_level":     learning_level,
                     "init_ego_lane":        start_lane,
                     "neighbor_speed":       29.1,
@@ -105,7 +104,7 @@ def main(argv):
     done = False
     action = [0, 0]
     raw_obs, _ = env.unscaled_reset()
-    graphics.update(action, raw_obs)
+    graphics.update(action, raw_obs, env.get_vehicle_data())
     obs = env.scale_obs(raw_obs)
     step = 0
     time.sleep(2)
@@ -116,7 +115,7 @@ def main(argv):
         episode_reward += reward
 
         # Display current status of all the vehicles
-        graphics.update(action, raw_obs)
+        graphics.update(action, raw_obs, env.get_vehicle_data())
 
         # Wait for user to indicate okay to begin animation
         """
@@ -261,18 +260,19 @@ class Graphics:
 
     def update(self,
                action  : list,      #vector of actions for the ego vehicle for the current time step
-               obs     : list       #vector of observations of the ego vehicle for the current time step
+               obs     : list,      #vector of observations of the ego vehicle for the current time step
+               vehicles: list,      #list of Vehicle objects, with item [0] as the ego vehicle
               ):
         """Paints all updates on the display screen, including the new motion of every vehicle and any data plots."""
 
         # Loop through each vehicle in the scenario
-        for v_idx in range(4):
+        for v_idx in range(len(vehicles)):
 
             # Grab the background under where we want the vehicle to appear & erase the old vehicle
             pygame.draw.circle(self.windowSurface, Graphics.BLACK, (self.prev_veh_r[v_idx], self.prev_veh_s[v_idx]), self.veh_radius, 0)
 
             # Display the vehicle in its new location.  Note that the obs vector is not scaled at this point.
-            new_x, new_y = self._get_vehicle_coords(obs, v_idx)
+            new_x, new_y = self._get_vehicle_coords(vehicles, v_idx)
             new_r = int(self.scale*(new_x - self.roadway_center_x)) + self.display_center_r
             new_s = Graphics.WINDOW_SIZE_Y - int(self.scale*(new_y - self.roadway_center_y)) - self.display_center_s
             pygame.draw.circle(self.windowSurface, self.veh_colors[v_idx], (new_r, new_s), self.veh_radius, 0)
@@ -334,29 +334,25 @@ class Graphics:
 
 
     def _get_vehicle_coords(self,
-                            obs         : list, #the unscaled observation vector
+                            vehicles    : List, #list of all Vehicles in the scenario
                             vehicle_id  : int   #ID of the vehicle; 0=ego, 1-3=neighbor vehicles
                            ) -> tuple:
         """Returns the map coordinates of the indicated vehicle based on its lane ID and distance downtrack.
 
-            ASSUMES that this method is called first for the ego vehicle, then updates each of the neighbors in
-            each update loop.
-
             CAUTION: these calcs are hard-coded to the specific roadway geometry in this code,
             it is not a general solution.
         """
-        assert 0 <= vehicle_id <= 3, "///// _get_vehicle_coords: invalid vehicle_id = {}".format(vehicle_id)
-        lane_id_idx = self.env.EGO_LANE_ID  + 3*vehicle_id
-        x_idx = self.env.EGO_X              + 3*vehicle_id
+        #TODO: reconcile graphics X vs roadway X, given that one is not on an angle, and apparent speeds are therefore different.
 
-        x = None
+        assert 0 <= vehicle_id <= 3, "///// _get_vehicle_coords: invalid vehicle_id = {}".format(vehicle_id)
+
+        x = vehicles[vehicle_id].x
         y = None
-        ddt = self.env.get_vehicle_dist_downtrack(vehicle_id) #get this directly from env since obs only has delta X
-        lane = int(obs[lane_id_idx])
+        lane = 1 #TODO - still need to replace all this logic
         if lane < 2:
-            x = ddt
             y = self.env.roadway.lanes[lane].segments[0][1]
         else:
+            ddt = x - self.roadway.lanes[2]
             if ddt < self.env.roadway.lanes[2].segments[0][4]: #vehicle is in seg 0
                 seg0x0 = self.env.roadway.lanes[2].segments[0][0]
                 seg0y0 = self.env.roadway.lanes[2].segments[0][1]

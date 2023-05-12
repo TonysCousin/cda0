@@ -1990,6 +1990,24 @@ program as a system test.
 	* Completed testing and began a new run...
 
 * Run c6e1e first training run with the new observations & action space, using PPO.
+	* Did not perform very well. rmean topped out ~4 for some trials, then dropped a bit.
+
+5/12/23
+11:32 - 
+
+	* Inference showed lane 0 works great, lane 1 starts often crashes into neighbors at the beginning.
+	  I believe this is restart() putting it too close to the back of the platoon and it doesn't have a
+	  chance to adjust. Lane 2 starts seem to always want to do an immediate lane change (to lane 1), so
+	  I never saw a run go past the first time step.
+	* Looked into updating the inference program for the new lane 2 schematic conocept. Decided it's best
+	  to revise comments, variable names, & concepts throughout to support a true map frame (reflecting
+	  real geometry), a schematic frame (how the NN views it, with lanes parallel), and a display frame.
+	  This will take some time to draw out, so I ran inference several times just for the calculations,
+	  accepting that the graphics are bogus.
+
+AI: redo coordinate transforms, then verify latest results with new inference program.
+
+
 
 
 
