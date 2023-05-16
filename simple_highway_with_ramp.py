@@ -1441,11 +1441,12 @@ def curriculum_fn(train_results:        dict,           #current status of train
 class Roadway:
     """Defines the geometry of the roadway lanes and their drivable connections.  All dimensions are
         physical quantities, measured in meters from an arbitrary map origin.  The roadway being modeled
-        looks roughly like the diagram at the top of this code file.  However, this class abstracts it
+        looks roughly like the diagram at the top of this code file.  However, this class provides
+        convertor methods to/from the parametric coordinate frame, which abstracts it
         slightly to be more of a structural "schematic" for better representation in our NN observation
-        space. To that end, all lanes in the schematic are considered parallel and physically next to
-        each other (even though the boundary separating two lanes may not be permeable, e.g. a jersey
-        wall).
+        space. To that end, all lanes in the parametric frame are considered parallel and physically
+        next to each other (even though the boundary separating two lanes may not be permeable, e.g. a
+        jersey wall).
 
         All lanes go from left to right, with travel direction being to the right. The coordinate system
         is oriented so that the origin is at the left (beginning of the first lane), with the X axis
@@ -1488,13 +1489,41 @@ class Roadway:
         self.lanes.append(lane)
 
         # Lane 2 - two segments as the merge ramp; first seg is separate; second it adjacent to L1.
-        # Segments show the lane at an angle to the main roadway, for visual appeal & clarity; this is
-        # different from how it is represented internally (parallel to the other lanes).
+        # Segments show the lane at an angle to the main roadway, for visual appeal & clarity.
         L2_Y = L1_Y - Roadway.WIDTH
         segs = [(159.1, L2_Y-370.0,  800.0, L2_Y, 740.0),
                 (800.0, L2_Y,       1320.0, L2_Y, 520.0)]
         lane = Lane(2, 60.0, 1260.0, segs, left_id = 1, left_join = 800.0, left_sep = 1320.0)
         self.lanes.append(lane)
+
+
+    def roadway_to_param_frame(self,
+                               x                : float,        #X coordinate in the roadway frame, m
+                               lane             : int           #lane ID (0-indexed)
+                              ) -> float:
+        """Converts a point in the roadway coordinate frame (x, y) to a corresponding point in the parametric coordinate
+            frame (p, q). Since the vehicles have no freedom of lateral movement other than whole-lane changes, Y
+            coordinates are not important, only lane IDs. These will not change between the frames.
+        """
+
+        p = x
+        if lane == 2:
+            join_point = self.lanes[2].segments[2]
+            if x < join_point:
+                deltax = join_point - self.lanes[2].segments[0]
+                deltay = self.lanes[2].segments[3] - self.lanes[2].segments[1]
+                cos_angle = deltax / math.sqrt(deltax*deltax + deltay*deltay)   #TODO: replace with pre-computed constant
+                p = join_point - (join_point - x)/cos_angle
+
+        return p
+
+
+    def param_to_roadway_frame(self,
+                               p                : float,        #P coordinate in the parametric frame, m
+                               lane             : int           #lane ID (0-indexed)
+                              ) -> float:
+
+        raise NotImplementedError #TODO
 
 
     def get_current_lane_geom(self,
@@ -1541,25 +1570,6 @@ class Roadway:
             print("      lid = {}, la = {:.2f}, lb = {:.2f}, l_rem = {:.2f}".format(left_id, la, lb, l_rem))
             print("      rid = {}, ra = {:.2f}, rb = {:.2f}, r_rem = {:.2f}".format(right_id, ra, rb, r_rem))
         return rem_this_lane, left_id, la, lb, l_rem, right_id, ra, rb, r_rem
-
-
-    def adjust_downtrack_dist(self,
-                                prev_lane_id    : int,
-                                new_lane_id     : int
-                             ) -> float:
-        """NO-OP - replacing deprecated method that was used when downtrack distance was measured from lane start location,
-            which could be different for each lane. We are now using x coordinate instead of downtrack dist, which is
-            a common reference, regardless of lane geometry.
-
-        Returns an adjustment to be applied to the downtrack distance in the current lane, as a result of changing lanes.
-            A vehicle's downtrack distance is relative to the beginning of its current lane, and each lane may start at a
-            different point.
-            Return value can be positive or negative (float), m
-        """
-
-        #TODO: remove this method once new geometry is fully tested
-        print("\n\n\n////////// adjust_downtrack_dist ENTERED //////////\n\n\n")
-        return 0.0
 
 
     def get_target_lane(self,

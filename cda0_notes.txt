@@ -1993,19 +1993,22 @@ program as a system test.
 	* Did not perform very well. rmean topped out ~4 for some trials, then dropped a bit.
 
 5/12/23
-11:32 - 
+11:32 - 12:54 = 1:22
 
 	* Inference showed lane 0 works great, lane 1 starts often crashes into neighbors at the beginning.
 	  I believe this is restart() putting it too close to the back of the platoon and it doesn't have a
 	  chance to adjust. Lane 2 starts seem to always want to do an immediate lane change (to lane 1), so
 	  I never saw a run go past the first time step.
-	* Looked into updating the inference program for the new lane 2 schematic conocept. Decided it's best
+	* Looked into updating the inference program for the new lane 2 schematic concept. Decided it's best
 	  to revise comments, variable names, & concepts throughout to support a true map frame (reflecting
-	  real geometry), a schematic frame (how the NN views it, with lanes parallel), and a display frame.
+	  real geometry), a parametric frame (how the NN views it, with lanes parallel), and a display frame.
 	  This will take some time to draw out, so I ran inference several times just for the calculations,
 	  accepting that the graphics are bogus.
 
 AI: redo coordinate transforms, then verify latest results with new inference program.
+	- change obs vector Xs to Ps
+	- change Vehicle vector to use parametric frame? Yes, and advance_vehicle() uses param frame.
+	- Roadway provides a to_parametric_frame() convertor and a reverse one
 
 
 
@@ -2030,8 +2033,6 @@ Near-term considerations:
 	** observation space design
 	** reward structure
 
-AI: change coord system so that x is distance to finish line. Otherwise, comparing ego_x in lane 2 go nx_x in lane 1 is
-    too confusing, and maybe even wrong. Lanes shouldn't have separate coord systems.
 AI: track down where Trainable/Algorithm object is instantiated and its setup() method is called, since this happens at
     the beginning of each trial, and at each perturbation of each trial in PBT.
 AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?
