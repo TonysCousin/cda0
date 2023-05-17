@@ -444,7 +444,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         max_distance = 1.0
         if self.training:
             ego_lane_id = self._select_init_lane() #covers all difficulty levels
-            ego_lane_start = self.roadway.get_lane_start_x(ego_lane_id)
+            ego_lane_start = self.roadway.get_lane_start_p(ego_lane_id)
 
             # This area of code is a sandbox for figuring out best approaches to working with curriculum learning and PBT simultaneously.
             # Some tests & comments may seem obtuse as a result.
@@ -498,10 +498,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 ego_speed = self.initialize_ramp_vehicle_speed(self.merge_relative_pos, ego_x)
             else:
                 ego_speed = self.prng.random() * 31.0 + 4.0 if self.init_ego_speed is None  else  self.init_ego_speed
-
-        # Ensure that we have the real X coordinate of the ego vehicle (above was just choosing dist downtrack, and not all lanes start at 0)
-        if ego_lane_id == 2:
-            ego_x += self.roadway.get_lane_start_x(2)
 
         # If this difficulty level uses neighbor vehicles then initialize their speed and starting point
         n_loc = 0.0
@@ -819,12 +815,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             Used for inference, which needs real DDT, not X location.
         """
 
-        assert 0 <= vehicle_id < 4, "///// SimpleHighwayRamp.get_vehicle_dist_downtrack: illegal vehicle_id entered: {}".format(vehicle_id)
+        assert 0 <= vehicle_id < len(self.vehicles), \
+                "///// SimpleHighwayRamp.get_vehicle_dist_downtrack: illegal vehicle_id entered: {}".format(vehicle_id)
 
         ddt = self.vehicles[vehicle_id].x
         lane_id = self.vehicles[vehicle_id].lane_id
         if lane_id == 2:
-            ddt -= self.roadway.get_lane_start_x(lane_id)
+            ddt -= self.roadway.get_lane_start_p(lane_id)
         return ddt
 
 
@@ -886,7 +883,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # If our desired arrival time is large enough then
         v0 = SimpleHighwayRamp.ROAD_SPEED_LIMIT
         #print("///// initialize_ramp_vehicle_speed: tgt time = {:.1f}, offset = {:.1f}, ego_x = {:.1f}".format(tgt_arrival_time, offset, ego_x))
-        dist_to_merge = self.roadway.get_lane_start_x(2) + L2_DIST_TO_MERGE - ego_x
+        dist_to_merge = self.roadway.get_lane_start_p(2) + L2_DIST_TO_MERGE - ego_x
         if tgt_arrival_time > dist_to_merge/SimpleHighwayRamp.ROAD_SPEED_LIMIT:
 
             # Solve quadratic equation to determine the ramp vehicle's starting speed, assuming that it will
@@ -1433,6 +1430,7 @@ def curriculum_fn(train_results:        dict,           #current status of train
     return task_settable_env.get_task() #don't return the local one, since the env may override it
 
 
+
 ######################################################################################################
 ######################################################################################################
 
@@ -1440,13 +1438,13 @@ def curriculum_fn(train_results:        dict,           #current status of train
 
 class Roadway:
     """Defines the geometry of the roadway lanes and their drivable connections.  All dimensions are
-        physical quantities, measured in meters from an arbitrary map origin.  The roadway being modeled
-        looks roughly like the diagram at the top of this code file.  However, this class provides
-        convertor methods to/from the parametric coordinate frame, which abstracts it
-        slightly to be more of a structural "schematic" for better representation in our NN observation
-        space. To that end, all lanes in the parametric frame are considered parallel and physically
-        next to each other (even though the boundary separating two lanes may not be permeable, e.g. a
-        jersey wall).
+        physical quantities, measured in meters from an arbitrary map origin and are in the map
+        coordinate frame.  The roadway being modeled looks roughly like the diagram at the top of this
+        code file.  However, this class provides convertor methods to/from the parametric coordinate
+        frame, which abstracts it slightly to be more of a structural "schematic" for better
+        representation in our NN observation space. To that end, all lanes in the parametric frame are
+        considered parallel and physically next to each other (even though the boundary separating two
+        lanes may not be permeable, e.g. a jersey wall).
 
         All lanes go from left to right, with travel direction being to the right. The coordinate system
         is oriented so that the origin is at the left (beginning of the first lane), with the X axis
@@ -1459,6 +1457,7 @@ class Roadway:
     """
 
     WIDTH = 20.0 #lane width, m; using a crazy large number so that grapics are pleasing
+    COS_LANE2_ANGLE = 0.8660 #cosine of the angle of lane 2, segment 0, between the map frame and parametric frame
 
     def __init__(self,
                  debug      : int   #debug printing level
@@ -1488,82 +1487,89 @@ class Roadway:
                     right_id = 2, right_join = 800.0, right_sep = 1320.0)
         self.lanes.append(lane)
 
-        # Lane 2 - two segments as the merge ramp; first seg is separate; second it adjacent to L1.
+        # Lane 2 - two segments as the merge ramp; first seg is separate; second is adjacent to L1.
         # Segments show the lane at an angle to the main roadway, for visual appeal & clarity.
         L2_Y = L1_Y - Roadway.WIDTH
-        segs = [(159.1, L2_Y-370.0,  800.0, L2_Y, 740.0),
+        segs = [(159.2, L2_Y-370.0,  800.0, L2_Y, 740.0),
                 (800.0, L2_Y,       1320.0, L2_Y, 520.0)]
-        lane = Lane(2, 60.0, 1260.0, segs, left_id = 1, left_join = 800.0, left_sep = 1320.0)
+        lane = Lane(2, 159.2, 1260.0, segs, left_id = 1, left_join = 800.0, left_sep = 1320.0)
         self.lanes.append(lane)
 
 
-    def roadway_to_param_frame(self,
-                               x                : float,        #X coordinate in the roadway frame, m
-                               lane             : int           #lane ID (0-indexed)
-                              ) -> float:
-        """Converts a point in the roadway coordinate frame (x, y) to a corresponding point in the parametric coordinate
+    def map_to_param_frame(self,
+                           x                : float,        #X coordinate in the map frame, m
+                           lane             : int           #lane ID (0-indexed)
+                          ) -> float:
+        """Converts a point in the map coordinate frame (x, y) to a corresponding point in the parametric coordinate
             frame (p, q). Since the vehicles have no freedom of lateral movement other than whole-lane changes, Y
             coordinates are not important, only lane IDs. These will not change between the frames.
         """
 
         p = x
         if lane == 2:
-            join_point = self.lanes[2].segments[2]
+            join_point = self.lanes[2].segments[0][2]
             if x < join_point:
-                deltax = join_point - self.lanes[2].segments[0]
-                deltay = self.lanes[2].segments[3] - self.lanes[2].segments[1]
-                cos_angle = deltax / math.sqrt(deltax*deltax + deltay*deltay)   #TODO: replace with pre-computed constant
-                p = join_point - (join_point - x)/cos_angle
+                p = join_point - (join_point - x)/self.COS_LANE2_ANGLE
 
         return p
 
 
-    def param_to_roadway_frame(self,
-                               p                : float,        #P coordinate in the parametric frame, m
-                               lane             : int           #lane ID (0-indexed)
-                              ) -> float:
+    def param_to_map_frame(self,
+                           p                : float,        #P coordinate in the parametric frame, m
+                           lane             : int           #lane ID (0-indexed)
+                          ) -> float:
 
-        raise NotImplementedError #TODO
+        x = p
+        if lane == 2:
+            join_point = self.lanes[2].segments[0][2]
+            if p < join_point:
+                x = join_point - (join_point - p)*self.COS_LANE2_ANGLE
+
+        return x
 
 
     def get_current_lane_geom(self,
                                 lane_id         : int   = 0,    #ID of the lane in question
-                                x_loc           : float = 0.0   #ego vehicle's location in the X coordinate, m
+                                p_loc           : float = 0.0   #ego vehicle's P coordinate in the parametric frame, m
                              ) -> Tuple[float, int, float, float, float, int, float, float, float]:
         """Determines all of the variable roadway geometry relative to the given vehicle location.
-            Returns a tuple of (remaining dist in this lane,
+            Returns a tuple of (remaining dist in this lane, m,
                                 ID of left neighbor ln (or -1 if none),
-                                dist to left adjoin point A,
-                                dist to left adjoin point B,
-                                remaining dist in left ajoining lane,
+                                dist to left adjoin point A, m,
+                                dist to left adjoin point B, m,
+                                remaining dist in left ajoining lane, m,
                                 ID of right neighbor lane (or -1 if none),
-                                dist to right adjoin point A,
-                                dist to right adjoin point B,
-                                remaining dist in right adjoining lane).
+                                dist to right adjoin point A, m,
+                                dist to right adjoin point B, m,
+                                remaining dist in right adjoining lane, m).
             If either adjoining lane doesn't exist, its return values will be 0, inf, inf, inf.  All distances are in m.
         """
 
+        # Ensure that the given location is not prior to beginning of the lane
+        assert self.param_to_map_frame(p_loc, lane_id) >= self.lanes[lane_id].start_x, \
+                "///// Roadway.get_current_lane_geom: p_loc of {} is prior to beginning of lane {}".format(p_loc, lane_id)
+
         if self.debug > 1:
-            print("///// Entering Roadway.get_current_lane_geom for lane_id = ", lane_id, ", x_loc = ", x_loc)
-        rem_this_lane = self.lanes[lane_id].start_x + self.lanes[lane_id].length - x_loc
+            print("///// Entering Roadway.get_current_lane_geom for lane_id = ", lane_id, ", p_loc = ", p_loc)
+        rem_this_lane = self.lanes[lane_id].length - (p_loc - self.map_to_param_frame(self.lanes[lane_id].start_x, lane_id))
 
         la = 0.0
         lb = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         l_rem = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         left_id = self.lanes[lane_id].left_id
         if left_id >= 0:
-            la = self.lanes[lane_id].left_join - x_loc
-            lb = self.lanes[lane_id].left_sep - x_loc
-            l_rem = self.lanes[left_id].start_x + self.lanes[left_id].length - x_loc
+            la = self.lanes[lane_id].left_join - p_loc
+            lb = self.lanes[lane_id].left_sep - p_loc
+            l_rem = self.lanes[left_id].length - (p_loc - self.map_to_param_frame(self.lanes[left_id].start_x, left_id))
 
         ra = 0.0
         rb = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         r_rem = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         right_id = self.lanes[lane_id].right_id
         if right_id >= 0:
-            ra = self.lanes[lane_id].right_join - x_loc
-            rb = self.lanes[lane_id].right_sep - x_loc
-            r_rem = self.lanes[right_id].start_x + self.lanes[right_id].length - x_loc
+            ra = self.lanes[lane_id].right_join - p_loc
+            rb = self.lanes[lane_id].right_sep - p_loc
+            r_rem = self.lanes[right_id].length - (p_loc - self.map_to_param_frame(self.lanes[right_id].start_x, right_id))
 
         if self.debug > 0:
             print("///// get_current_lane_geom complete. Returning rem = ", rem_this_lane)
@@ -1575,30 +1581,31 @@ class Roadway:
     def get_target_lane(self,
                         lane        : int,  #ID of the given lane
                         direction   : str,  #either "left" or "right"
-                        distance    : float #X location of interest, m
+                        p           : float #P coordinate for the location of interest, m
                        ) -> int:
         """Returns the lane ID of the adjacent lane on the indicated side of the given lane, or -1 if there is none
             currently adjoining.
         """
 
         if self.debug > 1:
-            print("///// Entering Roadway.get_target_lane. lane = ", lane, ", direction = ", direction, ", distance = ", distance)
+            print("///// Entering Roadway.get_target_lane. lane = ", lane, ", direction = ", direction, ", p = ", p)
         assert 0 <= lane < len(self.lanes), "get_adjoining_lane_id input lane ID {} invalid.".format(lane)
         if direction != "left"  and  direction != "right":
             return -1
 
         # Find the adjacent lane ID, then if one exists ensure that current location is between the join & separation points.
         this_lane = self.lanes[lane]
+        tgt = this_lane
         if direction == "left":
             tgt = this_lane.left_id
             if tgt >= 0:
-                if distance < this_lane.left_join  or  distance > this_lane.left_sep:
+                if p < this_lane.left_join  or  p > this_lane.left_sep:
                     tgt = -1
 
         else: #right
             tgt = this_lane.right_id
             if tgt >= 0:
-                if distance < this_lane.right_join  or  distance > this_lane.right_sep:
+                if p < this_lane.right_join  or  p > this_lane.right_sep:
                     tgt = -1
 
         if self.debug > 1:
@@ -1615,13 +1622,13 @@ class Roadway:
         return self.lanes[lane].length
 
 
-    def get_lane_start_x(self,
+    def get_lane_start_p(self,
                          lane   : int   #ID of the lane in question
                         ) -> float:
-        """Returns the X coordinate of the beginning of the lane."""
+        """Returns the P coordinate of the beginning of the lane (in parametric frame)."""
 
-        assert 0 <= lane < len(self.lanes), "Roadway.get_lane_start_x input lane ID {} invalid.".format(lane)
-        return self.lanes[lane].start_x
+        assert 0 <= lane < len(self.lanes), "Roadway.get_lane_start_p input lane ID {} invalid.".format(lane)
+        return self.map_to_param_frame(self.lanes[lane].start_x, lane)
 
 
 
@@ -1631,7 +1638,7 @@ class Roadway:
 
 
 class Lane:
-    """Defines the geometry of a single lane and its relationship to other lanes.
+    """Defines the geometry of a single lane and its relationship to other lanes in the map frame.
         Note: an adjoining lane must join this one exactly once (possibly at distance 0), and
                 may or may not separate from it farther downtrack. Once it separates, it cannot
                 rejoin.  If it does not separate, then separation location will be same as this
@@ -1641,7 +1648,7 @@ class Lane:
     def __init__(self,
                     my_id       : int,                  #ID of this lane
                     start_x     : float,                #X coordinate of the start of the lane, m
-                    length      : float,                #total length of this lane, m (includes buffer)
+                    length      : float,                #total length of this lane, m (includes any downtrack buffer)
                     segments    : list,                 #list of straight segments that make up this lane; each item is
                                                         # a tuple containing: (x0, y0, x1, y1, length), where
                                                         # x0, y0 are map coordinates of the starting point, in m

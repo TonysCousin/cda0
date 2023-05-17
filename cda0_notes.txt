@@ -2008,7 +2008,14 @@ program as a system test.
 AI: redo coordinate transforms, then verify latest results with new inference program.
 	- change obs vector Xs to Ps
 	- change Vehicle vector to use parametric frame? Yes, and advance_vehicle() uses param frame.
-	- Roadway provides a to_parametric_frame() convertor and a reverse one
+	- get_vehicle_dist_downtrack() should be removed (used by inference)
+	- update description at top of file
+
+5/16/23
+03:09 - 04:02 = 0:53
+
+5/17/23
+11:27 - 
 
 
 
