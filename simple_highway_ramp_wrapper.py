@@ -1,4 +1,3 @@
-import math
 import numpy as np
 from typing import Tuple, Dict
 from ray.rllib.env.env_context import EnvContext
@@ -89,14 +88,14 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         scaled = [None]*SimpleHighwayRamp.OBS_SIZE
 
         scaled[self.EGO_LANE_ID]        = obs[self.EGO_LANE_ID] - 1.0 #maps {0, 1, 2} to {-1, 0, 1}
-        scaled[self.EGO_X]              = obs[self.EGO_X]               / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
+        scaled[self.EGO_P]              = obs[self.EGO_P]               / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
+        scaled[self.EGO_LANE_REM]       = min(obs[self.EGO_LANE_REM]    / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
         scaled[self.EGO_SPEED]          = obs[self.EGO_SPEED]           / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
         scaled[self.EGO_SPEED_PREV]     = obs[self.EGO_SPEED_PREV]      / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
-        scaled[self.EGO_DESIRED_SPEED]  = obs[self.EGO_DESIRED_SPEED]   / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
-        scaled[self.EGO_LANE_REM]       = min(obs[self.EGO_LANE_REM]    / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
-        scaled[self.EGO_DESIRED_LN]     = obs[self.EGO_DESIRED_LN] - 1.0 #maps {0, 1, 2} to {-1, 0, 1}
         scaled[self.STEPS_SINCE_LN_CHG] = obs[self.STEPS_SINCE_LN_CHG]  / SimpleHighwayRamp.MAX_STEPS_SINCE_LC  #range [0, 1]
         scaled[self.NEIGHBOR_IN_EGO_ZONE] = obs[self.NEIGHBOR_IN_EGO_ZONE]
+        scaled[self.EGO_DESIRED_SPEED]  = obs[self.EGO_DESIRED_SPEED]   / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
+        scaled[self.EGO_DESIRED_LN]     = obs[self.EGO_DESIRED_LN] - 1.0 #maps {0, 1, 2} to {-1, 0, 1}
 
         # Handle all the geometric zones - none of these need scaling at this time, so just copy each element
         base = self.Z1_DRIVEABLE

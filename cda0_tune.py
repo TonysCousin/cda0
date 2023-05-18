@@ -96,7 +96,7 @@ def main(argv):
     success_threshold   = [9.5,         9.5,        9.5,        9.5,        9.5]
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
-    burn_in_period      = 100 #num iterations before we consider stopping or promoting to next level
+    burn_in_period      = 200 #num iterations before we consider stopping or promoting to next level
     max_iterations      = 1500
     num_trials          = 10
 

@@ -3,7 +3,6 @@ from statistics import mean
 from typing import Tuple, Dict, List
 import math
 import time
-import gymnasium
 from gymnasium.spaces import Box
 import numpy as np
 from ray.rllib.env.env_context import EnvContext
@@ -30,7 +29,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         attempt to change lanes into the right lane of the highway.  While it is doing that, the environment provides
         zero or more automated vehicles (not learning agents) driving in the right lane of the highway, thus presenting
         a possible safety conflict for the merging agent to resolve by adjusting its speed and merge timing.
-            Version 0 will have no mainline vehicles (intended for debugging the geometry & physics)
 
         This simple enviroment assumes perfect traction and steering response, so that the physics of driving can
         essentially be ignored.  However, there are upper and lower limits on longitudinal and lateral acceleration
@@ -42,7 +40,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         directly (e.g. distance between centerlines gradually decreases to 0).  Rather, it will approach asymptotically,
         then run parallel to the mainline lane for some length, then suddenly terminate.  It is in this parallel section
         that a car is able to change from the ramp lane to the mainline lane.  If it does not, it will be considered to
-        have crashed (run off the end of the ramp pavement).  The geometry looks something like below, with lanes 0
+        have run off the end of the ramp pavement.  The geometry looks something like below, with lanes 0
         and 1 continuing indefinitely, while lane 2 (the on ramp) has a finite length.  Vehicle motion is generally
         from left to right.
 
@@ -54,9 +52,25 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                                                   /
                     Lane 2  ----------------------
 
-        The environment is a continuous flat planar space, with the X-axis origin at the left end of lanes 0 & 1. The
-        location of any vehicle is represented by its X value and lane ID (which constrains Y), so the Y origin is
-        arbitrary, and only used for graphical output.
+        The environment is a continuous flat planar space in the map coordinate frame, with the X-axis origin at the
+        left end of lanes 0 & 1. The location of any vehicle is represented by its X value and lane ID (which constrains
+        Y), so the Y origin is arbitrary, and only used for graphical output.
+
+        In order to support data transforms to/from a neural network, the geometry is easier modeled schematically, where
+        all lanes are parallel and "adjacent". But any given lane may not always be reachable (via lane change) from an
+        adjacent lane (e.g. due to a jersey wall or grass in between the physical lanes). We call this schematic
+        representation the parametric coordinate frame, which uses coordinates P and Q as analogies to X and Y in the map
+        frame. In practice, the Q coordinate is never needed, since it is implied by the lane ID, which is more readily
+        available and important. It is possible to use this parametric frame because we ASSUME that the vehicles are
+        generally docile and not operating at their physical performance limits (acceleration, traction), and therefore
+        can perform any requested action regardless of the shape of the lane at that point. The roadway shown above then
+        looks something like the following in the parametric frame. It preserves the length of each lane segment. Note
+        that the boundary between lane 1 and the first part of lane 2 is not permeable (representing the grass that is
+        between these in reality).
+
+            Lane 0  ------------------------------------------------------------------------------------------>
+            Lane 1  ------------------------------------------------------------------------------------------>
+                 Lane 2  ============================----------------------/
 
         In this version there is no communication among the vehicles, only (perfect) observations of their own onboard
         sensors.
@@ -208,7 +222,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # don't include any lane shape geometry, representing every lane as straight, and physically adjacent to its
         # next lane. This is possible because we ASSUME that the vehicles are operating well inside their performance
         # limits, so that road geometry won't affect their ability to change lanes, accelerate or decelerate at any
-        # desired rate. The zones are arranged as in the following diagram.
+        # desired rate. The zones are arranged as in the following diagram. Given this assumption, the observation
+        # space can be defined in the parametric coordinate frame.
         #
         #              +----------+----------+----------+
         #              |  zone 7  |  zone 4  |  zone 1  |
@@ -220,82 +235,82 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         #
         # All zones are the same size, with their width equal to the lane width. Zone length is nominally 2 sec of
         # travel distance (at the posted speed limit). The ego vehicle is always centered in its zone, longitudinally.
-        # If any vehicle is in the process of changing lanes, it will be observed to be in both adjacent zones through
+        # If a neighbor vehicle is in the process of changing lanes, it will be observed to be in both adjacent zones through
         # the full lane change process. However, since the grid is centered on the ego vehicle, that vehicle will be
-        # handled specially when it comes to lane change maneuvers, looking into either zone 7 or zone 8 concerning a
+        # handled specially when it comes to lane change maneuvers, looking into either zone 7 or zone 9 concerning a
         # possible crash.
         #
         # Each zone will provide the following set of information:
         #   Is it drivable? E.g. is there a lane in that relative position
         #   Is the zone reachable from ego lane? I.e. lateral motion is possible and legal along the full length of the zone.
         #   Is there a neighbor vehicle in the zone? No more than one vehicle will be allowed in any given zone.
-        #   Occupant's X location within the zone, if occupant exists ((X - Xrear) / zone length)
-        #   Occupant's speed relative to ego vehicle, if occupant exists (delta-S / speed limit)
+        #   Occupant's P location within the zone, if occupant exists ((P - Prear) / zone length), in [0, 1]
+        #   Occupant's speed relative to ego vehicle, if occupant exists (delta-S / speed limit), in approx [-1.2, 1.2]
 
         # Indices into the observation vector
         self.EGO_LANE_ID        =  0 #index of the lane the agent is occupying
-        self.EGO_X              =  1 #agent's X coordinate (center of bounding box), m
-        self.EGO_SPEED          =  2 #agent's forward speed, m/s
-        self.EGO_SPEED_PREV     =  3 #agent's actual speed in previous time step, m/s
-        self.EGO_DESIRED_SPEED  =  4 #agent's current speed command, m/s
-        self.EGO_LANE_REM       =  5 #distance remaining in the agent's current lane, m     #TODO: is this redundant with zone info?
-        self.EGO_DESIRED_LN     =  6 #agent's most recent desired lane action (from prev time step)
-        self.STEPS_SINCE_LN_CHG =  7 #num time steps since the previous lane change was initiated
-        self.NEIGHBOR_IN_EGO_ZONE = 8 #if any neighbor vehicle is in the ego zone, then this value will be 1 if it is in front of the
+        self.EGO_P              =  1 #agent's P coordinate in parametric frame (center of bounding box), m
+        self.EGO_LANE_REM       =  2 #distance remaining in the agent's current lane, m     #TODO: is this redundant with zone info?
+        self.EGO_SPEED          =  3 #agent's actual forward speed, m/s
+        self.EGO_SPEED_PREV     =  4 #agent's actual speed in previous time step, m/s
+        self.STEPS_SINCE_LN_CHG =  5 #num time steps since the previous lane change was initiated
+        self.NEIGHBOR_IN_EGO_ZONE = 6 #if any neighbor vehicle is in the ego zone, then this value will be 1 if it is in front of the
                                      # ego vehicle or -1 if it is behind the ego vehicle. If no neigbhor is present, value = 0
+        self.EGO_DESIRED_SPEED  =  7 #agent's most recent speed command, m/s (action feedback from this step)
+        self.EGO_DESIRED_LN     =  8 #agent's most recent desired lane (action feedback from this time step)
 
         self.Z1_DRIVEABLE       =  9 #is all of this zone drivable pavement? (bool 0 or 1)
         self.Z1_REACHABLE       = 10 #is all of this zone reachable from ego's lane? (bool 0 or 1)
         self.Z1_OCCUPIED        = 11 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z1_ZONE_X          = 12 #occupant's X location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z1_ZONE_P          = 12 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
         self.Z1_REL_SPEED       = 13 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
         self.Z2_DRIVEABLE       = 14 #is all of this zone drivable pavement? (bool 0 or 1)
         self.Z2_REACHABLE       = 15 #is all of this zone reachable from ego's lane? (bool 0 or 1)
         self.Z2_OCCUPIED        = 16 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z2_ZONE_X          = 17 #occupant's X location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z2_ZONE_P          = 17 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
         self.Z2_REL_SPEED       = 18 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
         self.Z3_DRIVEABLE       = 19 #is all of this zone drivable pavement? (bool 0 or 1)
         self.Z3_REACHABLE       = 20 #is all of this zone reachable from ego's lane? (bool 0 or 1)
         self.Z3_OCCUPIED        = 21 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z3_ZONE_X          = 22 #occupant's X location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z3_ZONE_P          = 22 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
         self.Z3_REL_SPEED       = 23 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
         self.Z4_DRIVEABLE       = 24 #is all of this zone drivable pavement? (bool 0 or 1)
         self.Z4_REACHABLE       = 25 #is all of this zone reachable from ego's lane? (bool 0 or 1)
         self.Z4_OCCUPIED        = 26 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z4_ZONE_X          = 27 #occupant's X location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z4_ZONE_P          = 27 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
         self.Z4_REL_SPEED       = 28 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
         self.Z5_DRIVEABLE       = 29 #is all of this zone drivable pavement? (bool 0 or 1)
         self.Z5_REACHABLE       = 30 #is all of this zone reachable from ego's lane? (bool 0 or 1)
         self.Z5_OCCUPIED        = 31 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z5_ZONE_X          = 32 #occupant's X location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z5_ZONE_P          = 32 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
         self.Z5_REL_SPEED       = 33 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
         self.Z6_DRIVEABLE       = 34 #is all of this zone drivable pavement? (bool 0 or 1)
         self.Z6_REACHABLE       = 35 #is all of this zone reachable from ego's lane? (bool 0 or 1)
         self.Z6_OCCUPIED        = 36 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z6_ZONE_X          = 37 #occupant's X location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z6_ZONE_P          = 37 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
         self.Z6_REL_SPEED       = 38 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
         self.Z7_DRIVEABLE       = 39 #is all of this zone drivable pavement? (bool 0 or 1)
         self.Z7_REACHABLE       = 40 #is all of this zone reachable from ego's lane? (bool 0 or 1)
         self.Z7_OCCUPIED        = 41 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z7_ZONE_X          = 42 #occupant's X location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z7_ZONE_P          = 42 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
         self.Z7_REL_SPEED       = 43 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
         self.Z8_DRIVEABLE       = 44 #is all of this zone drivable pavement? (bool 0 or 1)
         self.Z8_REACHABLE       = 45 #is all of this zone reachable from ego's lane? (bool 0 or 1)
         self.Z8_OCCUPIED        = 46 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z8_ZONE_X          = 47 #occupant's X location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z8_ZONE_P          = 47 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
         self.Z8_REL_SPEED       = 48 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
         self.Z9_DRIVEABLE       = 49 #is all of this zone drivable pavement? (bool 0 or 1)
         self.Z9_REACHABLE       = 50 #is all of this zone reachable from ego's lane? (bool 0 or 1)
         self.Z9_OCCUPIED        = 51 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z9_ZONE_X          = 52 #occupant's X location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z9_ZONE_P          = 52 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
         self.Z9_REL_SPEED       = 53 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
         # Gymnasium requires a member variable named observation_space. Since we are dealing with world scale values here, we
@@ -318,7 +333,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         upper_obs = np.ones(SimpleHighwayRamp.OBS_SIZE) #most values are 1
         upper_obs[self.EGO_LANE_ID]         = SimpleHighwayRamp.NUM_LANES - 1
-        upper_obs[self.EGO_X]               = SimpleHighwayRamp.SCENARIO_LENGTH
+        upper_obs[self.EGO_P]               = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_SPEED_PREV]      = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_DESIRED_SPEED]   = SimpleHighwayRamp.MAX_SPEED
@@ -418,8 +433,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         """Reinitializes the environment to prepare for a new episode.  This must be called before
             making any calls to step().
 
-            Return tuple includes an array of observation values, plus a dict of additional key-value
-            info pairs.
+            Return tuple includes an array of observation values, plus a dict of additional info key-value
+            pairs.
 
             CAUTION: the returned observation vector is at actual world scale and needs to be
                      preprocessed before going into a NN!
@@ -439,7 +454,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # If the agent is being trained then
         ego_lane_id = None
-        ego_x = None
+        ego_p = None
         ego_speed = None
         max_distance = 1.0
         if self.training:
@@ -450,56 +465,53 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # Some tests & comments may seem obtuse as a result.
 
             # If we are at difficulty level 0-3, then choose widely randomized initial conditions
-            # NOTE: ego_x is initially chosen as a distance downtrack from lane begin; needs to be converted to X coordinate later
             if self.difficulty_level < 4:
-                ego_x = 0.0
+                ego_p = 0.0
                 if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
-                    physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - ego_lane_start - 10.0
+                    physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                     initial_steps = 60000 #num steps to wait before starting to shrink the max distance
                     if self.total_steps <= initial_steps:
                         max_distance = physical_limit
                     else:
                         max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(1.6e6 - initial_steps) + physical_limit,
                                         10.0) #decreases over time steps
-                    ego_x = self.prng.random() * max_distance + ego_lane_start
+                    ego_p = self.prng.random() * max_distance + ego_lane_start
                 ego_speed = self.prng.random() * 10.0 + 20.0 #value in [10, 30] m/s
-
-            elif self.difficulty_level < 4: #levels 1, 2, 3
-                ego_x = self.prng.random() * 500.0
-                ego_speed = self.prng.random() * SimpleHighwayRamp.MAX_SPEED #any physically possible value
 
             elif self.difficulty_level == 4:
                 # We want to sync the agent in lane 2 to force it to avoid a collision by positioning it right next to the neighbors
                 if ego_lane_id == 2:
-                    ego_x = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH
+                    ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
                     loc = int(self.prng.random()*5.0)
-                    ego_speed = self.initialize_ramp_vehicle_speed(loc, ego_x)
+                    ego_speed = self.initialize_ramp_vehicle_speed(loc, ego_p)
                 else:
-                    ego_x = self.prng.random() * 500.0
-                    ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
+                    ego_p = self.prng.random() * 500.0 + ego_lane_start
+                    ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 5.0) + 5.0 #not practical to train at really low speeds
 
                 # Code block inspired from above to support training level 4 from scratch - it needs to learn how to find the finish line
                 initial_steps = 60000 #num steps to wait before starting to shrink the max distance
                 if self.randomize_start_dist  and  self.total_steps <= initial_steps:
-                    physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - ego_lane_start - 10.0
-                    ego_x = self.prng.random() * physical_limit
+                    physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
+                    ego_p = self.prng.random() * physical_limit + ego_lane_start
 
             else: #levels 5 and up
-                ego_x = self.prng.random() * 500.0
+                ego_p = self.prng.random() * 500.0 + ego_lane_start
                 ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
 
         # Else, we are doing inference, so allow coonfigrable overrides if present
         else:
             ego_lane_id = int(self.prng.random()*3) if self.init_ego_lane is None  else  self.init_ego_lane
-            ego_x = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH if self.init_ego_dist is None  else  self.init_ego_dist + ego_lane_start
+            ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH if self.init_ego_dist is None  else  self.init_ego_dist
+            ego_p += ego_lane_start
 
             # If difficulty level 4, then always use the config value for merge relative position
             if self.difficulty_level == 4  and  ego_lane_id == 2:
-                ego_speed = self.initialize_ramp_vehicle_speed(self.merge_relative_pos, ego_x)
+                ego_speed = self.initialize_ramp_vehicle_speed(self.merge_relative_pos, ego_p)
             else:
-                ego_speed = self.prng.random() * 31.0 + 4.0 if self.init_ego_speed is None  else  self.init_ego_speed
+                ego_speed = self.prng.random() * 31.0 + 5.0 if self.init_ego_speed is None  else  self.init_ego_speed
 
-        # If this difficulty level uses neighbor vehicles then initialize their speed and starting point
+        # If this difficulty level uses neighbor vehicles then initialize their speed and starting point. Currently ASSUMES that
+        # neighbors are in lane 1, whose start location is P = 0.
         n_loc = 0.0
         n_speed = 0.0
         if self.difficulty_level == 4: #steady speed vehicles in lane 1
@@ -514,21 +526,21 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         elif self.difficulty_level > 4:
             raise NotImplementedError("///// Neighbor vehicle motion not defined for difficulty level {}".format(self.difficulty_level))
         if self.debug > 1:
-            print("///// reset: ego defined: lane = {}, x = {:.1f}, speed = {:.1f}".format(ego_lane_id, ego_x, ego_speed))
+            print("///// reset: ego defined: lane = {}, p = {:.1f}, speed = {:.1f}".format(ego_lane_id, ego_p, ego_speed))
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1
         #TODO: revise this for levels 4+
         n_lane_id = 1
         self.vehicles[1].lane_id = n_lane_id
-        self.vehicles[1].x = n_loc + 6.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
+        self.vehicles[1].p = n_loc + 6.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
         self.vehicles[1].speed = n_speed
         self.vehicles[1].lane_change_status = "none"
         self.vehicles[2].lane_id = n_lane_id
-        self.vehicles[2].x = n_loc + 3.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
+        self.vehicles[2].p = n_loc + 3.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
         self.vehicles[2].speed = n_speed
         self.vehicles[2].lane_change_status = "none"
         self.vehicles[3].lane_id = n_lane_id
-        self.vehicles[3].x = n_loc + 0.0 #at end of the line of 3 neighbors
+        self.vehicles[3].p = n_loc + 0.0 #at end of the line of 3 neighbors
         self.vehicles[3].speed = n_speed
         self.vehicles[3].lane_change_status = "none"
         if self.debug > 1:
@@ -541,32 +553,32 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # If the ego vehicle is in lane 1 (where the neighbor vehicles are), then we need to initialize its position so that it isn't
         # going to immediately crash with them (n1 is always the farthest downtrack and n3 is always the farthest uptrack). Give it
         # more room if going in front of the neighbors, as ego has limited accel and may be starting much slower than they are.
-        #TODO: when difficulty levels > 3 are implemented, this needs to account for vehicles in other lanes also.
+        #TODO: when difficulty levels > 4 are implemented, this needs to account for vehicles in other lanes also.
         if ego_lane_id == 1:
-            min_loc = max(self.vehicles[3].x - 3.0*SimpleHighwayRamp.VEHICLE_LENGTH, 0.0)
-            max_loc = self.vehicles[1].x + 6.0*SimpleHighwayRamp.VEHICLE_LENGTH
+            min_loc = self.vehicles[3].p - 3.0*SimpleHighwayRamp.VEHICLE_LENGTH
+            max_loc = self.vehicles[1].p + 6.0*SimpleHighwayRamp.VEHICLE_LENGTH
             midway = 0.5*(max_loc - min_loc) + min_loc
-            if midway < ego_x < max_loc:
-                ego_x = max_loc
+            if midway < ego_p < max_loc  or  min_loc < 0.0:
+                ego_p = max_loc
                 if self.debug > 0:
-                    print("///// reset adjusting lane 1 agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
-            elif min_loc < ego_x <= midway:
-                ego_x = min_loc
+                    print("///// reset adjusting lane 1 agent to: lane = {}, speed = {:.2f}, p = {:.2f}".format(ego_lane_id, ego_speed, ego_p))
+            elif min_loc < ego_p <= midway:
+                ego_p = min_loc
                 if self.debug > 0:
-                    print("///// reset adjusting lane 1 agent to: lane = {}, speed = {:.2f}, x = {:.2f}".format(ego_lane_id, ego_speed, ego_x))
-        #print("///// reset: training = {}, ego_lane_id = {}, ego_x = {:.2f}, ego_speed = {:.2f}".format(self.training, ego_lane_id, ego_x, ego_speed))
+                    print("///// reset adjusting lane 1 agent to: lane = {}, speed = {:.2f}, p = {:.2f}".format(ego_lane_id, ego_speed, ego_p))
+        #print("///// reset: training = {}, ego_lane_id = {}, ego_p = {:.2f}, ego_speed = {:.2f}".format(self.training, ego_lane_id, ego_p, ego_speed))
         self._verify_obs_limits("reset after initializing local vars")
 
         # Reinitialize the whole observation vector
-        ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_x)
+        ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_p)
         self.vehicles[0].lane_id = ego_lane_id
-        self.vehicles[0].x = ego_x
+        self.vehicles[0].p = ego_p
         self.vehicles[0].speed = ego_speed
         self.vehicles[0].lane_change_status = "none"
 
         self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE)
         self.obs[self.EGO_LANE_ID]          = ego_lane_id
-        self.obs[self.EGO_X]                = ego_x
+        self.obs[self.EGO_P]                = ego_p
         self.obs[self.EGO_SPEED]            = ego_speed
         self.obs[self.EGO_SPEED_PREV]       = ego_speed
         self.obs[self.EGO_LANE_REM]         = ego_rem
@@ -622,37 +634,33 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         assert 0 <= desired_lane <= 2, "///// step ERROR: desired_lane = {}, action[1] = {}".format(desired_lane, action[1])
 
         # Move all of the vehicles downtrack. This doesn't account for possible lane changes, which are handled seperately in the next section.
-        new_ego_x = None
+        new_ego_p = None
         new_ego_speed = None
         for i, v in enumerate(self.vehicles):
             lane_id = v.lane_id
             if self.debug > 1:
                 print("      Advancing vehicle {} in lane_id = {}".format(i, lane_id))
             new_speed_cmd = self.neighbor_speed #non-ego vehicles are constant speed
-            cur_speed = self.neighbor_speed
-            prev_speed = self.neighbor_speed
             if i == 0: #this is the ego vehicle
                 new_speed_cmd = desired_speed
-                cur_speed = v.speed
-                prev_speed = self.obs[self.EGO_SPEED_PREV]
-            new_speed, new_x = v.advance_vehicle_spd(new_speed_cmd, cur_speed, prev_speed)
+            new_speed, new_p = v.advance_vehicle_spd(new_speed_cmd)
             if i == 0:
-                new_ego_x = new_x
+                new_ego_p = new_p
                 new_ego_speed = new_speed
-                if new_ego_x > SimpleHighwayRamp.SCENARIO_LENGTH:
-                    new_ego_x = SimpleHighwayRamp.SCENARIO_LENGTH #limit it to avoid exceeding NN input validation rules
+                if new_ego_p > SimpleHighwayRamp.SCENARIO_LENGTH:
+                    new_ego_p = SimpleHighwayRamp.SCENARIO_LENGTH #limit it to avoid exceeding NN input validation rules
             if self.debug > 1:
-                print("      Vehicle {} advanced with new_speed_cmd = {:.2f}. new_speed = {:.2f}, new_x = {:.2f}"
-                        .format(i, new_speed_cmd, new_speed, new_x))
+                print("      Vehicle {} advanced with new_speed_cmd = {:.2f}. new_speed = {:.2f}, new_p = {:.2f}"
+                        .format(i, new_speed_cmd, new_speed, new_p))
 
         # Update ego vehicle obs vector
-        self.obs[self.EGO_X] = new_ego_x
+        self.obs[self.EGO_P] = new_ego_p
         self.obs[self.EGO_SPEED_PREV] = self.obs[self.EGO_SPEED]
         self.obs[self.EGO_SPEED] = new_ego_speed
         self.obs[self.EGO_DESIRED_SPEED] = desired_speed
-        if new_ego_x >= SimpleHighwayRamp.SCENARIO_LENGTH:
+        if new_ego_p >= SimpleHighwayRamp.SCENARIO_LENGTH:
             done = True
-            return_info["reason"] = "Success; end of scenario"
+            return_info["reason"] = "SUCCESS - end of scenario!"
         self._verify_obs_limits("step after moving vehicles forward")
 
         # Determine if we are beginning or continuing a lane change maneuver.
@@ -688,7 +696,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # If we are still in the original lane then
             if self.lane_change_count <= SimpleHighwayRamp.HALF_LANE_CHANGE_STEPS:
                 # Ensure that there is a lane to change into and get its ID
-                tgt_lane = self.roadway.get_target_lane(int(self.vehicles[0].lane_id), self.vehicles[0].lane_change_status, new_ego_x)
+                tgt_lane = self.roadway.get_target_lane(int(self.vehicles[0].lane_id), self.vehicles[0].lane_change_status, new_ego_p)
                 if tgt_lane < 0:
                     done = True
                     ran_off_road = True
@@ -706,7 +714,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 if self.vehicles[0].lane_change_status == "left":
                     coming_from = "right"
                 # Ensure the lane we were coming from is still adjoining (since we still have 2 wheels there)
-                prev_lane = self.roadway.get_target_lane(tgt_lane, coming_from, new_ego_x)
+                prev_lane = self.roadway.get_target_lane(tgt_lane, coming_from, new_ego_p)
                 if prev_lane < 0: #the lane we're coming from ended before the lane change maneuver completed
                     done = True
                     ran_off_road = True
@@ -715,7 +723,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                         print("      DONE!  original lane ended before lane change completed.")
 
         # Get updated metrics of ego vehicle relative to the new lane geometry
-        new_ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(new_ego_lane, new_ego_x)
+        new_ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(new_ego_lane, new_ego_p)
 
         # If remaining lane distance has gone away, then vehicle has run straight off the end of the lane, so episode is done
         if new_ego_rem <= 0.0:
@@ -818,7 +826,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         assert 0 <= vehicle_id < len(self.vehicles), \
                 "///// SimpleHighwayRamp.get_vehicle_dist_downtrack: illegal vehicle_id entered: {}".format(vehicle_id)
 
-        ddt = self.vehicles[vehicle_id].x
+        ddt = self.vehicles[vehicle_id].p
         lane_id = self.vehicles[vehicle_id].lane_id
         if lane_id == 2:
             ddt -= self.roadway.get_lane_start_p(lane_id)
@@ -839,11 +847,10 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     def initialize_ramp_vehicle_speed(self,
                                       relative_pos    : int = 2,  #desired position of the ego vehicle relative to the 3 neighbors
                                                                   # at the time it reaches the merge area
-                                      ego_x           : float = 0.0 #ego vehicle's X location, m
+                                      ego_p           : float = 0.0 #ego vehicle's starting P location, m
                                      ) -> float:
         """Returns a speed to start the ego vehicle when it starts at the beginning of lane 2, such that when it arrives at the
-            beginning of the merge area, assuming it continues at the same speed, it will approximately match the specified
-            position relative to the approaching neighbor vehicles.
+            beginning of the merge area, it will approximately match the specified position relative to the approaching neighbor vehicles.
             This location will be randomized as a normal draw near the specified relative position.  Relative position codes are:
                 0 = in front of neighbor #1
                 1 = roughly beside neighbor #1
@@ -882,8 +889,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # If our desired arrival time is large enough then
         v0 = SimpleHighwayRamp.ROAD_SPEED_LIMIT
-        #print("///// initialize_ramp_vehicle_speed: tgt time = {:.1f}, offset = {:.1f}, ego_x = {:.1f}".format(tgt_arrival_time, offset, ego_x))
-        dist_to_merge = self.roadway.get_lane_start_p(2) + L2_DIST_TO_MERGE - ego_x
+        #print("///// initialize_ramp_vehicle_speed: tgt time = {:.1f}, offset = {:.1f}, ego_p = {:.1f}".format(tgt_arrival_time, offset, ego_p))
+        dist_to_merge = self.roadway.get_lane_start_p(2) + L2_DIST_TO_MERGE - ego_p
         if tgt_arrival_time > dist_to_merge/SimpleHighwayRamp.ROAD_SPEED_LIMIT:
 
             # Solve quadratic equation to determine the ramp vehicle's starting speed, assuming that it will
@@ -1049,10 +1056,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Levels 3 & 4 need to emphasizes lots of experience in lane 2
         elif self.difficulty_level == 3:
-            if self.prng.random() < 0.5:
+            draw = self.prng.random()
+            if draw < 0.6:
                 return 2
+            elif draw < 0.9:
+                return 1
             else:
-                return int(self.prng.random()*2) #select 0 or 1
+                return 0
 
         elif self.difficulty_level < 5:
             if self.prng.random() < 0.5:
@@ -1065,7 +1075,10 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
 
     def _update_obs_zones(self):
-        """Updates the observation vector data for each of the roadway zones, based on ego state and current neighbor vehicle states."""
+        """Updates the observation vector data for each of the roadway zones, based on ego state and current neighbor vehicle states.
+
+            CAUTION: requires that each zone is represented the same in the obs vector and all zones are contiguous there.
+        """
 
         # Determine offsets in the obs vector for zone columns and rows
         base = self.Z1_DRIVEABLE
@@ -1076,17 +1089,17 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             self.obs[base + z + 0] = 0.0 #drivable
             self.obs[base + z + 1] = 0.0 #reachable
             self.obs[base + z + 2] = 0.0 #occupied
-            self.obs[base + z + 3] = 0.0 #x
+            self.obs[base + z + 3] = 0.0 #p
             self.obs[base + z + 4] = 0.0 #speed
         self.obs[self.NEIGHBOR_IN_EGO_ZONE] = 0.0
 
         # Get the current roadway geometry
         ego_lane_id = self.vehicles[0].lane_id
-        ego_x = self.vehicles[0].x
-        ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_x)
+        ego_p = self.vehicles[0].p
+        ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_p)
         if self.debug > 1:
-            print("///// Entering update_obs_zones: ego_lane_id = {}, ego_x = {:.1f}, ego_rem = {:.1f}, base = {}"
-                  .format(ego_lane_id, ego_x, ego_rem, base))
+            print("///// Entering update_obs_zones: ego_lane_id = {}, ego_p = {:.1f}, ego_rem = {:.1f}, base = {}"
+                  .format(ego_lane_id, ego_p, ego_rem, base))
 
         # Determine pavement existence and reachability in each zone
         # CAUTION: this block is dependent on the specific roadway geometry for this experiment, and is not generalized
@@ -1096,9 +1109,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 offset = base + (zone - 1)*num_zone_fields
                 self.obs[offset + 0] = 1.0 #drivable
 
-                zone_front = ((3 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH #distance downtrack of ego vehicle, m
+                zone_front = ((3 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH #distance downtrack from ego vehicle, m
                 zone_rear = zone_front - SimpleHighwayRamp.OBS_ZONE_LENGTH
-                if la <= zone_rear  and  lb >= zone_front:
+                if la <= zone_rear  and  lb >= zone_front: #TODO: this may be too conservative a requirement
                     self.obs[offset + 1] = 1.0 #reachable
 
         if rid >= 0: #there's a lane to the right
@@ -1107,12 +1120,12 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 offset = base + (zone - 1)*num_zone_fields
                 self.obs[offset + 0] = 1.0 #drivable
 
-                zone_front = ((3 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH #distance downtrack of ego vehicle, m
+                zone_front = ((3 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH #distance downtrack from ego vehicle, m
                 zone_rear = zone_front - SimpleHighwayRamp.OBS_ZONE_LENGTH
                 if ra <= zone_rear  and  rb >= zone_front:
                     self.obs[offset + 1] = 1.0 #reachable
 
-        # We know there's a lane in the center, but not how far it extends in either direction
+        # We know there's a lane in the center, but not how far it extends in either direction so look at each zone in this column
         for row in range(1, 5):
             zone = 3*(row - 1) + 2
             if row == 3: #ego zone
@@ -1120,11 +1133,11 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             elif row == 4:
                 zone = 8
             offset = base + (zone - 1)*num_zone_fields
-            zone_front = ((3 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH #distance downtrack of ego vehicle, m
+            zone_front = ((3 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH #distance downtrack from ego vehicle, m
             zone_rear = zone_front - SimpleHighwayRamp.OBS_ZONE_LENGTH
             if ego_rem >= zone_front: #don't worry about lane existence behind ego vehicle; assume it's there
                 self.obs[offset + 0] = 1.0 #drivable
-                self.obs[offset + 1] = 1.0 #reachable
+                self.obs[offset + 1] = 1.0 #reachable is guaranteed if it is driveable
 
         # Loop through the neighbor vehicles
         for neighbor_idx in range(1, SimpleHighwayRamp.NUM_NEIGHBORS + 1):
@@ -1135,7 +1148,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # Find which zone row it is in, if any (could be too far away)
             row = 0
-            dist_ahead_of_ego = nv.x - ego_x
+            dist_ahead_of_ego = nv.p - ego_p
             if dist_ahead_of_ego > 2.5 * SimpleHighwayRamp.OBS_ZONE_LENGTH: #way out front somewhere
                 row = 0
             elif dist_ahead_of_ego > 1.5 * SimpleHighwayRamp.OBS_ZONE_LENGTH:
@@ -1187,22 +1200,22 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 self.obs[offset + 2] = 1.0
 
                 # Set the neighbor's relative location within the zone
-                zone_rear_x = ego_x + ((2.0 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH
-                rel_x = (nv.x - zone_rear_x) / SimpleHighwayRamp.OBS_ZONE_LENGTH
-                self.obs[offset + 3] = rel_x
+                zone_rear_p = ego_p + ((2.0 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH
+                rel_p = (nv.p - zone_rear_p) / SimpleHighwayRamp.OBS_ZONE_LENGTH
+                self.obs[offset + 3] = rel_p
 
                 # Set the neighbor's relative speed
                 self.obs[offset + 4] = (nv.speed - self.vehicles[0].speed) / SimpleHighwayRamp.ROAD_SPEED_LIMIT
 
                 if self.debug > 1:
-                    print("///// update_obs_zones: neighbor {} has column = {}, row = {}, zone = {}, zone_rear = {:.1f}, rel_x = {:.2f}, ego speed = {:.1f}"
-                          .format(neighbor_idx, column, row, zone, zone_rear_x, rel_x, self.vehicles[0].speed))
+                    print("///// update_obs_zones: neighbor {} has column = {}, row = {}, zone = {}, zone_rear = {:.1f}, rel_p = {:.2f}, ego speed = {:.1f}"
+                          .format(neighbor_idx, column, row, zone, zone_rear_p, rel_p, self.vehicles[0].speed))
 
         if self.debug > 1:
             print("///// update_obs_zones complete.")
             for zone in range(1, 10):
                 offset = base + (zone - 1)*num_zone_fields
-                print("      Zone {}: drivable = {:.1f}, reachable = {:.1f}, occupied = {:.1f}, x = {:.2f}, speed = {:.2f}"
+                print("      Zone {}: drivable = {:.1f}, reachable = {:.1f}, occupied = {:.1f}, rel p = {:.2f}, rel speed = {:.2f}"
                       .format(zone, self.obs[offset+0], self.obs[offset+1], self.obs[offset+2], self.obs[offset+3], self.obs[offset+4]))
 
 
@@ -1229,10 +1242,10 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 if va.lane_id == vb.lane_id:
 
                     # If they are within one car length of each other, it's a crash
-                    if abs(va.x - vb.x) <= SimpleHighwayRamp.VEHICLE_LENGTH:
+                    if abs(va.p - vb.p) <= SimpleHighwayRamp.VEHICLE_LENGTH:
                         if self.debug > 1:
                             print("      CRASH in same lane between vehicles {} and {} near {:.2f} m in lane {}"
-                                    .format(i, j, va.x, va.lane_id))
+                                    .format(i, j, va.p, va.lane_id))
                         crash = True
                         break
 
@@ -1242,16 +1255,16 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     # If either vehicle is changing lanes at the moment, then
                     if va.lane_change_status != "none"  or  vb.lane_change_status != "none":
 
-                        # If the lane changer's target lane belongs to the other vehicle, then
-                        va_tgt = self.roadway.get_target_lane(va.lane_id, va.lane_change_status, va.x)
-                        vb_tgt = self.roadway.get_target_lane(vb.lane_id, vb.lane_change_status, vb.x)
+                        # If the lane changer's target lane is occupied by the other vehicle, then
+                        va_tgt = self.roadway.get_target_lane(va.lane_id, va.lane_change_status, va.p)
+                        vb_tgt = self.roadway.get_target_lane(vb.lane_id, vb.lane_change_status, vb.p)
                         if va_tgt == vb.lane_id  or  vb_tgt == va.lane_id:
 
                             # If the two are within a vehicle length of each other, then it's a crash
-                            if abs(va.x - vb.x) <= SimpleHighwayRamp.VEHICLE_LENGTH:
+                            if abs(va.p - vb.p) <= SimpleHighwayRamp.VEHICLE_LENGTH:
                                 if self.debug > 1:
                                     print("      CRASH in adjacent lanes between vehicles {} and {} near {:.2f} m in lane {}"
-                                            .format(i, j, vb.x, va.lane_id))
+                                            .format(i, j, vb.p, va.lane_id))
                                 crash = True
                                 break
 
@@ -1332,7 +1345,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             penalty = 0.0
             if diff > 0.02:
                 penalty = speed_mult*(diff - 0.02)
-                explanation += "spd pen {:.4f}".format(penalty)
+                explanation += "spd pen {:.4f}. ".format(penalty)
             reward -= penalty
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
@@ -1712,64 +1725,62 @@ class Vehicle:
     def __init__(self,
                     step_size   : float,    #duration of a time step, s
                     max_jerk    : float,    #max allowed jerk, m/s^3
-                    debug       : int       #debug printing level
+                    cur_speed   : float = 0.0,  #vehicle's current speed, m/s
+                    prev_speed  : float = 0.0,  #vehicle's speed in the previous time step, m/s
+                    debug       : int = 0   #debug printing level
                 ):
 
         self.time_step_size = step_size
         self.max_jerk = max_jerk
+        self.cur_speed = cur_speed
+        self.prev_speed = prev_speed
         self.debug = debug
 
         self.lane_id = -1                   #-1 is an illegal value
-        self.x = 0.0                        #X coordinate of vehicle center on map, m
+        self.p = 0.0                        #P coordinate of vehicle center in parametric frame, m
         self.lane_change_status = "none"    #Initialized to no lane change underway
-        self.speed = 0.0                    #Forward speed, m/s
+        self.prev_accel = 0.0               #Forward actual acceleration in previous time step, m/s^2
 
 
     def advance_vehicle_spd(self,
-                        new_speed_cmd   : float,    #the newly commanded speed, m/s
-                        cur_speed       : float,    #the current actual speed, m/s
-                        prev_speed      : float     #actual speed at the previous time step, m/s
-                       ) -> Tuple[float, float]:
+                            new_speed_cmd   : float,    #the newly commanded speed, m/s
+                           ) -> Tuple[float, float]:
         """Advances a vehicle's forward motion for one time step according to the vehicle dynamics model.
             Note that this does not consider lateral motion, which needs to be handled elsewhere.
 
-            Returns: tuple of (new speed (m/s), new X location (m))
+            Returns: tuple of (new speed (m/s), new P location (m))
         """
 
         # Determine the current & previous effective accelerations
-        cur_accel_cmd = (new_speed_cmd - cur_speed) / self.time_step_size
-        prev_accel = (cur_speed - prev_speed) / self.time_step_size
+        cur_accel_cmd = (new_speed_cmd - self.cur_speed) / self.time_step_size
         #print("///// Vehicle.advance_vehicle_spd: new_speed_cmd = {:.1f}, cur_speed = {:.1f}, prev_speed = {:.1f}, cur_accel_cmd = {:.2f}, prev_accel = {:.2f}"
         #      .format(new_speed_cmd, cur_speed, prev_speed, cur_accel_cmd, prev_accel))
-        return self.advance_vehicle_acc(cur_accel_cmd, prev_accel)
+        return self.advance_vehicle_acc(cur_accel_cmd)
 
 
     def advance_vehicle_acc(self,
-                        new_accel_cmd   : float,    #newest fwd accel command, m/s^2
-                        prev_accel_cmd  : float     #fwd accel command from prev time step, m/s^2
-                       ) -> Tuple[float, float]:
+                            new_accel_cmd   : float,    #newest fwd accel command, m/s^2
+                           ) -> Tuple[float, float]:
         """Advances a vehicle's forward motion for one time step according to the vehicle dynamics model.
             Note that this does not consider lateral motion, which needs to be handled elsewhere.
 
-            Returns: tuple of (new speed (m/s), new X location (m))
+            Returns: tuple of (new speed (m/s), new P location (m))
         """
 
         # Determine new jerk, accel, speed & location of the vehicle
-        new_jerk = (new_accel_cmd - prev_accel_cmd) / self.time_step_size
-        if new_jerk < -self.max_jerk:
-            new_jerk = -self.max_jerk
-        elif new_jerk > self.max_jerk:
-            new_jerk = self.max_jerk
+        new_jerk = min(max((new_accel_cmd - self.prev_accel) / self.time_step_size, -self.max_jerk), self.max_jerk)
         #print("///// Vehicle.advance_vehicle_acc: new_jerk = {:.3f}".format(new_jerk))
 
-        new_accel = min(max(prev_accel_cmd + self.time_step_size*new_jerk, -SimpleHighwayRamp.MAX_ACCEL), SimpleHighwayRamp.MAX_ACCEL)
-        new_speed = min(max(self.speed + self.time_step_size*new_accel, 0.0), SimpleHighwayRamp.MAX_SPEED) #vehicle won't start moving backwards
-        new_x = max(self.x + self.time_step_size*(new_speed + 0.5*self.time_step_size*new_accel), 0.0)
+        new_accel = min(max(self.prev_accel + self.time_step_size*new_jerk, -SimpleHighwayRamp.MAX_ACCEL), SimpleHighwayRamp.MAX_ACCEL)
+        new_speed = min(max(self.cur_speed + self.time_step_size*new_accel, 0.0), SimpleHighwayRamp.MAX_SPEED) #vehicle won't start moving backwards
+        new_p = max(self.p + self.time_step_size*(new_speed + 0.5*self.time_step_size*new_accel), 0.0)
 
-        self.x = new_x
-        self.speed = new_speed
+        self.p = new_p
+        self.prev_speed = self.cur_speed
+        self.cur_speed = new_speed
+        self.prev_accel = new_accel
 
-        return new_speed, new_x
+        return new_speed, new_p
 
 
     def print(self,
@@ -1778,4 +1789,4 @@ class Vehicle:
         """Prints the attributes of this vehicle object."""
 
         print("       [{}]: lane_id = {:2d}, dist = {:.2f}, status = {:5s}, speed = {:.2f}" \
-                .format(tag, self.lane_id, self.x, self.lane_change_status, self.speed))
+                .format(tag, self.lane_id, self.x, self.lane_change_status, self.cur_speed))
