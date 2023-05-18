@@ -480,6 +480,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             elif self.difficulty_level == 4:
                 # We want to sync the agent in lane 2 to force it to avoid a collision by positioning it right next to the neighbors
+                #physical_limit = 9898.9 #needed for print statement below, only
                 if ego_lane_id == 2:
                     ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
                     loc = int(self.prng.random()*5.0)
@@ -488,11 +489,17 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     ego_p = self.prng.random() * 500.0 + ego_lane_start
                     ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 5.0) + 5.0 #not practical to train at really low speeds
 
-                # Code block inspired from above to support training level 4 from scratch - it needs to learn how to find the finish line
-                initial_steps = 60000 #num steps to wait before starting to shrink the max distance
-                if self.randomize_start_dist  and  self.total_steps <= initial_steps:
+                # Code block inspired from above to support training level 4 from scratch - agent needs to learn how to find the finish line,
+                # so allow it to start anywhere along the route, sometimes very close to the finish line.
+                INITIAL_STEPS = 33333 #num steps to wait before starting to shrink the max distance; ~120 iterations
+                if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun()  and  self.total_steps < INITIAL_STEPS:
                     physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                     ego_p = self.prng.random() * physical_limit + ego_lane_start
+
+                #if self.total_steps % 10 == 0:
+                #    print("///// reset env {}: lane = {}, ego_p = {:6.1f}, speed = {:4.1f}, total_steps = {:6}, phys limit = {:6.1f}, init count = {}, perturb? {}"
+                #        .format(self.rollout_id, ego_lane_id, ego_p, ego_speed, self.total_steps, physical_limit, perturb_ctrl.get_algo_init_count(),
+                #                perturb_ctrl.has_perturb_begun()))
 
             else: #levels 5 and up
                 ego_p = self.prng.random() * 500.0 + ego_lane_start
@@ -1503,9 +1510,9 @@ class Roadway:
         # Lane 2 - two segments as the merge ramp; first seg is separate; second is adjacent to L1.
         # Segments show the lane at an angle to the main roadway, for visual appeal & clarity.
         L2_Y = L1_Y - Roadway.WIDTH
-        segs = [(159.2, L2_Y-370.0,  800.0, L2_Y, 740.0),
+        segs = [(159.1, L2_Y-370.0,  800.0, L2_Y, 740.0),
                 (800.0, L2_Y,       1320.0, L2_Y, 520.0)]
-        lane = Lane(2, 159.2, 1260.0, segs, left_id = 1, left_join = 800.0, left_sep = 1320.0)
+        lane = Lane(2, 159.1, 1260.0, segs, left_id = 1, left_join = 800.0, left_sep = 1320.0)
         self.lanes.append(lane)
 
 

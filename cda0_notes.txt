@@ -2016,8 +2016,45 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 5/18/23
 09:40 - 10:00 = 0:20
-11:30 - 
+11:30 - 14:12 = 2:42
+15:25 - 17:06 = 1:41
 
+	* Completed conversion of env code to use the parametric coordinate frame (schematic concept) and
+	  support transforms between that and the map frame to ensure nothing gets confused between the two.
+
+* Training run 41240 using this new code
+	* Set the burn-in period to 200 iterations (was alwasy 100 prior) to ensure that there is plenty of
+	  recovery time for an agent after the initial randomized location gets turned off.
+	* Still having problems with initializing ego_p in reset() based on PBT perturb counter. Experiments
+	  with the tune prgm specifying num_trials (running 2 at a time) and the resulting envs that get
+	  started:
+		* 1 trial specified, 1 run = 17 envs	16*1 + 1
+		* 2 trials specified, 2 run = 33 envs	16*2 + 1
+		* 4 trials specified, 2 run = 35 envs	16*2 + 3
+		* 4 trials specified, 4 run = 67 envs	16*4 + 3
+		* 4 trials specified, 6 run = 101 envs	16*6 + 5
+		* 8 trials specified, 2 run = 32 envs	16*2
+		* 8 trials specified, 4 run = 66 envs	16*4 + 2
+		* 8 trials specified, 6 run = 95 envs	16*6 - 1
+		* 8 trials specified, 8 run = 129 envs	16*8 + 1
+		* 8 trials specified, 10 run = 163 env	16*10 + 3
+		* 8 trials specified, 12 run = 197 env	16*12 + 3
+		* 8 trials specified, 14 run = 231 env	16*14 + 7
+		* 10 trials specified, 2 run = 34 env	16*2 + 2
+		* 10 trials specified, 4 run = 68 env	16*4 + 4
+		* 10 trials specified, 6 run = 102 env	16*6 + 6
+		* 10 trials specified, 8 run = 136 env	16*8 + 8
+		* 10 trials specified, 10 run = 170 env	16*10 + 10
+		* 10 trials specified, 12 run = 201 env	16*12 + 9
+		* 10 trials specified, 14 run = 233 env	16*14 + 9
+	* Each time a new env is created, its "total_steps" variable starts at 0, so we never get a
+	  cumulative step count, and must therefore rely on this perturb state calculation.
+
+* Run 5ad76 with the new perturb-controlled random initial position for the first 33333 steps (per
+  env object).
+	* The randomized initial postition turned off after ~65k steps (total), but the first 200
+	  iterations lasted until ~220k, so could have set the threshold a bit higher, maybe 50k,
+	  to allow for better orientation with the training wheels on.
 
 
 

@@ -219,9 +219,9 @@ class PerturbationController:
 
         #TODO: this relationship is fragile - need to investigate how it may change as numbers of
         #       rollout workers, eval workers, and other HPs change.
-        # Determine when the first perturbation cycle has been completed. On a single node running
-        # 2 trials simultaneously, there will be 14 of these objects created for every pair of trials
-        # being started.  This number will go up with each perturb cycle. So we want to allow reading
-        # from the checkpoint for the first 14*num_trials/2 objects, then no more.
-        max_instances = 14 * self._num_trials/2
+        # Determine when the first perturbation cycle has been completed.
+        #   On a single node running 1 env per worker and 2 evaluation workers (typically runs 2 workers simultaneously)
+        #   Ray spins up approx 16 env copies per trial per perturb cycle (it usually runs a few extra for the whole cycle).
+        #   To be safe, we need to allow for these extra copies when defining the threshold; allow up to 14 extras.
+        max_instances = 16*self._num_trials + 14
         return self.get_algo_init_count() > max_instances
