@@ -2056,6 +2056,34 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  iterations lasted until ~220k, so could have set the threshold a bit higher, maybe 50k,
 	  to allow for better orientation with the training wheels on.
 
+5/19/23
+
+	* Results were terrible. All 4 trials whose rmax was positive died early (nan problem in
+	  Gaussian).
+
+* Run 6fa3a extended the randomized initial position up to 55k env steps, and limited to 800 total
+  iterations.
+	* Trial 6 was performing far better than others, with rmax ~10, rmean between -2 and 2,
+	  when it died at 500k steps due to the same Gaussian nan problem as before. I am starting
+	  to wonder if there's something in my env code or the way the observations are structured
+	  that forces this when the solution starts to work well.
+
+5/22/23
+19:45 - 
+
+	* Performing inference on trial 6 in lane 0, which is the only trial that had a positive rmean. 
+		* Ego started at 1 m/s, but it seems the neighbor vehicles did the same thing, and
+		  all accelerated together!
+		* Jerk penalty still being applied several time steps in when speed cmd hasn't changed
+		  and accel is constant. Jerk penalty seems to be inversely proportional to speed.
+		* Eventually, ego went slightly faster than neighbors, but the rel_ps never changed
+		* Neighbor rel_speed seems wrong = always 0.10.
+
+AI: investigate problems in above inference!
+
+AI: look for calls to prng.normal()
+AI: copy time logs to dashboard
+
 
 
 

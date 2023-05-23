@@ -491,7 +491,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
                 # Code block inspired from above to support training level 4 from scratch - agent needs to learn how to find the finish line,
                 # so allow it to start anywhere along the route, sometimes very close to the finish line.
-                INITIAL_STEPS = 33333 #num steps to wait before starting to shrink the max distance; ~120 iterations
+                INITIAL_STEPS = 55000 #num steps to wait before starting to shrink the max distance; ~120 iterations
                 if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun()  and  self.total_steps < INITIAL_STEPS:
                     physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                     ego_p = self.prng.random() * physical_limit + ego_lane_start
@@ -509,7 +509,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         else:
             ego_lane_id = int(self.prng.random()*3) if self.init_ego_lane is None  else  self.init_ego_lane
             ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH if self.init_ego_dist is None  else  self.init_ego_dist
-            ego_p += ego_lane_start
+            ego_p += self.roadway.get_lane_start_p(ego_lane_id)
 
             # If difficulty level 4, then always use the config value for merge relative position
             if self.difficulty_level == 4  and  ego_lane_id == 2:

@@ -97,7 +97,7 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     burn_in_period      = 200 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 1500
+    max_iterations      = 800
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -117,7 +117,7 @@ def main(argv):
     env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 0
-    env_config["verify_obs"]                    = True
+    env_config["verify_obs"]                    = False
     env_config["training"]                      = True
     env_config["randomize_start_dist"]          = True
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels

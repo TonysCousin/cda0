@@ -132,14 +132,31 @@ def main(argv):
         # Scale the observations to be ready for NN ingest next time step
         obs = env.scale_obs(raw_obs)
 
-        print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, rem = {:4.0f}, r = {:7.4f} {}"
-                .format(step, action[0], action[1], raw_obs[0], raw_obs[2], raw_obs[1], raw_obs[12], reward, info["reward_detail"]))
-        print("      lft ln: Id = {:2.0f}, conn_a = {:6.0f}, conn_b = {:6.0f}, rem = {:6.0f}"
-                .format(raw_obs[18], raw_obs[19], raw_obs[20], raw_obs[21]))
-        print("      rgt ln: Id = {:2.0f}, conn_a = {:6.0f}, conn_b = {:6.0f}, rem = {:6.0f}"
-                .format(raw_obs[22], raw_obs[23], raw_obs[24], raw_obs[25]))
-        print("   SC lft ln: Id = {:2.0f}, conn_a = {:7.4f}, conn_b = {:7.4f}, rem = {:7.4f}, ego rem = {:.4f}"
-                .format(obs[18], obs[19], obs[20], obs[21], obs[12]))
+        print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, p = {:.3f}, rem = {:4.0f}, r = {:7.4f} {}"
+                .format(step, action[0], action[1], raw_obs[0], raw_obs[3], raw_obs[1], raw_obs[2], reward, info["reward_detail"]))
+
+        print("                   Z1    Z2    Z3    Z4    Z5    Z6    Z7    Z8    Z9, neighbor in ego zone = {:3.0f}".format(raw_obs[6]))
+        b = 9 #base index of this attribute for Z1 in the obs vector
+        s = 5 #size of each zone in the obs vector
+        print("      driveable: {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
+              .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
+                      raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
+        b = 10 #base index of this attribute for Z1 in the obs vector
+        print("      reachable: {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
+              .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
+                      raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
+        b = 11 #base index of this attribute for Z1 in the obs vector
+        print("      occupied:  {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
+              .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
+                      raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
+        b = 12 #base index of this attribute for Z1 in the obs vector
+        print("      rel p:     {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
+              .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
+                      raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
+        b = 13 #base index of this attribute for Z1 in the obs vector
+        print("      rel speed: {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
+              .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
+                      raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
 
         if done:
             print("///// Episode complete: {}. Total reward = {:.2f}".format(info["reason"], episode_reward))
@@ -337,35 +354,35 @@ class Graphics:
                             vehicles    : List, #list of all Vehicles in the scenario
                             vehicle_id  : int   #ID of the vehicle; 0=ego, 1-3=neighbor vehicles
                            ) -> tuple:
-        """Returns the map coordinates of the indicated vehicle based on its lane ID and distance downtrack.
+        """Returns the map frame coordinates of the indicated vehicle based on its lane ID and distance downtrack.
 
             CAUTION: these calcs are hard-coded to the specific roadway geometry in this code,
             it is not a general solution.
         """
-        #TODO: reconcile graphics X vs roadway X, given that one is not on an angle, and apparent speeds are therefore different.
 
         assert 0 <= vehicle_id <= 3, "///// _get_vehicle_coords: invalid vehicle_id = {}".format(vehicle_id)
 
-        x = vehicles[vehicle_id].x
+        road = self.env.roadway
+        lane = vehicles[vehicle_id].lane_id
+        x = road.param_to_map_frame(vehicles[vehicle_id].p, lane)
         y = None
-        lane = 1 #TODO - still need to replace all this logic
         if lane < 2:
-            y = self.env.roadway.lanes[lane].segments[0][1]
+            y = road.lanes[lane].segments[0][1]
         else:
             ddt = x - self.roadway.lanes[2]
-            if ddt < self.env.roadway.lanes[2].segments[0][4]: #vehicle is in seg 0
-                seg0x0 = self.env.roadway.lanes[2].segments[0][0]
-                seg0y0 = self.env.roadway.lanes[2].segments[0][1]
-                seg0x1 = self.env.roadway.lanes[2].segments[0][2]
-                seg0y1 = self.env.roadway.lanes[2].segments[0][3]
+            if ddt < road.lanes[2].segments[0][4]: #vehicle is in seg 0
+                seg0x0 = road.lanes[2].segments[0][0]
+                seg0y0 = road.lanes[2].segments[0][1]
+                seg0x1 = road.lanes[2].segments[0][2]
+                seg0y1 = road.lanes[2].segments[0][3]
 
-                factor = ddt / self.env.roadway.lanes[2].segments[0][4]
+                factor = ddt / road.lanes[2].segments[0][4]
                 x = seg0x0 + factor*(seg0x1 - seg0x0)
                 y = seg0y0 + factor*(seg0y1 - seg0y0)
 
             else: #vehicle is in seg 1
-                x = self.env.roadway.lanes[2].segments[1][0] + ddt - self.env.roadway.lanes[2].segments[0][4]
-                y = self.env.roadway.lanes[2].segments[1][1]
+                x = road.lanes[2].segments[1][0] + ddt - road.lanes[2].segments[0][4]
+                y = road.lanes[2].segments[1][1]
 
         return x, y
 
