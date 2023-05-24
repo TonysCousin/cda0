@@ -104,7 +104,9 @@ def main(argv):
     done = False
     action = [0, 0]
     raw_obs, _ = env.unscaled_reset()
-    graphics.update(action, raw_obs, env.get_vehicle_data())
+    vehicles = env.get_vehicle_data()
+    print("///// Neighbor speeds:  {:.1f}, {:.1f}, {:.1f}".format(vehicles[1].speed, vehicles[2].speed, vehicles[3].speed))
+    graphics.update(action, raw_obs, vehicles)
     obs = env.scale_obs(raw_obs)
     step = 0
     time.sleep(2)
@@ -136,24 +138,24 @@ def main(argv):
                 .format(step, action[0], action[1], raw_obs[0], raw_obs[3], raw_obs[1], raw_obs[2], reward, info["reward_detail"]))
 
         print("                   Z1    Z2    Z3    Z4    Z5    Z6    Z7    Z8    Z9, neighbor in ego zone = {:3.0f}".format(raw_obs[6]))
-        b = 9 #base index of this attribute for Z1 in the obs vector
+        b = 11 #base index of this attribute for Z1 in the obs vector
         s = 5 #size of each zone in the obs vector
         print("      driveable: {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
               .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
                       raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
-        b = 10 #base index of this attribute for Z1 in the obs vector
+        b += 1 #base index of this attribute for Z1 in the obs vector
         print("      reachable: {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
               .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
                       raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
-        b = 11 #base index of this attribute for Z1 in the obs vector
+        b += 1 #base index of this attribute for Z1 in the obs vector
         print("      occupied:  {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
               .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
                       raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
-        b = 12 #base index of this attribute for Z1 in the obs vector
+        b += 1 #base index of this attribute for Z1 in the obs vector
         print("      rel p:     {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
               .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
                       raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
-        b = 13 #base index of this attribute for Z1 in the obs vector
+        b += 1 #base index of this attribute for Z1 in the obs vector
         print("      rel speed: {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
               .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
                       raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))

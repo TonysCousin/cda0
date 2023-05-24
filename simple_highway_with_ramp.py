@@ -158,7 +158,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     metadata = {"render_modes": None}
     #metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    OBS_SIZE                = 54
     VEHICLE_LENGTH          = 20.0      #m
     NUM_LANES               = 3         #total number of unique lanes in the scenario
     MAX_SPEED               = 36.0      #vehicle's max achievable speed, m/s
@@ -256,70 +255,75 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.STEPS_SINCE_LN_CHG =  5 #num time steps since the previous lane change was initiated
         self.NEIGHBOR_IN_EGO_ZONE = 6 #if any neighbor vehicle is in the ego zone, then this value will be 1 if it is in front of the
                                      # ego vehicle or -1 if it is behind the ego vehicle. If no neigbhor is present, value = 0
-        self.EGO_DESIRED_SPEED  =  7 #agent's most recent speed command, m/s (action feedback from this step)
-        self.EGO_DESIRED_LN     =  8 #agent's most recent desired lane (action feedback from this time step)
+        self.EGO_DES_SPEED      =  7 #agent's most recent speed command, m/s (action feedback from this step)
+        self.EGO_DES_SPEED_PREV =  8 #desired speed from previous time step, m/s
+        self.EGO_DES_LN         =  9 #agent's most recent desired lane (action feedback from this time step)
+        self.EGO_DES_LN_PREV    = 10 #desired lane from previous time step
 
-        self.Z1_DRIVEABLE       =  9 #is all of this zone drivable pavement? (bool 0 or 1)
-        self.Z1_REACHABLE       = 10 #is all of this zone reachable from ego's lane? (bool 0 or 1)
-        self.Z1_OCCUPIED        = 11 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z1_ZONE_P          = 12 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
-        self.Z1_REL_SPEED       = 13 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
+        self.Z1_DRIVEABLE       = 11 #is all of this zone drivable pavement? (bool 0 or 1)
+        self.Z1_REACHABLE       = 12 #is all of this zone reachable from ego's lane? (bool 0 or 1)
+        self.Z1_OCCUPIED        = 13 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
+        self.Z1_ZONE_P          = 14 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z1_REL_SPEED       = 15 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
-        self.Z2_DRIVEABLE       = 14 #is all of this zone drivable pavement? (bool 0 or 1)
-        self.Z2_REACHABLE       = 15 #is all of this zone reachable from ego's lane? (bool 0 or 1)
-        self.Z2_OCCUPIED        = 16 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z2_ZONE_P          = 17 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
-        self.Z2_REL_SPEED       = 18 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
+        self.Z2_DRIVEABLE       = 16 #is all of this zone drivable pavement? (bool 0 or 1)
+        self.Z2_REACHABLE       = 17 #is all of this zone reachable from ego's lane? (bool 0 or 1)
+        self.Z2_OCCUPIED        = 18 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
+        self.Z2_ZONE_P          = 19 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z2_REL_SPEED       = 20 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
-        self.Z3_DRIVEABLE       = 19 #is all of this zone drivable pavement? (bool 0 or 1)
-        self.Z3_REACHABLE       = 20 #is all of this zone reachable from ego's lane? (bool 0 or 1)
-        self.Z3_OCCUPIED        = 21 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z3_ZONE_P          = 22 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
-        self.Z3_REL_SPEED       = 23 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
+        self.Z3_DRIVEABLE       = 21 #is all of this zone drivable pavement? (bool 0 or 1)
+        self.Z3_REACHABLE       = 22 #is all of this zone reachable from ego's lane? (bool 0 or 1)
+        self.Z3_OCCUPIED        = 23 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
+        self.Z3_ZONE_P          = 24 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z3_REL_SPEED       = 25 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
-        self.Z4_DRIVEABLE       = 24 #is all of this zone drivable pavement? (bool 0 or 1)
-        self.Z4_REACHABLE       = 25 #is all of this zone reachable from ego's lane? (bool 0 or 1)
-        self.Z4_OCCUPIED        = 26 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z4_ZONE_P          = 27 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
-        self.Z4_REL_SPEED       = 28 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
+        self.Z4_DRIVEABLE       = 26 #is all of this zone drivable pavement? (bool 0 or 1)
+        self.Z4_REACHABLE       = 27 #is all of this zone reachable from ego's lane? (bool 0 or 1)
+        self.Z4_OCCUPIED        = 28 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
+        self.Z4_ZONE_P          = 29 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z4_REL_SPEED       = 30 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
-        self.Z5_DRIVEABLE       = 29 #is all of this zone drivable pavement? (bool 0 or 1)
-        self.Z5_REACHABLE       = 30 #is all of this zone reachable from ego's lane? (bool 0 or 1)
-        self.Z5_OCCUPIED        = 31 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z5_ZONE_P          = 32 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
-        self.Z5_REL_SPEED       = 33 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
+        self.Z5_DRIVEABLE       = 31 #is all of this zone drivable pavement? (bool 0 or 1)
+        self.Z5_REACHABLE       = 32 #is all of this zone reachable from ego's lane? (bool 0 or 1)
+        self.Z5_OCCUPIED        = 33 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
+        self.Z5_ZONE_P          = 34 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z5_REL_SPEED       = 35 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
-        self.Z6_DRIVEABLE       = 34 #is all of this zone drivable pavement? (bool 0 or 1)
-        self.Z6_REACHABLE       = 35 #is all of this zone reachable from ego's lane? (bool 0 or 1)
-        self.Z6_OCCUPIED        = 36 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z6_ZONE_P          = 37 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
-        self.Z6_REL_SPEED       = 38 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
+        self.Z6_DRIVEABLE       = 36 #is all of this zone drivable pavement? (bool 0 or 1)
+        self.Z6_REACHABLE       = 37 #is all of this zone reachable from ego's lane? (bool 0 or 1)
+        self.Z6_OCCUPIED        = 38 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
+        self.Z6_ZONE_P          = 39 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z6_REL_SPEED       = 40 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
-        self.Z7_DRIVEABLE       = 39 #is all of this zone drivable pavement? (bool 0 or 1)
-        self.Z7_REACHABLE       = 40 #is all of this zone reachable from ego's lane? (bool 0 or 1)
-        self.Z7_OCCUPIED        = 41 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z7_ZONE_P          = 42 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
-        self.Z7_REL_SPEED       = 43 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
+        self.Z7_DRIVEABLE       = 41 #is all of this zone drivable pavement? (bool 0 or 1)
+        self.Z7_REACHABLE       = 42 #is all of this zone reachable from ego's lane? (bool 0 or 1)
+        self.Z7_OCCUPIED        = 43 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
+        self.Z7_ZONE_P          = 44 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z7_REL_SPEED       = 45 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
-        self.Z8_DRIVEABLE       = 44 #is all of this zone drivable pavement? (bool 0 or 1)
-        self.Z8_REACHABLE       = 45 #is all of this zone reachable from ego's lane? (bool 0 or 1)
-        self.Z8_OCCUPIED        = 46 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z8_ZONE_P          = 47 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
-        self.Z8_REL_SPEED       = 48 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
+        self.Z8_DRIVEABLE       = 46 #is all of this zone drivable pavement? (bool 0 or 1)
+        self.Z8_REACHABLE       = 47 #is all of this zone reachable from ego's lane? (bool 0 or 1)
+        self.Z8_OCCUPIED        = 48 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
+        self.Z8_ZONE_P          = 49 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z8_REL_SPEED       = 50 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
 
-        self.Z9_DRIVEABLE       = 49 #is all of this zone drivable pavement? (bool 0 or 1)
-        self.Z9_REACHABLE       = 50 #is all of this zone reachable from ego's lane? (bool 0 or 1)
-        self.Z9_OCCUPIED        = 51 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
-        self.Z9_ZONE_P          = 52 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
-        self.Z9_REL_SPEED       = 53 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
+        self.Z9_DRIVEABLE       = 51 #is all of this zone drivable pavement? (bool 0 or 1)
+        self.Z9_REACHABLE       = 52 #is all of this zone reachable from ego's lane? (bool 0 or 1)
+        self.Z9_OCCUPIED        = 53 #is this zone occupied by a neighbor vehicle? (bool 0 or 1)
+        self.Z9_ZONE_P          = 54 #occupant's P location relative to this zone (0 = at rear edge of zone, 1 = at front edge)
+        self.Z9_REL_SPEED       = 55 #occupant's speed relative to ego speed, fraction of speed limit (+ or -)
+
+        self.OBS_SIZE = self.Z9_REL_SPEED + 1 #number of elements in the observation vector
 
         # Gymnasium requires a member variable named observation_space. Since we are dealing with world scale values here, we
         # will need a wrapper to scale the observations for NN input. That wrapper will also need to use self.observation_space.
         # So here we must anticipate that scaling and leave the limits open enough to accommodate it.
         max_rel_speed = SimpleHighwayRamp.MAX_SPEED / SimpleHighwayRamp.ROAD_SPEED_LIMIT
-        lower_obs = np.zeros((SimpleHighwayRamp.OBS_SIZE)) #most values are 0, so only the others are explicitly set below
+        lower_obs = np.zeros((self.OBS_SIZE)) #most values are 0, so only the others are explicitly set below
         lower_obs[self.EGO_LANE_ID]         = -1.0 #should be in [0, 2], but will be scaled to [-1, 1]
-        lower_obs[self.EGO_DESIRED_LN]      = -1.0 #should be in [0, 2], but will be scaled to [-1, 1]
+        lower_obs[self.EGO_DES_LN]          = -1.0 #should be in [0, 2], but will be scaled to [-1, 1]
+        lower_obs[self.EGO_DES_LN_PREV]     = -1.0
         lower_obs[self.NEIGHBOR_IN_EGO_ZONE]= -1.0
         lower_obs[self.Z1_REL_SPEED]        = -max_rel_speed
         lower_obs[self.Z2_REL_SPEED]        = -max_rel_speed
@@ -331,14 +335,16 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         lower_obs[self.Z8_REL_SPEED]        = -max_rel_speed
         lower_obs[self.Z9_REL_SPEED]        = -max_rel_speed
 
-        upper_obs = np.ones(SimpleHighwayRamp.OBS_SIZE) #most values are 1
+        upper_obs = np.ones(self.OBS_SIZE) #most values are 1
         upper_obs[self.EGO_LANE_ID]         = SimpleHighwayRamp.NUM_LANES - 1
         upper_obs[self.EGO_P]               = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_SPEED_PREV]      = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.EGO_DESIRED_SPEED]   = SimpleHighwayRamp.MAX_SPEED
+        upper_obs[self.EGO_DES_SPEED]       = SimpleHighwayRamp.MAX_SPEED
+        upper_obs[self.EGO_DES_SPEED_PREV]  = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_LANE_REM]        = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
-        upper_obs[self.EGO_DESIRED_LN]      = SimpleHighwayRamp.NUM_LANES - 1
+        upper_obs[self.EGO_DES_LN]          = SimpleHighwayRamp.NUM_LANES - 1
+        upper_obs[self.EGO_DES_LN_PREV]     = SimpleHighwayRamp.NUM_LANES - 1
         upper_obs[self.STEPS_SINCE_LN_CHG]  = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
         upper_obs[self.Z1_REL_SPEED]        = max_rel_speed
         upper_obs[self.Z2_REL_SPEED]        = max_rel_speed
@@ -354,7 +360,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         if self.debug == 2:
             print("///// observation_space = ", self.observation_space)
 
-        self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE) #will be returned from reset() and step()
+        self.obs = np.zeros(self.OBS_SIZE) #will be returned from reset() and step()
         self._verify_obs_limits("init after space defined")
 
         #
@@ -583,13 +589,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.vehicles[0].speed = ego_speed
         self.vehicles[0].lane_change_status = "none"
 
-        self.obs = np.zeros(SimpleHighwayRamp.OBS_SIZE)
+        self.obs = np.zeros(self.OBS_SIZE)
         self.obs[self.EGO_LANE_ID]          = ego_lane_id
         self.obs[self.EGO_P]                = ego_p
         self.obs[self.EGO_SPEED]            = ego_speed
         self.obs[self.EGO_SPEED_PREV]       = ego_speed
         self.obs[self.EGO_LANE_REM]         = ego_rem
-        self.obs[self.EGO_DESIRED_LN]       = ego_lane_id #this is feedback from previous timestep, so okay to initialize it like this
+        self.obs[self.EGO_DES_LN]       = ego_lane_id #this is feedback from previous timestep, so okay to initialize it like this
         self.obs[self.STEPS_SINCE_LN_CHG]   = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
         self._verify_obs_limits("reset after populating main obs with ego stuff")
         self._update_obs_zones()
@@ -664,7 +670,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.EGO_P] = new_ego_p
         self.obs[self.EGO_SPEED_PREV] = self.obs[self.EGO_SPEED]
         self.obs[self.EGO_SPEED] = new_ego_speed
-        self.obs[self.EGO_DESIRED_SPEED] = desired_speed
+        self.obs[self.EGO_DES_SPEED_PREV] = self.obs[self.EGO_DES_SPEED]
+        self.obs[self.EGO_DES_SPEED] = desired_speed
         if new_ego_p >= SimpleHighwayRamp.SCENARIO_LENGTH:
             done = True
             return_info["reason"] = "SUCCESS - end of scenario!"
@@ -758,7 +765,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Update the obs vector with the new state info
         self.obs[self.EGO_LANE_ID] = new_ego_lane
         self.obs[self.EGO_LANE_REM] = new_ego_rem
-        self.obs[self.EGO_DESIRED_LN] = desired_lane
+        self.obs[self.EGO_DES_LN_PREV] = self.obs[self.EGO_DES_LN]
+        self.obs[self.EGO_DES_LN] = desired_lane
         self._verify_obs_limits("step after updating obs vector")
 
         # Check that none of the vehicles has crashed into another, accounting for a lane change in progress
@@ -1337,11 +1345,18 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             if self.difficulty_level > 0:
                 # Small penalty for widely varying speed commands
-                cmd_diff = abs(self.obs[self.EGO_DESIRED_SPEED] - self.obs[self.EGO_SPEED]) / SimpleHighwayRamp.MAX_SPEED
+                cmd_diff = abs(self.obs[self.EGO_DES_SPEED] - self.obs[self.EGO_DES_SPEED_PREV]) / SimpleHighwayRamp.MAX_SPEED
                 penalty = 0.2 * cmd_diff * cmd_diff
                 reward -= penalty
                 if penalty > 0.0001:
-                    explanation += "Jerk pen {:.4f}. ".format(penalty)
+                    explanation += "Spd cmd pen {:.4f}. ".format(penalty)
+
+                # Small penalty for widely varying lane commands
+                cmd_diff = abs(self.obs[self.EGO_DES_LN] - self.obs[self.EGO_DES_LN_PREV])
+                penalty = 0.01 * cmd_diff * cmd_diff
+                reward -= penalty
+                if penalty > 0.0001:
+                    explanation += "Ln cmd pen {:.4f}. ".format(penalty)
 
             # Penalty for deviating from roadway speed limit
             speed_mult = 0.2
@@ -1381,14 +1396,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         hi = self.observation_space.high
 
         try:
-            for i in range(SimpleHighwayRamp.OBS_SIZE):
+            for i in range(self.OBS_SIZE):
                 assert lo[i] <= self.obs[i] <= hi[i], "\n///// obs[{}] value ({}) is outside bounds {} and {}" \
                                                         .format(i, self.obs[i], lo[i], hi[i])
 
         except AssertionError as e:
             print(e)
             print("///// Full obs vector content at: {}:".format(tag))
-            for j in range(SimpleHighwayRamp.OBS_SIZE):
+            for j in range(self.OBS_SIZE):
                 print("      {:2d}: {}".format(j, self.obs[j]))
 
 

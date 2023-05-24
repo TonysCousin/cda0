@@ -2069,7 +2069,7 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  that forces this when the solution starts to work well.
 
 5/22/23
-19:45 - 
+19:45 - 20:40 = 0:55
 
 	* Performing inference on trial 6 in lane 0, which is the only trial that had a positive rmean. 
 		* Ego started at 1 m/s, but it seems the neighbor vehicles did the same thing, and
@@ -2079,9 +2079,19 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 		* Eventually, ego went slightly faster than neighbors, but the rel_ps never changed
 		* Neighbor rel_speed seems wrong = always 0.10.
 
+5/23/23
+21:13 - 22:56, int 15 = 1:28
+
+* Code changes:
+	* Fixed a defect where a nan or 0 neighbor speed could have been used as a denominator and an
+	  arg to prng.normal().
+	* Added historical (prev time step) command feedback and reward penalty for each of them changing.
+
+* Run 3a029 with the above changes
+
+
 AI: investigate problems in above inference!
 
-AI: look for calls to prng.normal()
 AI: copy time logs to dashboard
 
 
