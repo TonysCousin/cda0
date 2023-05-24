@@ -876,17 +876,18 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Find the time of arrival of the target neighbor
         tgt_arrival_time = 0.0
+        ns = self.neighbor_speed if self.neighbor_speed > 0.0  else  SimpleHighwayRamp.ROAD_SPEED_LIMIT
         if relative_pos <= 1:
-            tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc - 2*headway) / self.neighbor_speed
+            tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc - 2*headway) / ns
         elif relative_pos == 2:
-            tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc - headway) / self.neighbor_speed
+            tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc - headway) / ns
         else:
-            tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc) / self.neighbor_speed
+            tgt_arrival_time = (L1_DIST_TO_MERGE - self.neighbor_start_loc) / ns
         #print("\n///// initialize_ramp_vehicle_speed: rel pos = {}, headway = {:.1f}, n start loc = {:.1f}, n spd = {:.1f}, tgt time = {:.1f}"
-        #      .format(relative_pos, headway, self.neighbor_start_loc, self.neighbor_speed, tgt_arrival_time))
+        #      .format(relative_pos, headway, self.neighbor_start_loc, ns, tgt_arrival_time))
 
         # Get a random offset from that arrival time and apply it
-        time_headway = headway / self.neighbor_speed
+        time_headway = headway / ns
         offset = self.prng.normal(scale = 0.1*time_headway)
         if relative_pos == 0: #in front of first neighbor
             offset -= 1.1 * time_headway
