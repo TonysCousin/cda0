@@ -1564,7 +1564,7 @@ class Roadway:
         if lane == 2:
             join_point = self.lanes[2].segments[0][2]
             if p < join_point:
-                x = join_point - (join_point - p)*self.COS_LANE2_ANGLE
+                x = max(join_point - (join_point - p)*self.COS_LANE2_ANGLE, self.lanes[2].start_x)
 
         return x
 

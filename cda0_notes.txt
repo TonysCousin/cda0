@@ -2090,7 +2090,7 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 		* neighbor_in_ego_zone flag is never set even though ego crashes into rear of n3.
 		* The zone driveable and reachable flags never update when ego changes lanes.
 
-* Run ? with following changes:
+* Run 1d440 with following changes:
 	* Removed the only call to prng.normal() (where reset() is defining the agent's relative_pos).
 	* Fixed several places where Vehicle.cur_speed was misspelled.
 	* Fixed step() where it forced new neighbor speed command to be the speed limit, rather than the
@@ -2099,6 +2099,9 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Fixed step() defect in erasing the obs zone info from previous step.
 	* Fixed defect in Graphics._get_vehicle_coords() illegally referencing lane 2 start location.
 	* Ran several tests with inference program and extra debugging to ensure that env behavior is proper.
+	* Results: first 200 iterations showed a lot of promise, with 3 trials achieving rmax > 6 after the
+	  randomized initial location was turned off, and one trial approached rmean = -1. However, there
+	  were several exceptions thrown due to starting location in lane 2 prior to the lane's starting point.
 
 
 
