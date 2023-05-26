@@ -546,15 +546,15 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         n_lane_id = 1
         self.vehicles[1].lane_id = n_lane_id
         self.vehicles[1].p = n_loc + 6.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n2
-        self.vehicles[1].speed = n_speed
+        self.vehicles[1].cur_speed = n_speed
         self.vehicles[1].lane_change_status = "none"
         self.vehicles[2].lane_id = n_lane_id
         self.vehicles[2].p = n_loc + 3.0*SimpleHighwayRamp.VEHICLE_LENGTH #in front of vehicle n3
-        self.vehicles[2].speed = n_speed
+        self.vehicles[2].cur_speed = n_speed
         self.vehicles[2].lane_change_status = "none"
         self.vehicles[3].lane_id = n_lane_id
         self.vehicles[3].p = n_loc + 0.0 #at end of the line of 3 neighbors
-        self.vehicles[3].speed = n_speed
+        self.vehicles[3].cur_speed = n_speed
         self.vehicles[3].lane_change_status = "none"
         if self.debug > 1:
             print("      in reset: vehicles = ")
@@ -586,7 +586,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_p)
         self.vehicles[0].lane_id = ego_lane_id
         self.vehicles[0].p = ego_p
-        self.vehicles[0].speed = ego_speed
+        self.vehicles[0].cur_speed = ego_speed
         self.vehicles[0].lane_change_status = "none"
 
         self.obs = np.zeros(self.OBS_SIZE)
@@ -653,7 +653,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             lane_id = v.lane_id
             if self.debug > 1:
                 print("      Advancing vehicle {} in lane_id = {}".format(i, lane_id))
-            new_speed_cmd = self.neighbor_speed #non-ego vehicles are constant speed
+            new_speed_cmd = v.cur_speed #non-ego vehicles are constant speed
             if i == 0: #this is the ego vehicle
                 new_speed_cmd = desired_speed
             new_speed, new_p = v.advance_vehicle_spd(new_speed_cmd)
@@ -767,6 +767,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.EGO_LANE_REM] = new_ego_rem
         self.obs[self.EGO_DES_LN_PREV] = self.obs[self.EGO_DES_LN]
         self.obs[self.EGO_DES_LN] = desired_lane
+        self._update_obs_zones()
         self._verify_obs_limits("step after updating obs vector")
 
         # Check that none of the vehicles has crashed into another, accounting for a lane change in progress
@@ -780,7 +781,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # If vehicle has been stopped for several time steps, then declare the episode done as a failure
         stopped_vehicle = False
-        if self.vehicles[0].speed < 0.5:
+        if self.vehicles[0].cur_speed < 0.5:
             self.stopped_count += 1
             if self.stopped_count > 3:
                 done = True
@@ -896,7 +897,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Get a random offset from that arrival time and apply it
         time_headway = headway / ns
-        offset = self.prng.normal(scale = 0.1*time_headway)
+        offset = 0.0 #self.prng.normal(scale = 0.1*time_headway)
         if relative_pos == 0: #in front of first neighbor
             offset -= 1.1 * time_headway
         elif relative_pos == 4: #behind last neighbor
@@ -1102,14 +1103,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Clear all zone info from previous time step
         for z in range(9):
-            self.obs[base + z + 0] = 0.0 #drivable
-            self.obs[base + z + 1] = 0.0 #reachable
-            self.obs[base + z + 2] = 0.0 #occupied
-            self.obs[base + z + 3] = 0.0 #p
-            self.obs[base + z + 4] = 0.0 #speed
+            self.obs[base + num_zone_fields*z + 0] = 0.0 #drivable
+            self.obs[base + num_zone_fields*z + 1] = 0.0 #reachable
+            self.obs[base + num_zone_fields*z + 2] = 0.0 #occupied
+            self.obs[base + num_zone_fields*z + 3] = 0.0 #p
+            self.obs[base + num_zone_fields*z + 4] = 0.0 #speed
         self.obs[self.NEIGHBOR_IN_EGO_ZONE] = 0.0
 
-        # Get the current roadway geometry
+       # Get the current roadway geometry
         ego_lane_id = self.vehicles[0].lane_id
         ego_p = self.vehicles[0].p
         ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_p)
@@ -1161,6 +1162,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # Find which zone column it is in (relative lane), if any (could be 2 lanes away) (ego is in column 1, lanes are 0-indexed, left-to-right)
             column = nv.lane_id - ego_lane_id + 1
+            if self.debug > 1:
+                print("///// update_obs_zones: considering neighbor {} in column {}".format(neighbor_idx, column))
 
             # Find which zone row it is in, if any (could be too far away)
             row = 0
@@ -1180,8 +1183,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # If the neighbor is too far away, no further consideration needed
             if column < 0  or  column > 2  or  row == 0:
                 if self.debug > 1:
-                    print("///// update_obs_zones: found neighbor {} too far away, with column {}, row {}, x = {:.1f}, dist_ahead_of_ego = {:.1f}"
-                          .format(neighbor_idx, column, row, nv.x, dist_ahead_of_ego))
+                    print("///// update_obs_zones: found neighbor {} too far away, with column {}, row {}, p = {:.1f}, dist_ahead_of_ego = {:.1f}"
+                          .format(neighbor_idx, column, row, nv.p, dist_ahead_of_ego))
                 continue
 
             # Neighbor is within our obs zone grid.
@@ -1211,6 +1214,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                         continue
 
                 offset = base + (zone - 1)*num_zone_fields
+                if self.debug > 1:
+                    print("///// update_obs_zones: neighbor offset = {} for zone {}".format(offset, zone))
 
                 # Since we've identified a neighbor vehicle in this zone, flag it as occupied
                 self.obs[offset + 2] = 1.0
@@ -1221,11 +1226,11 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 self.obs[offset + 3] = rel_p
 
                 # Set the neighbor's relative speed
-                self.obs[offset + 4] = (nv.speed - self.vehicles[0].speed) / SimpleHighwayRamp.ROAD_SPEED_LIMIT
+                self.obs[offset + 4] = (nv.cur_speed - self.vehicles[0].cur_speed) / SimpleHighwayRamp.ROAD_SPEED_LIMIT
 
                 if self.debug > 1:
                     print("///// update_obs_zones: neighbor {} has column = {}, row = {}, zone = {}, zone_rear = {:.1f}, rel_p = {:.2f}, ego speed = {:.1f}"
-                          .format(neighbor_idx, column, row, zone, zone_rear_p, rel_p, self.vehicles[0].speed))
+                          .format(neighbor_idx, column, row, zone, zone_rear_p, rel_p, self.vehicles[0].cur_speed))
 
         if self.debug > 1:
             print("///// update_obs_zones complete.")
@@ -1811,5 +1816,5 @@ class Vehicle:
              ):
         """Prints the attributes of this vehicle object."""
 
-        print("       [{}]: lane_id = {:2d}, dist = {:.2f}, status = {:5s}, speed = {:.2f}" \
-                .format(tag, self.lane_id, self.x, self.lane_change_status, self.cur_speed))
+        print("       [{}]: lane_id = {:2d}, p = {:.2f}, status = {:5s}, speed = {:.2f}" \
+                .format(tag, self.lane_id, self.p, self.lane_change_status, self.cur_speed))

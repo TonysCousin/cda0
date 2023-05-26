@@ -1980,9 +1980,6 @@ program as a system test.
 	  to experiment with this.
 
 5/11/23
-11:52 - 12:44 = 0:52
-21:17 - 21:47 = 0:30
-22:00 - 22:20 = 0:20
 
 	* Created new branch, scaled-space, from new-obs-actions to play with scaling the obs space.
 	  Found that I can't do much with the derived class because it needs to overwrite the parent's member
@@ -1993,7 +1990,6 @@ program as a system test.
 	* Did not perform very well. rmean topped out ~4 for some trials, then dropped a bit.
 
 5/12/23
-11:32 - 12:54 = 1:22
 
 	* Inference showed lane 0 works great, lane 1 starts often crashes into neighbors at the beginning.
 	  I believe this is restart() putting it too close to the back of the platoon and it doesn't have a
@@ -2009,15 +2005,10 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	- get_vehicle_dist_downtrack() should be removed (used by inference)
 
 5/16/23
-03:09 - 04:02 = 0:53
 
 5/17/23
-11:27 - 13:40 = 2:13
 
 5/18/23
-09:40 - 10:00 = 0:20
-11:30 - 14:12 = 2:42
-15:25 - 17:06 = 1:41
 
 	* Completed conversion of env code to use the parametric coordinate frame (schematic concept) and
 	  support transforms between that and the map frame to ensure nothing gets confused between the two.
@@ -2069,7 +2060,6 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  that forces this when the solution starts to work well.
 
 5/22/23
-19:45 - 20:40 = 0:55
 
 	* Performing inference on trial 6 in lane 0, which is the only trial that had a positive rmean. 
 		* Ego started at 1 m/s, but it seems the neighbor vehicles did the same thing, and
@@ -2080,7 +2070,6 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 		* Neighbor rel_speed seems wrong = always 0.10.
 
 5/23/23
-21:13 - 22:56, int 15 = 1:28
 
 * Code changes:
 	* Fixed a defect where a nan or 0 neighbor speed could have been used as a denominator and an
@@ -2089,10 +2078,28 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 * Run 3a029 with the above changes
 
+5/25/23
 
-AI: investigate problems in above inference!
+	* Still had 6 trials end with errors, all the same nan problem in Normal() as before, being called
+	  by ppo_torch_policy. Five of these had rmax ~10, and no other trials showed such success, all
+	  others having rmax < 6, and mostly ~ -10.
+	* Trial 9 went the longest of the ones with a high rmax (> 500k steps), but its ending rmean was ~-10.
+	  Performed some inference on it for debug purposes.
+		* Neighbor rel_speed is incorrect and not changing as ego accelerates.
+		* Neighbor rel_p never changes as ego accelerates.
+		* neighbor_in_ego_zone flag is never set even though ego crashes into rear of n3.
+		* The zone driveable and reachable flags never update when ego changes lanes.
 
-AI: copy time logs to dashboard
+* Run ? with following changes:
+	* Removed the only call to prng.normal() (where reset() is defining the agent's relative_pos).
+	* Fixed several places where Vehicle.cur_speed was misspelled.
+	* Fixed step() where it forced new neighbor speed command to be the speed limit, rather than the
+	  current speed.
+	* Fixed step() missing a call to _update_obs_zones().
+	* Fixed step() defect in erasing the obs zone info from previous step.
+	* Fixed defect in Graphics._get_vehicle_coords() illegally referencing lane 2 start location.
+	* Ran several tests with inference program and extra debugging to ensure that env behavior is proper.
+
 
 
 

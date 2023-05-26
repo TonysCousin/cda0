@@ -52,8 +52,8 @@ def main(argv):
                     "debug":                0,
                     "difficulty_level":     learning_level,
                     "init_ego_lane":        start_lane,
-                    "neighbor_speed":       29.1,
-                    "neighbor_start_loc":   0.0, #dist downtrack from beginning of lane 1 for n3, m
+                    #"neighbor_speed":       29.1,
+                    #"neighbor_start_loc":   0.0, #dist downtrack from beginning of lane 1 for n3, m
                     "merge_relative_pos":   relative_pos, #neighbor vehicle that we want ego to be beside when starting in lane 2
                 }
     env = SimpleHighwayRampWrapper(env_config)
@@ -105,7 +105,7 @@ def main(argv):
     action = [0, 0]
     raw_obs, _ = env.unscaled_reset()
     vehicles = env.get_vehicle_data()
-    print("///// Neighbor speeds:  {:.1f}, {:.1f}, {:.1f}".format(vehicles[1].speed, vehicles[2].speed, vehicles[3].speed))
+    print("///// Neighbor speeds:  {:.1f}, {:.1f}, {:.1f}".format(vehicles[1].cur_speed, vehicles[2].cur_speed, vehicles[3].cur_speed))
     graphics.update(action, raw_obs, vehicles)
     obs = env.scale_obs(raw_obs)
     step = 0
@@ -371,7 +371,7 @@ class Graphics:
         if lane < 2:
             y = road.lanes[lane].segments[0][1]
         else:
-            ddt = x - self.roadway.lanes[2]
+            ddt = x - road.lanes[2].start_x
             if ddt < road.lanes[2].segments[0][4]: #vehicle is in seg 0
                 seg0x0 = road.lanes[2].segments[0][0]
                 seg0y0 = road.lanes[2].segments[0][1]
