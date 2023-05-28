@@ -485,22 +485,24 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 ego_speed = self.prng.random() * 10.0 + 20.0 #value in [10, 30] m/s
 
             elif self.difficulty_level == 4:
+                # Code block inspired from above to support training level 4 from scratch - agent needs to learn how to find the finish line,
+                # so allow it to start anywhere along the route, sometimes very close to the finish line, then gradually force it uptrack.
+                INITIAL_STEPS   = 60000 #num steps to wait before starting to shrink the max distance
+                FINAL_STEPS     = 65000 #num steps where max distance reduction ends
+                physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
+                ego_p = self.prng.random() * 500.0 + ego_lane_start
+                if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
+                    max_distance = physical_limit
+                    if self.total_steps > INITIAL_STEPS:
+                        max_distance = max((self.total_steps - INITIAL_STEPS) * (10.0 - physical_limit)/(FINAL_STEPS - INITIAL_STEPS) + physical_limit, 10.0)
+                    ego_p = self.prng.random() * max_distance + ego_lane_start
+
                 # We want to sync the agent in lane 2 to force it to avoid a collision by positioning it right next to the neighbors
-                #physical_limit = 9898.9 #needed for print statement below, only
                 if ego_lane_id == 2:
-                    ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
                     loc = int(self.prng.random()*5.0)
                     ego_speed = self.initialize_ramp_vehicle_speed(loc, ego_p)
                 else:
-                    ego_p = self.prng.random() * 500.0 + ego_lane_start
                     ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 5.0) + 5.0 #not practical to train at really low speeds
-
-                # Code block inspired from above to support training level 4 from scratch - agent needs to learn how to find the finish line,
-                # so allow it to start anywhere along the route, sometimes very close to the finish line.
-                INITIAL_STEPS = 55000 #num steps to wait before starting to shrink the max distance; ~120 iterations
-                if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun()  and  self.total_steps < INITIAL_STEPS:
-                    physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
-                    ego_p = self.prng.random() * physical_limit + ego_lane_start
 
                 #if self.total_steps % 10 == 0:
                 #    print("///// reset env {}: lane = {}, ego_p = {:6.1f}, speed = {:4.1f}, total_steps = {:6}, phys limit = {:6.1f}, init count = {}, perturb? {}"

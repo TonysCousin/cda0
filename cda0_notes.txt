@@ -2103,6 +2103,38 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  randomized initial location was turned off, and one trial approached rmean = -1. However, there
 	  were several exceptions thrown due to starting location in lane 2 prior to the lane's starting point.
 
+* Run a7e09 included fix for Roadway to avoid the above mentioned assertion exception.
+	* After ~400 iterations, 7 of the 10 trials had errored out, wiping out all the promising solutions.
+
+3/26/23
+
+* Run bee8a redo of previous run.
+	* There were no error trials, but every trial dove to rmax = -10.
+
+* Run 514fc redo of previous run.
+	* Similar problems with the promising performers throwing errors in normal distribution calcs.
+
+* Run cfe6a with several debug stmts in Ray code to try diagnosing the error problems.
+	* Also improved the reset() method of defining ego_p during the warmup phase, so it gradually moves
+	  the max_distance for starting location back toward beginning of route, instead of the suddedn
+	  restriction.
+	* It seems the debug stmts were generating too much output on the log file. The laptop locked up a
+	  couple times, and the log was way too big to open for editing (in vi). So I took most of them out
+	  and only left some new stuff for when an exception occurred in Normal.
+	* A couple runs showed that even the successful trials were gradually degrading (rmax) as start
+	  location got moved farther uptrack, and it never learned to recover. So maybe it needs more time
+	  using the full track before restricting the start location.
+
+* Run cc948 with fixes to ppo_torch_policy and adjusted my env randomized start distance initializations;
+  it is now using the full length for 50k steps, then fairly quickly restricts start dist to near the
+  beginning after 90k steps.
+	* In first 200 iterations, all trials crapped out, ending with rmax = -10.
+	* When trial 0 died it was due to the nan exception in Normal, but revealed that it is due to the
+	  logits tensor coming out of the model in ppo_torch_policy. I need to look into how the model code
+	  works to understand what might be causing that.  The entire tensor was nan values.
+
+* Run 6b67a adjusted the initialization constants to INITIAL_STEPS = 60k, FINAL_STEPS = 65k to make the
+  dropoff more dramatic like it was a few versions ago.
 
 
 
