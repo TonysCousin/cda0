@@ -2135,8 +2135,69 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 * Run 6b67a adjusted the initialization constants to INITIAL_STEPS = 60k, FINAL_STEPS = 65k to make the
   dropoff more dramatic like it was a few versions ago.
+	* Still no workie.
 
+* Researched possible problems on Ray Discuss. 
+	* Found that I had reported this same problem back in Sep 2022! with a simple mountain car prgm.
+	  Solution there was to reduce LR. I dialed back the max range of the LR here, but it looks like
+	  it's already in a good range.
+	* Someone else ran into a similar problem (not sure it's the same). The answer was to look for
+	  spikes (in Tensorboard) in total_loss, cur_kl_coeff, kl, and entropy. I did that and found
+	  nothing jumping out on the one trial that failed in this run.
+	* The above discussion also advised to try using grad_clip between 10 & 40, so I added that.
 
+5/29/23
+
+* Run 76b7c incorporates the 2 changes described under the previous run.
+
+5/30/23
+
+	* All trials dropped to rmax = -10 as soon as random initial location was removed, and never recovered.
+
+* Run 518f4 trains just to level 0 to use as a baseline for further learning.
+	* Trials 0 and 9 completed successfully (rmin = +10) in ~100k steps. Saving them for future use.
+
+* Run 1c07e training level 3 using the above result (trial 9) as the starting baseline. This still includes
+  initial location gradually getting reduced over 1.6M steps.
+
+5/31/23
+
+	* Three or four trials showed promise in the first 200k steps, with rmax ~10 and rmean between 0 and 4,
+	  then all of them dropped down to -1 or lower after the first perturb cycle, even though none of them
+	  got perturbed. Nothing ever recovered. I suspect the initial location randomization played a part here.
+
+* Run 0c256 training level 3 using the same baseline (518f4, trial09). Also turned off randomized_start_dist
+  and fixed code so that in levels 0-3 it initializes based on ego_lane_start, not blindly setting it to 0.
+
+6/1/23
+
+	* All trials ended with rmax ~10, rmean in [-4, -1] and rmin = -10, so not very good.
+
+* Run abe44 training level 1 using the 518f4 baseline and randomized_start_dist = False.
+	* Several trials completed successfully after ~100k steps.
+	* 4 trials also ended with the nan error described above.
+
+* Run 8cdf5 training level 4 from the abe44 (level 1) baseline, with randomized_start_dist = False.
+
+6/2/23
+
+	* Most trials ended with rmean in [-2, 0]. But individual iteration results show that an episode either
+	  succeeds very well or dies immediately due to running off road.  Inference runs show that starting in
+	  lanes 0 or 1 gives success, while starting in lane 2 it always does an illegal lane change immediately.
+	  Seems like more training is needed in lane 2.
+
+* Run 17455 training level 4 from the abe44 level 1 baseline. 
+	* Changed _select_init_lane() for level 4 to choose lane 2 80% of the time (was 50%).
+	* 7 of the 10 trials ended with errors - the same nan errors.
+	* All of the completed trials had rmean ~ -6. Inference on one of them showed that starting in lanes 0
+	  and 1 works fine, but every start in lane 2 had an immediate illegal lane change.
+
+* Run 18baa training level 3 from scratch to see if it can better learn to drive lane 2. Randomized start is
+  still off, and lane assignments are 60% lane 2, 30% lane 1, 10% lane 0.
+	* Turned on verify_obs to ensure that there are no "nan"s being propagated out of the environment.
+	* Fixed a defect in PerturbController that forced it to read the checkpoint file possibly used in the
+	  previous run (not clear, but probably the main instance used a different checkpoint than the env or
+	  callbacks instances). It now works whether previous info files are present or not.
 
 
 Near-term considerations:

@@ -1,7 +1,7 @@
 import time
 import numpy as np
 
-PBTC_STORAGE_DIR = "/home/starkj/tmp"
+PBTC_STORAGE_DIR = "/tmp"
 
 class PerturbationController:
     """Emulates a singleton pattern by storing and retrieving the same info for all clients, but accommodates clients in
@@ -86,47 +86,13 @@ class PerturbationController:
 
             # Indicate if the local info is valid
             self._info_valid = success
+            print("///// PerturbationController master instance created.")
 
         else: # Else (this instance is owned by an environment object in a worker thread)
 
-            # Attempt to open the storage files and read their contents, updating local data accordingly
-            success = False
-            num_attempts = 0
-            prng = np.random.default_rng()
-            while num_attempts < 10:
-                s = ""
-                nt = -1
-                try:
-                    with open(self._filename1, "r") as f1:
-                        s = f1.readline()
-                        nt = int(f1.readline())
-                        if len(s) > 0: #should at least contain a \n
-                            self._checkpoint_path = s.split("\n")[0]
-                            if len(self._checkpoint_path) == 0:
-                                self._checkpoint_path = None
-                            if nt >= 0:
-                                self._num_trials = nt
-                                success = True
-                                break
-                except:
-                    print("///// PerturbationController.__init__ read error on {}".format(self._filename1))
-
-                time.sleep(prng.random()*0.020 + 0.001) #wait up to 20 ms before attempting again
-                num_attempts += 1
-
-            # For the algo counter, the file should already exist, so we can safely mark info as valid, then
-            # just increment the counter normally.
-            if success:
-                self._info_valid = True
-                success = False
-                try:
-                    self.increment_algo_init()
-                    success = True
-                except Exception as e:
-                    print("///// PerturbationController.__init__ exception trapped: ", e)
-
-        if not success:
-            raise IOError("///// PerturbationController.__init__ was unable to initialize data files.")
+            # Attempt to get the persistent data from the main instance. If not available yet, then not fatal.
+            self._have_valid_data()
+            #print("///// PerturbationController secondary instance created.")
 
 
     def get_checkpoint_path(self) -> str:
@@ -134,6 +100,7 @@ class PerturbationController:
             Throws AssertionError if checkpoint has not been determined.
         """
 
+        self._have_valid_data()
         assert self._info_valid, "///// PerturbationController.get_checkpoint_path: controller is not properly initialized."
         return self._checkpoint_path
 
@@ -143,6 +110,7 @@ class PerturbationController:
             Throws AssertionError if data has not been initialized correctly.
         """
 
+        self._have_valid_data()
         assert self._info_valid, "///// PerturbationController.get_num_trials: controller is not properly initialized."
         return self._num_trials
 
@@ -185,6 +153,7 @@ class PerturbationController:
             Throws AssertionError if the counter hasn't been properly initialized.
         """
 
+        self._have_valid_data()
         assert self._info_valid, "///// PerturbationController.get_algo_init_count: controller is not properly initialized."
 
         # Read the latest value from the storage file
@@ -225,3 +194,49 @@ class PerturbationController:
         #   To be safe, we need to allow for these extra copies when defining the threshold; allow up to 14 extras.
         max_instances = 16*self._num_trials + 14
         return self.get_algo_init_count() > max_instances
+
+
+    def _have_valid_data(self) -> bool:
+        """Looks for data files containing the internal storage data, and attempts to read them. Marks the
+            member variable _info_valid appropriately and returns its value.
+        """
+
+        # If data has already been validated, then we're done
+        if self._info_valid:
+            return True
+
+        # Attempt to open the storage files and read their contents, updating local data accordingly
+        success = False
+        num_attempts = 0
+        prng = np.random.default_rng()
+        while num_attempts < 20:
+            s = ""
+            nt = -1
+            try:
+                with open(self._filename1, "r") as f1:
+                    s = f1.readline()
+                    nt = int(f1.readline())
+                    if len(s) > 0: #should at least contain a \n
+                        self._checkpoint_path = s.split("\n")[0]
+                        if len(self._checkpoint_path) == 0:
+                            self._checkpoint_path = None
+                        if nt >= 0:
+                            self._num_trials = nt
+                            success = True
+                            break
+            except:
+                pass
+                #print("///// PerturbationController._have_valid_data read error on {}".format(self._filename1))
+
+            time.sleep(prng.random()*0.020 + 0.001) #wait up to 20 ms before attempting again
+            num_attempts += 1
+
+        # For the algo counter, the file should already exist, so increment the counter normally.
+        if success:
+            try:
+                self._info_valid = True #set this first, as increment_algo_init() checks it!
+                self.increment_algo_init()
+            except Exception as e:
+                print("///// PerturbationController._have_valid_data exception trapped: ", e)
+
+        return self._info_valid

@@ -26,51 +26,11 @@ from perturbation_control import PerturbationController
 # Identify a baseline checkpoint from which to continue training
 _checkpoint_path = None
 
-# Didn't quite finish training level 0
-#_checkpoint_path = "/home/starkj/projects/cda0/training/SAC/p256-128-v256-128/L0-32efc/trial10/checkpoint_001001"
+# Completed level 0 on 5/30/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L0-518f4/trial09/checkpoint_000086"
 
-# Completed level 0 solidly with PPO and discrete action space
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-b948a/trial04/checkpoint_000490"
-
-# Completed level 2 solidly with PPO and discrete action space on 4/3/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-d9e0d/trial06/checkpoint_002000"
-
-# Completed level 3 solidly with PPO and discrete actions pace on 4/4/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-0ed7f/trial06/checkpoint_000622"
-
-# Completed level 4 moderately challenged with PPO and discrete action space on 4/4/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-2ce8a/trial03/checkpoint_001190"
-
-# Completed level 4 challenging course with PPO and discrete action space on 4/5/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-65cf4/trial00/checkpoint_002000"
-
-# Completed level 0 with PPO and discrete actions in [256, 128] NN using symmetrical speed penalty on 4/10/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-5f786/trial01/checkpoint_000412"
-
-# Completed level 2 with PPO and discrete actions in [256, 128] NN using symmetrical speed penalty on 4/10/23
-
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-c23d4/trial08/checkpoint_000800"
-
-# Completed level 3 with PPO and discrete actions in [256, 128] NN using symmetrical speed penalty on 4/10/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-9e59e/trial07/checkpoint_001000"
-
-# Comopleted level 4 with mediocre success; PPO, discrete actions, [256, 128] NN, symmetrical speed penalty, 4/11/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-75472/trial05/checkpoint_001000"
-
-
-########## Items below are for the new observation structure, built on 4/13/23 ##########
-
-# Completed level 0, NN [256, 128], PPO, discrete actions on 4/14/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-31b3b/trial09/checkpoint_000477"
-
-# Completed level 2 on 4/14/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-6428b/trial02/checkpoint_000800"
-
-# Completed level 3, NN [256, 128], PPO, discrete actions on 4/20/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-6ad8f/trial02/checkpoint_001205"
-
-# Completed level 4 with decent success, NN [256, 128], PPO, discrete actions on 4/22/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-c4c9f/trial00/checkpoint_001350"
+# Completed level 1 on 6/1/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L1-abe44/trial03/checkpoint_000059"
 
 
 def main(argv):
@@ -96,8 +56,10 @@ def main(argv):
     success_threshold   = [9.5,         9.5,        9.5,        9.5,        9.5]
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
-    burn_in_period      = 200 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 800
+    chkpt_int           = 10    #num iters between storing new checkpoints
+    burn_in_period      = 200   #num iterations before we consider stopping or promoting to next level
+    perturb_int         = 200   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
+    max_iterations      = 500
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -117,9 +79,9 @@ def main(argv):
     env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 0
-    env_config["verify_obs"]                    = False
+    env_config["verify_obs"]                    = True
     env_config["training"]                      = True
-    env_config["randomize_start_dist"]          = True
+    env_config["randomize_start_dist"]          = False
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
     env_config["neighbor_start_loc"]            = 0.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
@@ -185,13 +147,14 @@ def main(argv):
     # NOTE: all items below lr_schedule are PPO-specific
     cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
                     train_batch_size            = 1024, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    lr                          = tune.loguniform(1e-6, 3e-4),
+                    lr                          = tune.loguniform(1e-6, 2e-4),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
                     sgd_minibatch_size          = 128, #must be <= train_batch_size (and divide into it)
                     entropy_coeff               = tune.uniform(0.0005, 0.01),
                     kl_coeff                    = tune.uniform(0.3, 0.8),
                     #clip_actions                = True,
                     clip_param                  = tune.uniform(0.05, 0.4),
+                    grad_clip                   = tune.uniform(10, 40),
     )
 
     # Add dict for model structure
@@ -232,9 +195,6 @@ def main(argv):
 
     #print("\n///// {} training params are:\n".format(algo))
     #print(pretty_print(cfg.to_dict()))
-
-    chkpt_int                                   = 10                    #num iters between storing new checkpoints
-    perturb_int                                 = burn_in_period        #num iters between policy perturbations (must be a multiple of chkpt period)
 
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation

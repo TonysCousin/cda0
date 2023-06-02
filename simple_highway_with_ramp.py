@@ -472,7 +472,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If we are at difficulty level 0-3, then choose widely randomized initial conditions
             if self.difficulty_level < 4:
-                ego_p = 0.0
+                ego_p = self.prng.random() * 500.0 + ego_lane_start
                 if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
                     physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                     initial_steps = 60000 #num steps to wait before starting to shrink the max distance
@@ -487,8 +487,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             elif self.difficulty_level == 4:
                 # Code block inspired from above to support training level 4 from scratch - agent needs to learn how to find the finish line,
                 # so allow it to start anywhere along the route, sometimes very close to the finish line, then gradually force it uptrack.
-                INITIAL_STEPS   = 60000 #num steps to wait before starting to shrink the max distance
-                FINAL_STEPS     = 65000 #num steps where max distance reduction ends
+                INITIAL_STEPS   = 0 #num steps to wait before starting to shrink the max distance
+                FINAL_STEPS     = 1 #num steps where max distance reduction ends
                 physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                 ego_p = self.prng.random() * 500.0 + ego_lane_start
                 if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
@@ -1084,7 +1084,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 return 0
 
         elif self.difficulty_level < 5:
-            if self.prng.random() < 0.5:
+            if self.prng.random() < 0.8:
                 return 2
             else:
                 return int(self.prng.random()*2) #select 0 or 1
