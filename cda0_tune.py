@@ -59,7 +59,7 @@ def main(argv):
     chkpt_int           = 10    #num iters between storing new checkpoints
     burn_in_period      = 200   #num iterations before we consider stopping or promoting to next level
     perturb_int         = 200   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
-    max_iterations      = 500
+    max_iterations      = 1000
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -81,25 +81,22 @@ def main(argv):
     env_config["debug"]                         = 0
     env_config["verify_obs"]                    = True
     env_config["training"]                      = True
-    env_config["randomize_start_dist"]          = False
+    env_config["randomize_start_dist"]          = True
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
     env_config["neighbor_start_loc"]            = 0.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
     cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config, env_task_fn = curriculum_fn)
 
     # Add exploration noise params
-    """
     explore_config = cfg_dict["exploration_config"]
     #print("///// Explore config:\n", pretty_print(explore_config))
-    explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
     explore_config["stddev"]                    = tune.uniform(0.1, 0.5) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
     explore_config["scale_timesteps"]           = 500000  #tune.choice([100000, 400000]) #was 900k
-    """
-    cfg.exploration(explore = True)
+    cfg.exploration(explore = True, exploration_config = explore_config)
     #cfg.exploration(explore = False)
 
     # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
@@ -203,7 +200,7 @@ def main(argv):
                     perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
                     burn_in_period              = burn_in_period,       #num initial iterations before any perturbations occur
                     quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
-                    resample_probability        = 0.5,                  #resampling and mutation probability at each decision point
+                    resample_probability        = 0.5,                  #resampling vs mutation probability at each decision point
                     synch                       = False,                #True:  all trials must finish before each perturbation decision is made
                                                                         # if any trial errors then all trials hang!
                                                                         #False:  each trial finishes & decides based on available info at that time,
@@ -213,9 +210,9 @@ def main(argv):
                     #    "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
                     #    "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
                     #    "optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
-                        "lr"                                    :   tune.loguniform(1e-6, 1e-3),
+                        "lr"                                    :   tune.loguniform(1e-6, 2e-4),
                         "entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
-                        "kl_coeff"                              :   tune.uniform(0.3, 0.8),
+                    #    "kl_coeff"                              :   tune.uniform(0.3, 0.8),
                         "clip_param"                            :   tune.uniform(0.05, 0.4),
                     },
     )

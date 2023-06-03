@@ -479,10 +479,10 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     if self.total_steps <= initial_steps:
                         max_distance = physical_limit
                     else:
-                        max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(1.6e6 - initial_steps) + physical_limit,
+                        max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(1.0e6 - initial_steps) + physical_limit,
                                         10.0) #decreases over time steps
                     ego_p = self.prng.random() * max_distance + ego_lane_start
-                ego_speed = self.prng.random() * 10.0 + 20.0 #value in [10, 30] m/s
+                ego_speed = self.prng.random() * 5.0 + 30.0 #value in [5, 35] m/s
 
             elif self.difficulty_level == 4:
                 # Code block inspired from above to support training level 4 from scratch - agent needs to learn how to find the finish line,
@@ -1322,6 +1322,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             elif off_road:
                 reward = -10.0
+                # Assign a different value if agent is in lane 2 so we can see in the logs which episodes are in this lane
+                if self.vehicles[0].lane_id == 2:
+                    reward = -12.0
                 explanation = "Ran off road. "
 
             # Else if the vehicle just stopped in the middle of the road then

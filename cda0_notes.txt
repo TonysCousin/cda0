@@ -2198,6 +2198,52 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Fixed a defect in PerturbController that forced it to read the checkpoint file possibly used in the
 	  previous run (not clear, but probably the main instance used a different checkpoint than the env or
 	  callbacks instances). It now works whether previous info files are present or not.
+	* All trials quickly reached rmean = rmax = -10, having never found the finish line.
+
+* Run bad2c training level 3 from scratch, this time with randomized start location turned on.
+	* All trials converged to rmean in [-7, -5], representing actual episodes, much like above, with lanes
+	  0 and 1 showing good trajectories (although at full speed always), and lane 2 results in immediate
+	  lane change cmd & dies.
+	* I noticed that exploration was turned on, but none of the Gaussian params were included, so not sure
+	  how much exploration is actually going on.
+
+6/3/23
+
+* Run 23c74 training level 3 from scratch, with the old Gaussian noise params in use.
+	* All trials performed as before, with rmean ending in the [-4, -1] range after 500k steps, but
+	  rmin was usually -20. Checking a few sample results, rmin was usually -10, with an occasional -20,
+	  indicating it was probably crashing into the stopped neighbors at startup. Good performers scored
+	  +5 or better.
+	* Every trial errored out eventually, some took > 1M steps to do so. It appears all were the nan
+	  problems. For a couple of them, I note that the logged "results" section included learner_stats
+	  with cur_kl_coeff extremely small (order of 1e-217 or 1e-234) just before the nans showed up.
+	* One trial actually started to solve the puzzle, it appears, with rmin hitting -5 just before it
+	  died. It's prior cur_kl_coeff was 1e-34.
+	* Searching the log, I see that values of cur_kl_coeff start the run in O(1) to O(0.001) and gradually
+	  drop so that by the end of the run all of them are something like O(1e-200). This, despite the
+	  tuning program's limiting kl_coeff to [0.3, 0.8].
+
+* Investigated use of kl_coeff in the RLlib code:
+	* cur_kl_coeff is only used in one file, ppo_torch_policy.py. In there...
+	* In the loss() method it attempts to handle bad values by calling warn_if_infinite_kl_divergence(),
+	  which is from rllib.utils.torch_utils. However, it is testing the loss() variable mean_kl_loss
+	  for values near infinity, which is a different problem.
+	* The term "kl_loss" doesn't appear in the log anywhere. Further down in the loss() method it is
+	  multiplied by kl_coeff and added to the total loss. Log does show "total_loss", which is pretty
+	  steady over the course of the run, starting in O(1) to O(10) and ending in O(0.1).
+	* This class doesn't assing the value to its self.kl_coeff, which indicates that it is probably a
+	  derived member. The class has parents
+		TorchPolicyV2
+		ValueNetworkMixin
+		LearningRateSchedule
+		EntropyCoeffSchedule
+		KLCoeffMixin
+
+* Run 40b02 training level 3 from scratch
+	* Turned off perturbation of kl_coeff, although it is still an HP subject to tuning (static value).
+	  I am hoping this reduces the occurrences of the nan problem.
+	* Modified rewards so that going off road in lane 2 results in score of -12, while the other lanes
+	  continue to score -10. This will allow identifying those lane 2 cases in the logs.
 
 
 Near-term considerations:
