@@ -2244,6 +2244,28 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  I am hoping this reduces the occurrences of the nan problem.
 	* Modified rewards so that going off road in lane 2 results in score of -12, while the other lanes
 	  continue to score -10. This will allow identifying those lane 2 cases in the logs.
+	* Every trial errored out. Most lasted to at least 600k steps, and some went to 900k. All stabilized
+	  with rmean in the -5 to -2 range, with rmin ~ -20.
+	* I confirmed through visual inspection that reset() is not placing the agent in an illegal
+	  downtrack location when starting on lane 2; it is limited to somewhere on that physical lane.
+	  However, this presents a challenge. When learning from scratch, it has a big leap even if starting
+	  from the end of lane 2, to change lanes then drive the entire rest of lane 1 without error before
+	  getting the big reward.
+
+* Run f2297 training level 3 from the level 1 baseline (abe44), since it seems the agent will never learn
+  to reach the finish line if it starts from scratch in lane 2 because it requires too many steps.
+	* I also changed reset() to force this run to ONLY start the agent in lane 2 for every episode,
+	  just to see if it can learn that lane alone. Given its baseline, it should know how to drive the
+	  remainder of lane 1 after changing lanes there, so it should only have to learn the lane change.
+	* All rewards dropped to -12 after the first perturbation, where the randomized initial location
+	  ended.
+
+* Run ed762 training level 3 from level 1 baseline (abe44)
+	* Modified the reward function to add a keep-alive component for every timestep, and scaled back
+	  the penalties possible to be less than that keep-alive value except in aggregious cases. This
+	  should motivate level 3 to progress downtrack on lane 2 instead of using its ingrained idea of
+	  always desiring lane 0, which previously had forced the least-cost episode (-10 in first time
+	  step vs -10 minus a penalty for doing something else wrong).
 
 
 Near-term considerations:

@@ -30,7 +30,7 @@ _checkpoint_path = None
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L0-518f4/trial09/checkpoint_000086"
 
 # Completed level 1 on 6/1/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L1-abe44/trial03/checkpoint_000059"
+_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L1-abe44/trial03/checkpoint_000059"
 
 
 def main(argv):

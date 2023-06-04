@@ -1075,6 +1075,10 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Levels 3 & 4 need to emphasizes lots of experience in lane 2
         elif self.difficulty_level == 3:
+            return 2 #TODO experimental to force learning to drive lane 2
+
+
+
             draw = self.prng.random()
             if draw < 0.6:
                 return 2
@@ -1345,7 +1349,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
                 else:
                     if self.reward_for_completion:
-                        reward = min(max(10.0 - 0.05882*(self.steps_since_reset - 130), 0.0), 10.0)
+                        reward = min(max(10.0 - 0.25*(self.steps_since_reset - 130), 0.0), 10.0)
                         explanation = "Successful episode! {} steps".format(self.steps_since_reset)
                     else:
                         explanation = "Completed episode, but no bonus due to rule violation."
@@ -1353,25 +1357,28 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Else, episode still underway
         else:
 
+            # Reward for staying alive
+            reward += 0.05
+
+            # Small penalty for widely varying lane commands
+            cmd_diff = abs(self.obs[self.EGO_DES_LN] - self.obs[self.EGO_DES_LN_PREV])
+            penalty = 0.01 * cmd_diff * cmd_diff
+            reward -= penalty
+            if penalty > 0.0001:
+                explanation += "Ln cmd pen {:.4f}. ".format(penalty)
+
+            # Small penalty for widely varying speed commands
             if self.difficulty_level > 0:
-                # Small penalty for widely varying speed commands
                 cmd_diff = abs(self.obs[self.EGO_DES_SPEED] - self.obs[self.EGO_DES_SPEED_PREV]) / SimpleHighwayRamp.MAX_SPEED
-                penalty = 0.2 * cmd_diff * cmd_diff
+                penalty = 0.1 * cmd_diff * cmd_diff
                 reward -= penalty
                 if penalty > 0.0001:
                     explanation += "Spd cmd pen {:.4f}. ".format(penalty)
 
-                # Small penalty for widely varying lane commands
-                cmd_diff = abs(self.obs[self.EGO_DES_LN] - self.obs[self.EGO_DES_LN_PREV])
-                penalty = 0.01 * cmd_diff * cmd_diff
-                reward -= penalty
-                if penalty > 0.0001:
-                    explanation += "Ln cmd pen {:.4f}. ".format(penalty)
-
             # Penalty for deviating from roadway speed limit
-            speed_mult = 0.2
+            speed_mult = 0.05
             if self.difficulty_level == 1  or  self.difficulty_level == 2:
-                speed_mult = 0.4
+                speed_mult = 0.1
 
             norm_speed = self.obs[self.EGO_SPEED] / SimpleHighwayRamp.ROAD_SPEED_LIMIT #1.0 = speed limit
             diff = abs(norm_speed - 1.0)
@@ -1383,7 +1390,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
-                penalty = 0.1 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
+                penalty = 0.02 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
                 reward -= penalty
                 explanation += "Ln chg pen {:.4f}. ".format(penalty)
 

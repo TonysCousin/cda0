@@ -87,7 +87,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
 
         scaled = [None]*self.OBS_SIZE
 
-        scaled[self.EGO_LANE_ID]        = obs[self.EGO_LANE_ID] - 1.0 #maps {0, 1, 2} to {-1, 0, 1}
+        scaled[self.EGO_LANE_ID]        = obs[self.EGO_LANE_ID] - 1.0                                           #maps {0, 1, 2} to {-1, 0, 1}
         scaled[self.EGO_P]              = obs[self.EGO_P]               / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
         scaled[self.EGO_LANE_REM]       = min(obs[self.EGO_LANE_REM]    / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
         scaled[self.EGO_SPEED]          = obs[self.EGO_SPEED]           / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
@@ -104,7 +104,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         zone_data_size = self.Z2_DRIVEABLE - self.Z1_DRIVEABLE
         for zone in range(9):
             offset = base + zone*zone_data_size
-            for i in range(5):
+            for i in range(zone_data_size):
                 scaled[offset + i] = obs[offset + i]
 
         # Return the obs as an ndarray
