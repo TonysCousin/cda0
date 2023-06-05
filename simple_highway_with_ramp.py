@@ -479,7 +479,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     if self.total_steps <= initial_steps:
                         max_distance = physical_limit
                     else:
-                        max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(1.0e6 - initial_steps) + physical_limit,
+                        max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(5e5 - initial_steps) + physical_limit,
                                         10.0) #decreases over time steps
                     ego_p = self.prng.random() * max_distance + ego_lane_start
                 ego_speed = self.prng.random() * 5.0 + 30.0 #value in [5, 35] m/s
@@ -1335,7 +1335,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             elif stopped:
 
                 # Subtract a penalty for no movement (needs to be as severe as off-road)
-                reward = -10.0
+                reward = -12.0
                 explanation = "Vehicle stopped. "
 
             # Else (episode ended successfully)
@@ -1358,7 +1358,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         else:
 
             # Reward for staying alive
-            reward += 0.05
+            reward += 0.06
 
             # Small penalty for widely varying lane commands
             cmd_diff = abs(self.obs[self.EGO_DES_LN] - self.obs[self.EGO_DES_LN_PREV])
@@ -1376,7 +1376,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     explanation += "Spd cmd pen {:.4f}. ".format(penalty)
 
             # Penalty for deviating from roadway speed limit
-            speed_mult = 0.05
+            speed_mult = 0.08
             if self.difficulty_level == 1  or  self.difficulty_level == 2:
                 speed_mult = 0.1
 

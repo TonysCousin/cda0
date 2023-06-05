@@ -2260,12 +2260,60 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* All rewards dropped to -12 after the first perturbation, where the randomized initial location
 	  ended.
 
-* Run ed762 training level 3 from level 1 baseline (abe44)
+6/4/23
+
+* Run ed762 training level 3 from level 1 baseline (abe44) - DRIVING LANE 2 ONLY!
 	* Modified the reward function to add a keep-alive component for every timestep, and scaled back
 	  the penalties possible to be less than that keep-alive value except in aggregious cases. This
 	  should motivate level 3 to progress downtrack on lane 2 instead of using its ingrained idea of
 	  always desiring lane 0, which previously had forced the least-cost episode (-10 in first time
 	  step vs -10 minus a penalty for doing something else wrong).
+	* 9 trials errored out, and after first perturb, they all had rmax = -12, so I killed it.
+
+* Run f8bb5 training level 3 from level 1 baseline (abe44) - DRIVING LANE 2 ONLY!
+	* Increased keep-alive reward from 0.05 to 0.1
+	* Increased burn-in period from 200 to 500 iterations and set the randomized start location to
+	  decay over 500k steps (approx 500 iterations) instead of 1M steps.
+	* 8 of 10 trials errored out by 600k steps. Spot check shows this is the nan problem still.
+	* Of the two that went to 1.4M steps, one showed some promise, achieving rmin as high as -3,
+	  with quite a bit of time > -10, and rmean > 0 in quite a few iterations.
+	* Running that trial in inference, it most recently learned to collect a few keep-alive points
+	  over ~40 time steps, then come to a stop, getting penalized with -10, rather than get hit with
+	  a -12 for going off road.
+	* I believe that using the level 1 baseline is a handicap, as it had learned to live in lane 0
+	  always, so that lesson seems to be hard to unlearn.
+
+* Run be359 training level 3 from scratch - DRIVING LANE 2 ONLY!
+	* Using no baseline allows it to learn lane choices more freely.
+	* Tweaked the reward function a bit to discourage stopping
+	* Killed it after 700 iterations, as all living trials (8 of 10) were showing rewards < -10.
+	  rmean is a gradual dive between 200k and 500k steps from a peak reward in the -5 to 0 range,
+	  as randomizes start location gets pushed uptrack. I had thought that it would learn the lower
+	  part of the track well, then gradually translate that knowledge into how to start from farther
+	  up, but it doesn't seem to be working.
+
+* Run bdc08 training level 3 from scratch - DRIVING LANE 2 ONLY
+	* Turned off randomized inital location, forcing agent to start near the beginning of the lane
+	  every time. Hoping that the keep-alive reward is enough to encourage it to drive downtrack.
+	* 4 trials completed early (between 200k and 500k steps), reaching rmean > 9.5, so this looks
+	  like the right approach. With the new keep-alive reward, rmax can get much bigger, so maybe
+	  the success criterion needs to be changed.
+	* Inference on one of the winners showed that speed was highly variable and generally well
+	  below speed limit, so penalties need to be a bit tougher for both those problems. Also, it
+	  looks like the agent jumped from lane 2 to lane 1 prior to the frog, although the log shows
+	  that it did a legal move. I need to check the geometry of that merge point in the parametric
+	  frame.
+	* Trials that succeeded tended to jump from rmax < 0 to rmean ~+10 very quickly - it might be
+	  better to extend the stopper criterion to require more time at a high rmean. This could also
+	  give it more time to address speed command problems.
+	* Only one trial had errored out when I killed it after 900 iterations.
+
+* Run 9a992 training level 3 from scratch - DRIVING LANE 2 ONLY
+	* Changed tune prgm to require 20 consecutive acceptable iterations before a stop signal is sent.
+	* Changed tune prgm to set success threshold from 9.5 to 15.0.
+	* Reduced the keep-alive reward from 0.08 to 0.06 per time step.
+	* Increased penalty for speed not at speed limit (multiplier from 0.06 to 0.08).
+
 
 
 Near-term considerations:

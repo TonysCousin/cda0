@@ -30,7 +30,7 @@ _checkpoint_path = None
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L0-518f4/trial09/checkpoint_000086"
 
 # Completed level 1 on 6/1/23
-_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L1-abe44/trial03/checkpoint_000059"
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L1-abe44/trial03/checkpoint_000059"
 
 
 def main(argv):
@@ -53,11 +53,11 @@ def main(argv):
     # let_it_run can be a single value if it applies to all phases.
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
-    success_threshold   = [9.5,         9.5,        9.5,        9.5,        9.5]
+    success_threshold   = [9.5,         9.5,        9.5,        15.0,        9.5]
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     chkpt_int           = 10    #num iters between storing new checkpoints
-    burn_in_period      = 200   #num iterations before we consider stopping or promoting to next level
+    burn_in_period      = 500   #num iterations before we consider stopping or promoting to next level
     perturb_int         = 200   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
     max_iterations      = 1000
     num_trials          = 10
@@ -68,7 +68,7 @@ def main(argv):
     # Define the stopping logic for PBT runs - this requires mean reward to stay at the threshold for multiple consiecutive
     # iterations, rather than just stopping on an outlier spike.
     stopper = StopSimple(max_iterations     = max_iterations,
-                         avg_over_latest    = 5,
+                         avg_over_latest    = 20,
                          success_threshold  = success_threshold[difficulty_level]
                         )
 
@@ -79,9 +79,9 @@ def main(argv):
     env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 0
-    env_config["verify_obs"]                    = True
+    env_config["verify_obs"]                    = False
     env_config["training"]                      = True
-    env_config["randomize_start_dist"]          = True
+    env_config["randomize_start_dist"]          = False
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
     env_config["neighbor_start_loc"]            = 0.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
