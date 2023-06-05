@@ -2314,6 +2314,32 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Reduced the keep-alive reward from 0.08 to 0.06 per time step.
 	* Increased penalty for speed not at speed limit (multiplier from 0.06 to 0.08).
 
+6/5/23
+
+	* 5 of 10 trials completed, but none hit the success criterion, although they all got close.
+	  I think the criterion was set slightly unrealistically high.
+	* Inference on Ray's reported "best" trial proved that it was bogus. In fact, that trial, while
+	  it has the best rmean at the end, its final iteration included the nan error, so the NN wass
+	  hosed.
+	* Inference on another trial that completed 1000 iterations worked pretty well.  It had decent
+	  respect for speed desires, and made the lane change well. It did attempt an illegal lane
+	  change on step 1 a couple times, however.
+	* I have noticed for a long time, including this run, that a trial may often perform well in a
+	  given iteration (many episodes with ~100 steps), but will have several (or many) episodes with
+	  just 1 time step. It virtually never happens that it fails on step 2, 3, 4, 10 or 20; it
+	  either fails on first step or it succeeds. I suspect this has to do with the initial values
+	  of the feedback observation elements. Maybe they need to be tuned somehow.
+	* Inference runs show that there is definitely a longitudinal offset error between lanes 1 and 2
+	  in the graphics representation, at least.
+
+* Run a70cb training level 3 from scratch - DRIVING LANE 2 ONLY
+	* Adjusted rewards slightly to dial back the keep-alive a little and increase emphasis on speed
+	  penalty.
+	* Fixed a defect where obs element EGO_DES_LN_PREV was initialized to 0 instead of to the 
+	  currently assigned lane, which should improve first step failures.
+	* Changed success criterion from 15 to 13, anticipating that the above changes will make higher
+	  scores less likely.
+
 
 
 Near-term considerations:

@@ -597,7 +597,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.EGO_SPEED]            = ego_speed
         self.obs[self.EGO_SPEED_PREV]       = ego_speed
         self.obs[self.EGO_LANE_REM]         = ego_rem
-        self.obs[self.EGO_DES_LN]       = ego_lane_id #this is feedback from previous timestep, so okay to initialize it like this
+        self.obs[self.EGO_DES_LN]           = ego_lane_id #this is feedback from previous timestep, so okay to initialize it like this
+        self.obs[self.EGO_DES_LN_PREV]      = ego_lane_id
         self.obs[self.STEPS_SINCE_LN_CHG]   = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
         self._verify_obs_limits("reset after populating main obs with ego stuff")
         self._update_obs_zones()
@@ -740,6 +741,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Get updated metrics of ego vehicle relative to the new lane geometry
         new_ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(new_ego_lane, new_ego_p)
+
+        #TODO - for debugging only, this whole section:
+        if not self.training:
+            if self.lane_change_count == SimpleHighwayRamp.HALF_LANE_CHANGE_STEPS - 1:
+                print("   ** LC next step: ego_p = {:.1f}, ego_rem = {:.1f}, lid = {}, la = {:.1f}, lb = {:.1f}, l_rem = {:.1f}".format(new_ego_p, new_ego_rem, lid, la, lb, l_rem))
+            elif self.lane_change_count == SimpleHighwayRamp.HALF_LANE_CHANGE_STEPS:
+                print("   ** LC now: ego_p = {:.1f}, ego_rem = {:.1f}, rid = {}, ra = {:.1f}, rb = {:.1f}, r_rem = {:.1f}".format(new_ego_p, new_ego_rem, rid, ra, rb, r_rem))
 
         # If remaining lane distance has gone away, then vehicle has run straight off the end of the lane, so episode is done
         if new_ego_rem <= 0.0:
@@ -1075,10 +1083,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Levels 3 & 4 need to emphasizes lots of experience in lane 2
         elif self.difficulty_level == 3:
-            return 2 #TODO experimental to force learning to drive lane 2
-
-
-
             draw = self.prng.random()
             if draw < 0.6:
                 return 2
@@ -1358,7 +1362,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         else:
 
             # Reward for staying alive
-            reward += 0.06
+            reward += 0.05
 
             # Small penalty for widely varying lane commands
             cmd_diff = abs(self.obs[self.EGO_DES_LN] - self.obs[self.EGO_DES_LN_PREV])
@@ -1376,7 +1380,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     explanation += "Spd cmd pen {:.4f}. ".format(penalty)
 
             # Penalty for deviating from roadway speed limit
-            speed_mult = 0.08
+            speed_mult = 0.1
             if self.difficulty_level == 1  or  self.difficulty_level == 2:
                 speed_mult = 0.1
 
@@ -1552,7 +1556,7 @@ class Roadway:
     def map_to_param_frame(self,
                            x                : float,        #X coordinate in the map frame, m
                            lane             : int           #lane ID (0-indexed)
-                          ) -> float:
+                          ) -> float:                       #Returns P coordinate, m
         """Converts a point in the map coordinate frame (x, y) to a corresponding point in the parametric coordinate
             frame (p, q). Since the vehicles have no freedom of lateral movement other than whole-lane changes, Y
             coordinates are not important, only lane IDs. These will not change between the frames.
@@ -1570,7 +1574,11 @@ class Roadway:
     def param_to_map_frame(self,
                            p                : float,        #P coordinate in the parametric frame, m
                            lane             : int           #lane ID (0-indexed)
-                          ) -> float:
+                          ) -> float:                       #Returns X coordinate, m
+        """Converts a point in the parametric coordinate frame (p, q) to a corresponding point in the map frame (x, y).
+            Since the vehicles have no freedom of lateral movement other than whole-lane changes, Q and Y coordinates
+            are not important, only lane IDs, which will not change between coordinate frames.
+        """
 
         x = p
         if lane == 2:
