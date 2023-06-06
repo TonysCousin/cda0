@@ -2340,6 +2340,22 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Changed success criterion from 15 to 13, anticipating that the above changes will make higher
 	  scores less likely.
 
+6/6/23
+
+	* 4 trials succeeded and 4 errored out. Inference on one of the successful trials shows...
+	* rmax got up to 15.
+	* Speed cmd penalty needs to be larger - is not having much effect.
+	* Speed penalty could be a little larger.
+	* Keep-alive reward could be a little smaller.
+
+* Run e6301 training level 3 from scratch (back to all lanes being trained)
+	* Fixed small defect in inference program's graphics display when vehicle is in lane 2 segment 1.
+	* Reduced keep-alive reward from 0.05 to 0.04
+	* Doubled the speed command variance penalty
+	* Increased speed penalty multiplier from 0.1 to 0.15
+	* I expect the rmax to be a little lower as a result of these, so leaving the success threshold
+	  the same at 13.0 to make it a little more difficult
+
 
 
 Near-term considerations:

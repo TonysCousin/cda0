@@ -371,7 +371,7 @@ class Graphics:
         if lane < 2:
             y = road.lanes[lane].segments[0][1]
         else:
-            ddt = x - road.lanes[2].start_x
+            ddt = (x - road.lanes[2].start_x)/Roadway.COS_LANE2_ANGLE
             if ddt < road.lanes[2].segments[0][4]: #vehicle is in seg 0
                 seg0x0 = road.lanes[2].segments[0][0]
                 seg0y0 = road.lanes[2].segments[0][1]
@@ -383,7 +383,6 @@ class Graphics:
                 y = seg0y0 + factor*(seg0y1 - seg0y0)
 
             else: #vehicle is in seg 1
-                x = road.lanes[2].segments[1][0] + ddt - road.lanes[2].segments[0][4]
                 y = road.lanes[2].segments[1][1]
 
         return x, y
