@@ -53,7 +53,7 @@ def main(argv):
     # let_it_run can be a single value if it applies to all phases.
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
-    success_threshold   = [9.5,         9.5,        9.5,        13.0,       9.5]
+    success_threshold   = [9.5,         9.5,        9.5,        14.5,       9.5]
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     chkpt_int           = 10    #num iters between storing new checkpoints

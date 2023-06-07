@@ -2355,6 +2355,35 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Increased speed penalty multiplier from 0.1 to 0.15
 	* I expect the rmax to be a little lower as a result of these, so leaving the success threshold
 	  the same at 13.0 to make it a little more difficult
+	* None of the trials could sustain rmean > 0. Several reached rmax ~14.5. There were quite a few
+	  examples of rmin = -20.
+	* 8 of 10 trials errored.
+
+* Run e04ff training level 3 from scratch
+	* Restored the keep-alive reward to 0.05 and the speed penalty multiplier to 0.1. This is now
+	  like run a70cb (yesterday) but with all 3 lanes and a larger speed command variance penalty.
+	* Trial 0 completed successfully. Inference on it showed that starting in lane 0 always wants to
+	  move to lane 2, so crashes into the parked neighbors. When starting in lane 1 it still prefers
+	  lane 2, and moves over there where it's legal, then moves back to complete the track. When
+	  starting in lane 2 performance was good, achieving total scores of ~15.3, while staying pretty
+	  close to the speed limit for most of the route.
+	* The skew in performance among the 3 starting lanes is probably due to the skew in how much
+	  each lane was trained (lane 0 10%, lane 1 30%, lane 2 60%).
+
+* run 8148a training level 3 from scratch
+	* Modified the level 3 success criterion from 13.0 to 14.5 for rmean.
+	* I modified _select_init_lane() to choose each lane equally for levels 3 & 4.
+	* 9 of 10 trials errored out.
+	* No trial sustained any rmean > 8 but most stayed above 0 for most of the time.
+	* Inference on trial 7 showed that lane 1 worked well, but starting in either of the other lanes
+	  immediately ran off-road because its desired lane is always 1. This checkpoint was 30 iterations
+	  prior to when it caught the nan disease. Trial 2 performed the same way.
+
+* Run 155e6 training level 3 from scratch
+	* Fixed a defect where the two desired speed feedback elements of the obs vector were allowed to
+	  initialize to 0 instead of the actual speed.
+	* Code inspection revealed no obvious reason that the agent would be learning to always desire
+	  lane 1.
 
 
 

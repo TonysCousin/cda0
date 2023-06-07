@@ -513,7 +513,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 ego_p = self.prng.random() * 500.0 + ego_lane_start
                 ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
 
-        # Else, we are doing inference, so allow coonfigrable overrides if present
+        # Else, we are doing inference, so allow configrable overrides if present
         else:
             ego_lane_id = int(self.prng.random()*3) if self.init_ego_lane is None  else  self.init_ego_lane
             ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH if self.init_ego_dist is None  else  self.init_ego_dist
@@ -584,7 +584,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         #print("///// reset: training = {}, ego_lane_id = {}, ego_p = {:.2f}, ego_speed = {:.2f}".format(self.training, ego_lane_id, ego_p, ego_speed))
         self._verify_obs_limits("reset after initializing local vars")
 
-        # Reinitialize the whole observation vector
+        # Reinitialize the ego vehicle and the whole observation vector
         ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_p)
         self.vehicles[0].lane_id = ego_lane_id
         self.vehicles[0].p = ego_p
@@ -593,12 +593,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         self.obs = np.zeros(self.OBS_SIZE)
         self.obs[self.EGO_LANE_ID]          = ego_lane_id
+        self.obs[self.EGO_DES_LN]           = ego_lane_id
+        self.obs[self.EGO_DES_LN_PREV]      = ego_lane_id
         self.obs[self.EGO_P]                = ego_p
         self.obs[self.EGO_SPEED]            = ego_speed
         self.obs[self.EGO_SPEED_PREV]       = ego_speed
+        self.obs[self.EGO_DES_SPEED]        = ego_speed
+        self.obs[self.EGO_DES_SPEED_PREV]   = ego_speed
         self.obs[self.EGO_LANE_REM]         = ego_rem
-        self.obs[self.EGO_DES_LN]           = ego_lane_id #this is feedback from previous timestep, so okay to initialize it like this
-        self.obs[self.EGO_DES_LN_PREV]      = ego_lane_id
         self.obs[self.STEPS_SINCE_LN_CHG]   = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
         self._verify_obs_limits("reset after populating main obs with ego stuff")
         self._update_obs_zones()
@@ -1081,22 +1083,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         if self.difficulty_level < 3:
             return int(self.prng.random()*2) #select 0 or 1
 
-        # Levels 3 & 4 need to emphasizes lots of experience in lane 2
-        elif self.difficulty_level == 3:
-            draw = self.prng.random()
-            if draw < 0.6:
-                return 2
-            elif draw < 0.9:
-                return 1
-            else:
-                return 0
-
-        elif self.difficulty_level < 5:
-            if self.prng.random() < 0.8:
-                return 2
-            else:
-                return int(self.prng.random()*2) #select 0 or 1
-
         else:
             return int(self.prng.random()*3)
 
@@ -1362,7 +1348,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         else:
 
             # Reward for staying alive
-            reward += 0.04
+            reward += 0.05
 
             # Small penalty for widely varying lane commands
             cmd_diff = abs(self.obs[self.EGO_DES_LN] - self.obs[self.EGO_DES_LN_PREV])
@@ -1380,7 +1366,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     explanation += "Spd cmd pen {:.4f}. ".format(penalty)
 
             # Penalty for deviating from roadway speed limit
-            speed_mult = 0.15
+            speed_mult = 0.1
             if self.difficulty_level == 1  or  self.difficulty_level == 2:
                 speed_mult *= 2.0
 
