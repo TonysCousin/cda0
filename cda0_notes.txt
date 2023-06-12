@@ -2385,13 +2385,102 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Code inspection revealed no obvious reason that the agent would be learning to always desire
 	  lane 1.
 
+===== Upgraded to Ray 2.4.0 =====
+
+* Created new conda env rllib24 and upgraded the env cda0 to be built upon that. Note that ray 2.4.0
+  installs torch 2.0.1. It also installed torchvision 0.14.1 (in the rllib24 env). However, when
+  importing that to cda0, pip didn't like it, saying those versions are incompatible. So I had to
+  upgrade torchvision to 0.15.2. Also installed pygame 2.4.0 with pip.
+	* Initial run of the tune program resulted in a few errors from Ray, since it was trying to
+	  search for obsolete uses of gym (instead of gymnasium). I modified the Ray code in miniconda3
+	  to skip over these checks.
+	* It now runs, but continues to throw out some new messages (warnings?) about the backprop
+	  process.
+	* I have a small concern that maybe the upgrade left some old 2.3 remnants around, so maybe will
+	  need to do a full uninstall then reinstall of 2.4.0.
+
+* New run of the tune program just as it was before the upgrade
+	* Most of the trials errored out early in the process, with the nan problem. I killed it early.
+
+* New run, this time with exploration turned off.
+	* Still got lots of trials that errored out.
+
+6/9/23
+
+* Redid the Ray 2.4.0 installation (see the top level Notes.txt), then replaced the conda env cda0
+  with this new rllib24 env. It required an updated version of torchvision (0.15.2). Also installed
+  pygame 2.4.0.
+	* This time there was no need to modify the Ray source code to avoid those gym checks.
+
+* Run 1efa4 training level 3 to smoke test the new Ray installation.
+	* Still getting lots of trials with the nan error. I now realize the errors are coming from
+	  pytorch, not from ray. But they were happening in the old version of ray/torch, so dropping
+	  back to torch 1.13.1 (the lastest 1.x version) is not likely to change the problem. I need
+	  to look at what is being input to the distribution object.
+
+* A series of tuning runs training level 3 as before, just to get debugging info on Ray code.
+	* Added exception traps w/print stmts to several places in torch & rllib to help find the
+	  problem.
+	* Problem is first detected in TorchDiagGaussian constructor, which traps the exception from
+	  torch's distribution.normal.Normal.
+	* Up the call stack one notch is PPOTorchPolicy.loss(), which has logits of all nan. It
+	  reports on the exception then reraises it.
+	* loss() is called by _worker(), which is an embedded function in
+	  TorchPolicyV2._multi_gpu_paralle_grad_calc(). It passed model and sample_batch to loss(),
+	  which calls the model with its train_batch (the input sample_batch) to compute logits.
+	* model is a FullyConnectedNetwork that has a _logits layer of type SlimFC with 128 in_features
+	  and 4 out_features. I suspect the in_features is connected to the policy NN output but I have
+	  no idea where it gets 4 outputs.
+	* model is created in rllib.models.catalog.py line 718, which is called by 
+	  rllib.policy.torch_policy_v2.py line 490 (_init_model_and_dist_class). It is created with
+	  num_outputs = 4 and all flags vf_share_layers, free_log_std, no_final_linear all False.
+	  In call to DiagGaussian.required_model_output_shape() it multiplies the action_space shape
+	  by 2 to give the num_outputs. This seems to be to support that the DiagGaussian class 
+	  represents the action vector as 2 mean values followed by 2 std deviations.
+	* Run with no_final_linear = True and NN structure of [256, 256, 4] the final value must be
+	  exactly 2x the number of outputs. This avoids having a logits layer, which is always the
+	  one containing the nan values.
+		* Generated nan error very quickly on trial 1, indicating that the logits contains
+		  the offending content. This is the name given to the output of model.forward(),
+		  regardless of whether it has a _logits layer defined or not.
+	* Added diagnostics to the FullyConnectedNetwork.forward() method to see when things go south.
+		* When error occurs, FullyConnectedNetwork.forward() shows _features tensor is all
+		  nans, as is logits, but the obs tensor looks like probably reasonable values.
+		* When one trial errored, within 1000 steps prior the largest logit returned from the
+		  model was ~51. Most values I've seen in normal operation are O(0.01) to O(0.1).
+		* During one of the thread crashes, there is the error message, "RuntimeError: Expected
+		  scalars to be on CPU, got cuda:0 instead." from torch/optim/adam.py. Found a Discuss
+		  post sayiing this error is fixed in v2.5.
+		* When an exception was raised, the logits from the previous time step consistently
+		  contain somewhat large numbers in the 4th column, values ~50, while the other columns
+		  are all magnitude < 1. In another trial, 2nd column also had some suspiciously large
+		  values, ~+2. In another it was the 3rd column with large values, between 10 & 70.
+		  Meanwhile, the every-50-steps reports show the largest magnitude logit values are all
+		  < 1.0. So maybe it is reasonable to have the model clamp all of them at 1 or so?
+	* Created a temporary clamping mechanism in FullyConnectedNetwork.forward() to limit the output
+	  logits to be within [-1, 1] and to track how often this clamping was applied.
+		* Apparently this action is causing failure of the gradient calculation, as it can't
+		  trace backwards through the chain.
+
+* During above debugging, I continue to see the agent learning to get to lane 1 asap, which doesn't work
+  so thinking maybe it doesn't get enough exposure to the neighbors to understand how to behave near
+  them. Maybe training at level 4 is better and/or train with randomized start locaton on?
+
+Todo
+- try a different NN structure. Even if this fails, at least understand how 128 affects the logits layer
+- try SAC
+- post on Ray Discuss to ask about why a default model needs a logits layer
+- Install Ray 2.5.0
+
+
 
 
 Near-term considerations:
 - implement level 5 with random lanes & crash avoidance neighbors
+
+Longer term considerations:
 - study graph ML
 - study path planning to replace near-sighted agent
-- switch to raster map
 
 
 *** Variables under manual control:
@@ -2408,4 +2497,3 @@ Near-term considerations:
 
 AI: track down where Trainable/Algorithm object is instantiated and its setup() method is called, since this happens at
     the beginning of each trial, and at each perturbation of each trial in PBT.
-AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?

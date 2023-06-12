@@ -81,7 +81,7 @@ def main(argv):
     env_config["debug"]                         = 0
     env_config["verify_obs"]                    = False
     env_config["training"]                      = True
-    env_config["randomize_start_dist"]          = False
+    env_config["randomize_start_dist"]          = True
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
     env_config["neighbor_start_loc"]            = 0.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
@@ -110,8 +110,8 @@ def main(argv):
     # This config will run 5 parallel trials on the Tensorbook.
     cfg.resources(  num_gpus                    = 0.5, #for the local worker, which does the learning & evaluation runs
                     num_cpus_for_local_worker   = 1,
-                    num_cpus_per_trainer_worker = 1, #also applies to the local worker and evaluation workers
-                    num_gpus_per_trainer_worker = 0  #this has to allow gpu left over for local worker & evaluation workers also
+                    num_cpus_per_worker         = 1, #also applies to the local worker and evaluation workers
+                    num_gpus_per_worker         = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
     cfg.rollouts(   #num_rollout_workers         = 1, #num remote workers _per trial_ (remember that there is a local worker also)
@@ -146,7 +146,7 @@ def main(argv):
                     train_batch_size            = 1024, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
                     lr                          = tune.loguniform(1e-6, 2e-4),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
-                    sgd_minibatch_size          = 128, #must be <= train_batch_size (and divide into it)
+                    sgd_minibatch_size          = 32, #128, #must be <= train_batch_size (and divide into it)
                     entropy_coeff               = tune.uniform(0.0005, 0.01),
                     kl_coeff                    = tune.uniform(0.3, 0.8),
                     #clip_actions                = True,
@@ -156,7 +156,8 @@ def main(argv):
 
     # Add dict for model structure
     model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = [256, 256, 128]
+    model_config["no_final_linear"]             = True #requires that final hidden layer is the size of the NN output
+    model_config["fcnet_hiddens"]               = [256, 256, 4]
     model_config["fcnet_activation"]            = "relu"
     cfg.training(model = model_config)
 

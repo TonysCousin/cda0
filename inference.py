@@ -4,7 +4,7 @@ import math
 import time
 from typing import List
 import numpy as np
-import gym
+import gymnasium
 import ray
 import ray.rllib.algorithms.ppo as ppo
 #import ray.rllib.algorithms.ddpg as ddpg
@@ -65,7 +65,8 @@ def main(argv):
     cfg = ppo.PPOConfig()
     cfg.framework("torch").exploration(explore = False)
     model = cfg.to_dict()["model"]
-    model["fcnet_hiddens"]                  = [256, 256, 128]
+    model["no_final_linear"]                = True
+    model["fcnet_hiddens"]                  = [256, 256, 4]
     model["fcnet_activation"]               = "relu"
     model["post_fcnet_activation"]          = "linear"
     cfg.training(model = model)
@@ -195,7 +196,7 @@ class Graphics:
 
 
     def __init__(self,
-                 env    : gym.Env
+                 env    : gymnasium.Env
                 ):
         """Initializes the graphics and draws the roadway background display."""
 
