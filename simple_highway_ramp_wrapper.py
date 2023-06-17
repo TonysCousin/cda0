@@ -67,6 +67,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
 
         # Step the environment
         raw_obs, r, d, t, i = super().step(action)
+        o = None
         if self.training:
             o = self.scale_obs(raw_obs)
         else:

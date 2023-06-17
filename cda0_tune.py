@@ -7,9 +7,7 @@ from ray.tune.tune_config import TuneConfig
 from ray.tune.logger import pretty_print
 from ray.air import RunConfig
 import ray.rllib.algorithms.ppo as ppo
-#import ray.rllib.algorithms.a2c as a2c
-#import ray.rllib.algorithms.sac as sac
-#import ray.rllib.algorithms.ddpg as ddpg
+import ray.rllib.algorithms.sac as sac
 
 from stop_simple import StopSimple
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
@@ -43,8 +41,8 @@ def main(argv):
     ray.init()
 
     # Define which learning algorithm we will use and set up is default config params
-    algo = "PPO"
-    cfg = ppo.PPOConfig()
+    algo = "SAC"
+    cfg = sac.SACConfig()
     cfg.framework("torch")
     cfg_dict = cfg.to_dict()
 
@@ -57,9 +55,9 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     chkpt_int           = 10    #num iters between storing new checkpoints
-    burn_in_period      = 500   #num iterations before we consider stopping or promoting to next level
+    burn_in_period      = 200   #num iterations before we consider stopping or promoting to next level
     perturb_int         = 200   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
-    max_iterations      = 1000
+    max_iterations      = 1600
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -81,7 +79,7 @@ def main(argv):
     env_config["debug"]                         = 0
     env_config["verify_obs"]                    = False
     env_config["training"]                      = True
-    env_config["randomize_start_dist"]          = True
+    env_config["randomize_start_dist"]          = False
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
     env_config["neighbor_start_loc"]            = 0.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
@@ -95,7 +93,7 @@ def main(argv):
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = 500000  #tune.choice([100000, 400000]) #was 900k
+    explore_config["scale_timesteps"]           = 1000000  #tune.choice([100000, 400000]) #was 900k
     cfg.exploration(explore = True, exploration_config = explore_config)
     #cfg.exploration(explore = False)
 
@@ -119,11 +117,14 @@ def main(argv):
                     num_envs_per_worker         = 1,
                     rollout_fragment_length     = 256, #timesteps pulled from a sampler
                     batch_mode                  = "complete_episodes",
+    )
+
+    cfg.fault_tolerance(
                     recreate_failed_workers     = True,
     )
 
     # Evaluation process
-    cfg.evaluation( evaluation_interval         = 10, #iterations
+    cfg.evaluation( evaluation_interval         = 10, #iterations between evals
                     evaluation_duration         = 15, #units specified next
                     evaluation_duration_unit    = "episodes",
                     evaluation_parallel_to_training = True, #True requires evaluation_num_workers > 0
@@ -138,6 +139,7 @@ def main(argv):
     # Custom callbacks from the training algorithm
     cfg.callbacks(  CdaCallbacks)
 
+    """
     # ===== Training algorithm HPs for PPO =================================================
 
     # NOTE: lr_schedule is only defined for policy gradient algos
@@ -170,15 +172,15 @@ def main(argv):
     opt_config["entropy_learning_rate"]         = tune.loguniform(1e-4, 1e-3) #default 0.0003
 
     policy_config = cfg_dict["policy_model_config"]
-    policy_config["fcnet_hiddens"]              = [256, 128]
+    policy_config["fcnet_hiddens"]              = [256, 256]
     policy_config["fcnet_activation"]           = "relu"
 
     q_config = cfg_dict["q_model_config"]
-    q_config["fcnet_hiddens"]                   = [256, 128]
+    q_config["fcnet_hiddens"]                   = [256, 256]
     q_config["fcnet_activation"]                = "relu"
 
     cfg.training(   twin_q                      = True,
-                    gamma                       = 0.999,
+                    gamma                       = 0.995,
                     train_batch_size            = 256, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
                     initial_alpha               = 1.0,
                     tau                         = 0.005,
@@ -187,7 +189,6 @@ def main(argv):
                     policy_model_config         = policy_config,
                     q_model_config              = q_config,
     )
-    """
 
     # ===== Final setup =========================================================================
 
@@ -208,13 +209,15 @@ def main(argv):
                                                                         # then immediately moves on. If True and one trial dies, then PBT hangs and all
                                                                         # remaining trials go into perpetual PAUSED state.
                     hyperparam_mutations={                              #resample distributions
-                    #    "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
-                    #    "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
-                    #    "optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
-                        "lr"                                    :   tune.loguniform(1e-6, 2e-4),
-                        "entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
+                        #for SAC:
+                        "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
+                        # for PPO:
+                    #   "lr"                                    :   tune.loguniform(1e-6, 2e-4),
+                    #   "entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
                     #    "kl_coeff"                              :   tune.uniform(0.3, 0.8),
-                        "clip_param"                            :   tune.uniform(0.05, 0.4),
+                    #   "clip_param"                            :   tune.uniform(0.05, 0.4),
                     },
     )
 

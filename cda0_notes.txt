@@ -2419,6 +2419,7 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  to look at what is being input to the distribution object.
 
 * A series of tuning runs training level 3 as before, just to get debugging info on Ray code.
+	* Put this work on a new git branch "nan-experiments" off of new-obs-actions.
 	* Added exception traps w/print stmts to several places in torch & rllib to help find the
 	  problem.
 	* Problem is first detected in TorchDiagGaussian constructor, which traps the exception from
@@ -2466,11 +2467,57 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
   so thinking maybe it doesn't get enough exposure to the neighbors to understand how to behave near
   them. Maybe training at level 4 is better and/or train with randomized start locaton on?
 
+
+===== Upgraded to Ray 2.5.0 =====
+
+6/16/23
+
+* Created conda env rllib25 (see ~/Notes), then built a new env cda0 on top of that. In cda0 I installed
+  pygame-2.4.0. The test_cuda program works after reboot.
+
+* Run 3da38 training with SAC, with randomize_start_dist off.
+	* This run used whatever configs were on for the previous days' debugging sessions, so may not
+	  be ideal.
+	* All trials converged to a rough performance band of rmax in [2, 6] and rmean in [-6, -2] after
+	  800 iterations. But there were no errors reported.
+
+* Run 979df training with SAC, as before.
+	* Added command masking logic to the step() method that forces desired lane command to be equal
+	  to the actual lane for the first 3 time steps, which allows the feedback obs to fully initialize.
+	* This run proved slightly better than the previous, with rmax in [3, 7] and starting to trend
+	  upward at the end, but rmean in [-5, -1] for the last half of the run.
+	* Inference shows it still consistenly wants to be in lane 1, so makes illegal lane changes when
+	  starting in 0 or 2. Also, when it runs in 1, desired speeed is too low, so rewards need adjusting.
+
+6/17/23
+
+* Several runs to debug desired lane command
+	* Adjusted rewards so that completion bonus is spread a bit wider on time step variation, and
+	  reduced the keep-alive bonus from 0.05 to 0.03 to encourage higher speeds.
+	* Inspected code dealing with lane assignment and lane change, and found no defects. Added print
+	  stmts to track down desired lane assignments to see how it really varies during training.
+	* Desired lane leans heavily to lane 1, regardless of initial lane assignment.
+	* Initial lane seems skewed to 0 and 1. But I verified that _select_init_lane() is evenly drawing
+	  from all 3 lanes.
+	* Fixed a minor initialization defect in the env wrapper, but it had no effect.
+	* Tried a run forcing all initial lane assignments to be either 0 or 2.
+		* Between 700 and 800 iters (the defined limit), three of the trials had a sudden burst
+		  of learning, where rmax reached 8 for one and 10 for another, and rmean > 0.
+		* On the best of these trials, inference shows that it can successfully run the track
+		  after starting in lane 2.  Speed is still a bit of a problem, but slightly less than
+		  earlier.
+
+* Run 3bbcf training with SAC
+	* Modified _select_init_lane() to choose 0 and 2 each with 45% probability and lane 1 at 10%.
+	* Increased the speed penalty multiplier from 0.1 to 0.15.
+	* Doubled the duration of the Gaussian noise from 500k to 1M time steps.
+	* Doubled the run duration from 800 to 1600 iterations.
+
+
+
 Todo
 - try a different NN structure. Even if this fails, at least understand how 128 affects the logits layer
-- try SAC
 - post on Ray Discuss to ask about why a default model needs a logits layer
-- Install Ray 2.5.0
 
 
 

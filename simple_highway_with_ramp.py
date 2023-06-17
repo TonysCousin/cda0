@@ -391,6 +391,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.episode_count = 0      #number of training episodes (number of calls to reset())
         self.neighbor_print_latch = True #should the neighbor vehicle info be printed when initiated?
         self.rollout_id = hex(int(self.prng.random() * 65536))[2:].zfill(4) #random int to ID this env object in debug logging
+        self.debug_ln_cmd = [0, 0, 0] #TODO for debugging only
+        self.debug_init_lane = -4   #TODO for debugging only
         print("///// Initializing env environment ID {} at level {}".format(self.rollout_id, self.difficulty_level))
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -613,15 +615,20 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.episode_count += 1
         self._verify_obs_limits("end of reset")
 
+        #TODO this block for debugging only
+        print("///// reset: prev episode desired lane distribution: ", self.debug_ln_cmd, ", init lane = ", self.debug_init_lane)
+        self.debug_ln_cmd = [0, 0, 0]
+        self.debug_init_lane = ego_lane_id #TODO debug only
+
         if self.debug > 0:
             print("///// End of reset().")
         return self.obs, {}
 
 
     def step(self,
-                action  : list      #list of floats; 0 = speed command, 1 = desired lane, scaled
+                cmd     : list      #list of floats; 0 = speed command, 1 = desired lane, scaled
             ) -> Tuple[np.array, float, bool, bool, Dict]:
-        """Executes a single time step of the environment.  Determines how the input actions will alter the
+        """Executes a single time step of the environment.  Determines how the input commands (actions) will alter the
             simulated world and returns the resulting observations to the agent.
 
             Return is array of new observations, new reward, done flag, truncated flag, and a dict of additional info.
@@ -631,25 +638,34 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         """
 
         if self.debug > 0:
-            print("\n///// Entering step(): action = ", action)
+            print("\n///// Entering step(): cmd = ", cmd)
             print("      vehicles array contains:")
             for i, v in enumerate(self.vehicles):
                 v.print(i)
 
         self.total_steps += 1
         self.steps_since_reset += 1
+        done = False
+        return_info = {"reason": "Unknown"}
 
         #
         #..........Calculate new state for the ego vehicle and determine if episode is complete
         #
 
-        done = False
-        return_info = {"reason": "Unknown"}
+        # Apply command masking for first few steps to avoid startup problems with the feedback observations
+        action = [None]*2
+        action[0] = cmd[0]
+        des_ln = cmd[1]
+        if self.steps_since_reset < 4:
+            des_ln = self.vehicles[0].lane_id - 1.0 #action is still scaled
+            assert -1.0 <= des_ln <= 1.0, "///// step ERROR: command masked action[1] = {} is illegal.".format(action[1])
+        action[1] = des_ln
 
         # Unscale the action inputs (both actions are in [-1, 1])
         desired_speed = (action[0] + 1.0)/2.0 * SimpleHighwayRamp.MAX_SPEED
         desired_lane = int(math.floor(action[1] + 0.5) + 1.0)
         assert 0 <= desired_lane <= 2, "///// step ERROR: desired_lane = {}, action[1] = {}".format(desired_lane, action[1])
+        self.debug_ln_cmd[desired_lane] += 1 #TODO debug only
 
         # Move all of the vehicles downtrack. This doesn't account for possible lane changes, which are handled seperately in the next section.
         new_ego_p = None
@@ -1083,6 +1099,16 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         if self.difficulty_level < 3:
             return int(self.prng.random()*2) #select 0 or 1
 
+        # Level 3 needs to emphasize lanes 0 & 2 since the agent naturally prefers lane 1
+        elif self.difficulty_level == 3:
+            draw = self.prng.random()
+            if draw < 0.45:
+                return 0
+            elif draw < 0.9:
+                return 2
+            else:
+                return 1
+
         else:
             return int(self.prng.random()*3)
 
@@ -1339,7 +1365,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
                 else:
                     if self.reward_for_completion:
-                        reward = min(max(10.0 - 0.25*(self.steps_since_reset - 130), 0.0), 10.0)
+                        reward = min(max(10.0 - 0.2*(self.steps_since_reset - 130), 0.0), 10.0)
                         explanation = "Successful episode! {} steps".format(self.steps_since_reset)
                     else:
                         explanation = "Completed episode, but no bonus due to rule violation."
@@ -1348,7 +1374,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         else:
 
             # Reward for staying alive
-            reward += 0.05
+            reward += 0.03
 
             # Small penalty for widely varying lane commands
             cmd_diff = abs(self.obs[self.EGO_DES_LN] - self.obs[self.EGO_DES_LN_PREV])
@@ -1366,7 +1392,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     explanation += "Spd cmd pen {:.4f}. ".format(penalty)
 
             # Penalty for deviating from roadway speed limit
-            speed_mult = 0.1
+            speed_mult = 0.15
             if self.difficulty_level == 1  or  self.difficulty_level == 2:
                 speed_mult *= 2.0
 

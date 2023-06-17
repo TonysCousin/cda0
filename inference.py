@@ -7,9 +7,7 @@ import numpy as np
 import gymnasium
 import ray
 import ray.rllib.algorithms.ppo as ppo
-#import ray.rllib.algorithms.ddpg as ddpg
-#import ray.rllib.algorithms.td3  as td3
-#import ray.rllib.algorithms.sac as sac
+import ray.rllib.algorithms.sac as sac
 from ray.tune.logger import pretty_print
 import pygame
 from pygame.locals import *
@@ -62,6 +60,7 @@ def main(argv):
     env.reset()
 
     # Algorithm-specific configs - NN structure needs to match the checkpoint being read
+    """
     cfg = ppo.PPOConfig()
     cfg.framework("torch").exploration(explore = False)
     model = cfg.to_dict()["model"]
@@ -70,23 +69,20 @@ def main(argv):
     model["fcnet_activation"]               = "relu"
     model["post_fcnet_activation"]          = "linear"
     cfg.training(model = model)
-
     """
+
     cfg = sac.SACConfig()
     cfg.framework("torch").exploration(explore = False)
     cfg_dict = cfg.to_dict()
     policy_config = cfg_dict["policy_model_config"]
-    policy_config["fcnet_hiddens"]              = [256, 128]
+    policy_config["fcnet_hiddens"]              = [256, 256]
     policy_config["fcnet_activation"]           = "relu"
     q_config = cfg_dict["q_model_config"]
-    q_config["fcnet_hiddens"]                   = [256, 128]
+    q_config["fcnet_hiddens"]                   = [256, 256]
     q_config["fcnet_activation"]                = "relu"
     cfg.training(policy_model_config = policy_config, q_model_config = q_config)
-    """
 
-    cfg.environment(env = SimpleHighwayRampWrapper,
-                    env_config = env_config
-                   )
+    cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config)
 
     # Restore the selected checkpoint file
     # Note that the raw environment class is passed to the algo, but we are only using the algo to run the NN model,
@@ -114,6 +110,12 @@ def main(argv):
     while not done:
         step += 1
         action = algo.compute_single_action(obs, explore = False)
+
+        # Command masking for first few steps to allow feedback obs to populate
+        if step < 4:
+            action[1] = obs[env.EGO_LANE_ID]
+
+        # Move the environment forward one time step
         raw_obs, reward, done, truncated, info = env.step(np.ndarray.tolist(action)) #obs returned is UNSCALED
         episode_reward += reward
 
