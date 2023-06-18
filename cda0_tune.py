@@ -30,6 +30,9 @@ _checkpoint_path = None
 # Completed level 1 on 6/1/23
 #_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L1-abe44/trial03/checkpoint_000059"
 
+# Completed level 3 with SAC on 6/17/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/SAC/p256-256-v256-256/L3-3bbcf/trial03/checkpoint_001600"
+
 
 def main(argv):
 
@@ -57,7 +60,7 @@ def main(argv):
     chkpt_int           = 10    #num iters between storing new checkpoints
     burn_in_period      = 200   #num iterations before we consider stopping or promoting to next level
     perturb_int         = 200   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
-    max_iterations      = 1600
+    max_iterations      = 2400
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles

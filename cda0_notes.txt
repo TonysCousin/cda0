@@ -2475,13 +2475,13 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 * Created conda env rllib25 (see ~/Notes), then built a new env cda0 on top of that. In cda0 I installed
   pygame-2.4.0. The test_cuda program works after reboot.
 
-* Run 3da38 training with SAC, with randomize_start_dist off.
+* Run 3da38 training level 3 with SAC, with randomize_start_dist off.
 	* This run used whatever configs were on for the previous days' debugging sessions, so may not
 	  be ideal.
 	* All trials converged to a rough performance band of rmax in [2, 6] and rmean in [-6, -2] after
 	  800 iterations. But there were no errors reported.
 
-* Run 979df training with SAC, as before.
+* Run 979df training level 3 with SAC, as before.
 	* Added command masking logic to the step() method that forces desired lane command to be equal
 	  to the actual lane for the first 3 time steps, which allows the feedback obs to fully initialize.
 	* This run proved slightly better than the previous, with rmax in [3, 7] and starting to trend
@@ -2507,11 +2507,36 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 		  after starting in lane 2.  Speed is still a bit of a problem, but slightly less than
 		  earlier.
 
-* Run 3bbcf training with SAC
+* Run 3bbcf training level 3 with SAC
 	* Modified _select_init_lane() to choose 0 and 2 each with 45% probability and lane 1 at 10%.
 	* Increased the speed penalty multiplier from 0.1 to 0.15.
 	* Doubled the duration of the Gaussian noise from 500k to 1M time steps.
 	* Doubled the run duration from 800 to 1600 iterations.
+	* By the end of training 4 trials had rmax in [9, 10] and rmean in [0, 3], while all had
+	  rmin = -20. Looks like there's room for more improvement if training continues.
+	* Inference on trial 3 showed lane 0 starts always seem to crash. Turns out inference starts
+	  more consistently uptrack than traning did, so maybe it didn't get enough training exposure
+	  to the neighbor vehicles parked in lane 1.
+	* Inference in lane 1 shows better speed performance, holding steady ~21 m/s, but still
+	  incurring more speed penalty than the keep-alive bonus.
+	* Saved trial 3 checkpoint for future use.
+
+* Run 0392b training level 3 with SAC starting from checkpoint in 3bbcf trial03 for additional 800 iters
+	* Modified reset() to set the initial ego_p the same in training as it does in inference.
+	* Modified reward to increase multiplier on speed penalty from 0.15 to 0.2.
+	* Not so good. Best rmax ~9 and best rmean ~-2.
+
+* Run 122bb training level 3 with SAC from scratch for 2400 iterations. No other changes made.
+	* Very bad. No trial sustained an rmax > -5.
+
+6/18/23
+
+* Run 740f8 training level 3 from scratch with SAC
+	* Changed reset() to prevent agent starting in lane 0 to be beside the parked neighbors.
+	* This proved somewhat better, but not as good as 3bbcf yesterday. rmax up to 8 on a couple
+	  trials but most did a lot worse with rmean in [-3, 1] range.
+	* Inference looked fine, except that speeds are slow in lane 1 (~21 m/s). It runs fast during
+	  time in lane 2, but as soon as the lane change occurs, it slows down.
 
 
 

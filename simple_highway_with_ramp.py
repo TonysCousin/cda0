@@ -474,7 +474,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If we are at difficulty level 0-3, then choose widely randomized initial conditions
             if self.difficulty_level < 4:
-                ego_p = self.prng.random() * 500.0 + ego_lane_start
+                ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
                 if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
                     physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                     initial_steps = 60000 #num steps to wait before starting to shrink the max distance
@@ -492,7 +492,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 INITIAL_STEPS   = 0 #num steps to wait before starting to shrink the max distance
                 FINAL_STEPS     = 1 #num steps where max distance reduction ends
                 physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
-                ego_p = self.prng.random() * 500.0 + ego_lane_start
+                ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
                 if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
                     max_distance = physical_limit
                     if self.total_steps > INITIAL_STEPS:
@@ -512,7 +512,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 #                perturb_ctrl.has_perturb_begun()))
 
             else: #levels 5 and up
-                ego_p = self.prng.random() * 500.0 + ego_lane_start
+                ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
                 ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 15.0) + 15.0 #not practical to train at really low speeds
 
         # Else, we are doing inference, so allow configrable overrides if present
@@ -571,7 +571,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # going to immediately crash with them (n1 is always the farthest downtrack and n3 is always the farthest uptrack). Give it
         # more room if going in front of the neighbors, as ego has limited accel and may be starting much slower than they are.
         #TODO: when difficulty levels > 4 are implemented, this needs to account for vehicles in other lanes also.
-        if ego_lane_id == 1:
+        if ego_lane_id == 1  or  (ego_lane_id == 0  and  self.difficulty_level < 4): #stay away from parked neighbors
             min_loc = self.vehicles[3].p - 3.0*SimpleHighwayRamp.VEHICLE_LENGTH
             max_loc = self.vehicles[1].p + 6.0*SimpleHighwayRamp.VEHICLE_LENGTH
             midway = 0.5*(max_loc - min_loc) + min_loc
@@ -1392,7 +1392,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     explanation += "Spd cmd pen {:.4f}. ".format(penalty)
 
             # Penalty for deviating from roadway speed limit
-            speed_mult = 0.15
+            speed_mult = 0.2
             if self.difficulty_level == 1  or  self.difficulty_level == 2:
                 speed_mult *= 2.0
 
