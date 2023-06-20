@@ -60,7 +60,7 @@ def main(argv):
     chkpt_int           = 10    #num iters between storing new checkpoints
     burn_in_period      = 200   #num iterations before we consider stopping or promoting to next level
     perturb_int         = 200   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
-    max_iterations      = 2400
+    max_iterations      = 1600
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -82,7 +82,7 @@ def main(argv):
     env_config["debug"]                         = 0
     env_config["verify_obs"]                    = False
     env_config["training"]                      = True
-    env_config["randomize_start_dist"]          = False
+    env_config["randomize_start_dist"]          = True
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
     env_config["neighbor_start_loc"]            = 0.0 #dist downtrack from beginning of lane 1 for n3, m
     #env_config["init_ego_lane"]                 = 0
@@ -92,7 +92,7 @@ def main(argv):
     explore_config = cfg_dict["exploration_config"]
     #print("///// Explore config:\n", pretty_print(explore_config))
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.1, 0.5) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = tune.uniform(0.1, 0.7) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
@@ -219,7 +219,7 @@ def main(argv):
                         # for PPO:
                     #   "lr"                                    :   tune.loguniform(1e-6, 2e-4),
                     #   "entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
-                    #    "kl_coeff"                              :   tune.uniform(0.3, 0.8),
+                    #   "kl_coeff"                              :   tune.uniform(0.3, 0.8),
                     #   "clip_param"                            :   tune.uniform(0.05, 0.4),
                     },
     )

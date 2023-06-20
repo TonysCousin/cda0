@@ -132,9 +132,9 @@ class PerturbationController:
                 with open(self._filename2, "r+") as f2:
                     count = int(f2.readline())
                     if count >= 0:
-                        self._algo_init_count = count + 1
                         f2.seek(0)
                         f2.write("{}\n".format(self._algo_init_count))
+                        self._algo_init_count = count + 1
                         success = True
                         break
             except:
@@ -194,6 +194,14 @@ class PerturbationController:
         #   To be safe, we need to allow for these extra copies when defining the threshold; allow up to 14 extras.
         max_instances = 16*self._num_trials + 14
         return self.get_algo_init_count() > max_instances
+
+
+    def get_num_perturb_cycles(self) -> int:
+        """Returns the number of times perturbation has been applied during the tuning run. This result is approximate, as
+            the number of environment instances isn't necessarily constant for each perturb cycle (unknown why).
+        """
+
+        return int(max(self.get_algo_init_count() - 8, 0)) // 16
 
 
     def _have_valid_data(self) -> bool:

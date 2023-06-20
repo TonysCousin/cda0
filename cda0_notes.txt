@@ -2537,12 +2537,39 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  trials but most did a lot worse with rmean in [-3, 1] range.
 	* Inference looked fine, except that speeds are slow in lane 1 (~21 m/s). It runs fast during
 	  time in lane 2, but as soon as the lane change occurs, it slows down.
+	* It appears the low scores are all due to the desire for low speeds; the lane change maneuver
+	  normally happens just fine.
+
+* Run 1d15b training level 3 from scratch with SAC
+	* Tweaked reward keep-alive bonus from 0.03 to 0.02 and decreased speed penalty multiplier from
+	  0.2 to 0.15 (as it was yesterday).
+	* Terrible. All trials rmax ~ -6.
+	* It seems a big part of the problem is that it can't learn to drive the length of lane 2. Even
+	  after many iterations it attempts to change lanes after only 3 steps (forced to stay in lane).
+
+* Run de296 training level 3 from scratch with SAC
+	* Modified reward function to anneal the keepalive bonus from 0.03 down to 0 between 400k and
+	  800k steps.
+	* Changed _select_init_lane() to choose 0 40% of the time and 2 50% and 1 10%.
+	* Turned on randomized_start_dist to help it explore all parts of the track.
+	* A couple trials reached rmax ~12, with two of them (8 and 9) reaching rmean ~0 at the end
+	  with some spikes well above that earlier.
+	* Keepalive bonus never deviated from 0.03, so the annealing didn't happen. Mostly the step
+	  count stayed below 120k, with the highest I see at 147k. The counter is getting reset at each
+	  perturb event.
+	* Inference on trial 9 shows lane 0 start does really well, maintainin speed in 24-27 m/s,
+	  which is almost ideal, and scored 11 points. Same for lane 1 start. It never learned to
+	  start lane 2, however, running off road in 4th time step every time.
+
+* Run 76221 training level 3 from scratch with SAC
+	* Fixed reward function for annealing keepalive bonus across perturb events.
+	* Skewed more training time to lane 2 starts (70% vs 20% for lane 0 and 10% for lane 1).
 
 
 
 Todo
-- try a different NN structure. Even if this fails, at least understand how 128 affects the logits layer
-- post on Ray Discuss to ask about why a default model needs a logits layer
+- skew lane choice probabilities toward 2 more
+- add full action masking to avoid illegal lane changes ever (annealed)
 
 
 
