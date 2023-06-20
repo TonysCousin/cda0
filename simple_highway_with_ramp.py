@@ -1107,7 +1107,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             elif draw < 0.3:
                 return 1
             else:
-                return 1
+                return 2
 
         else:
             return int(self.prng.random()*3)

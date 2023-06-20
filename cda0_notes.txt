@@ -2561,15 +2561,19 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  which is almost ideal, and scored 11 points. Same for lane 1 start. It never learned to
 	  start lane 2, however, running off road in 4th time step every time.
 
-* Run 76221 training level 3 from scratch with SAC
+6/20/23
+
+* Run d106d training level 3 from scratch with SAC
 	* Fixed reward function for annealing keepalive bonus across perturb events.
 	* Skewed more training time to lane 2 starts (70% vs 20% for lane 0 and 10% for lane 1).
+	* Not good. All rmax level at +8, all rmean noisy in [-6, -2] after 1600 iters.
 
 
 
 Todo
-- skew lane choice probabilities toward 2 more
 - add full action masking to avoid illegal lane changes ever (annealed)
+- change meaning of desired lane values between 0 & 1 to see if it still prefers action[0] to be
+  near 0 (which would now be lane 0). Maybe a similar redefinition of speed command?
 
 
 
