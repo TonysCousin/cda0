@@ -657,13 +657,21 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         action[0] = cmd[0]
         des_ln = cmd[1]
         if self.steps_since_reset < 4:
-            des_ln = self.vehicles[0].lane_id - 1.0 #action is still scaled
+            #TODO: jas debug with next block
+            des_ln = self.vehicles[0].lane_id #action is still scaled
+            if des_ln == 2:
+                des_ln = -1
+            #des_ln = self.vehicles[0].lane_id - 1.0 #action is still scaled
             assert -1.0 <= des_ln <= 1.0, "///// step ERROR: command masked action[1] = {} is illegal.".format(action[1])
         action[1] = des_ln
 
         # Unscale the action inputs (both actions are in [-1, 1])
         desired_speed = (action[0] + 1.0)/2.0 * SimpleHighwayRamp.MAX_SPEED
-        desired_lane = int(math.floor(action[1] + 0.5) + 1.0)
+        #TODO: jas next lines are for debugging only; remaps action = -1 to lane 2, otherwise lane = action. CHANGE ABOVE ALSO!
+        desired_lane = int(math.floor(action[1] + 0.5))
+        if desired_lane < 0:
+            desired_lane = 2
+        #desired_lane = int(math.floor(action[1] + 0.5) + 1.0)
         assert 0 <= desired_lane <= 2, "///// step ERROR: desired_lane = {}, action[1] = {}".format(desired_lane, action[1])
         self.debug_ln_cmd[desired_lane] += 1 #TODO debug only
 
@@ -1378,7 +1386,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             bonus = INITIAL_BONUS
             keepalive_begin_steps   = 4e5
             keepalive_end_steps     = 8e5
-            tune_steps = perturb_ctrl.get_num_perturb_cycles() * 100000 + self.total_steps #keeps counting across perturb events
+            tune_steps = self.total_steps
+            if self.training:
+                tune_steps += perturb_ctrl.get_num_perturb_cycles() * 100000 #keeps counting across perturb events
             if tune_steps > keepalive_begin_steps:
                 if tune_steps > keepalive_end_steps:
                     bonus = 0.0

@@ -49,7 +49,7 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
             ) -> Tuple[np.array, float, bool, bool, Dict]:  #returns scaled obs, rewards, dones truncated flag, and infos,
                                                             # where obs are scaled for NN consumption
 
-        """Passes the actions (after unscaling) to the environment to advance it one step and to gather new observations and rewards.
+        """Passes the actions to the environment to advance it one step and to gather new observations and rewards.
 
             If the "training" config param is True, then the return obs needs the resulting observations scaled,
             such that it will be usable as input to a NN.  The rewards, dones and info structures are not modfied.

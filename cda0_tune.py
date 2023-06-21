@@ -176,11 +176,11 @@ def main(argv):
 
     policy_config = cfg_dict["policy_model_config"]
     policy_config["fcnet_hiddens"]              = [256, 256]
-    policy_config["fcnet_activation"]           = "relu"
+    policy_config["fcnet_activation"]           = "tanh"
 
     q_config = cfg_dict["q_model_config"]
     q_config["fcnet_hiddens"]                   = [256, 256]
-    q_config["fcnet_activation"]                = "relu"
+    q_config["fcnet_activation"]                = "tanh"
 
     cfg.training(   twin_q                      = True,
                     gamma                       = 0.995,
