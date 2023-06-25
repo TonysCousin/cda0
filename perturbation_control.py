@@ -201,7 +201,10 @@ class PerturbationController:
             the number of environment instances isn't necessarily constant for each perturb cycle (unknown why).
         """
 
-        return int(max(self.get_algo_init_count() - 8, 0)) // 16
+        count = self.get_algo_init_count()
+        res = int(max(count - 8, 0)) // 16
+        print("///// PerturbationController.get_num_perturb_cycles: init count = {}. Returning {}".format(count, res))
+        return res
 
 
     def _have_valid_data(self) -> bool:

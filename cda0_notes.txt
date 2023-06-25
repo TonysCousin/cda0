@@ -2562,7 +2562,6 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  start lane 2, however, running off road in 4th time step every time.
 
 6/20/23
-22:10 - 23:00 = 0:50
 
 * Run d106d training level 3 from scratch with SAC
 	* Fixed reward function for annealing keepalive bonus across perturb events.
@@ -2590,20 +2589,63 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  0.49. So it has been staying as close to 0 as it can get the whole time.
 
 6/21/23
-07:52 - 08:10 = 0:18
-08:50 - 09:08 = 0:18
 
-* Run ? training level 3 from scratch with SAC
+* Run 1abe2 training level 3 from scratch with SAC
 	* Changed NN activations from relu to tanh for both the policy & value networks, thinking
 	  that relu may be forcing an affinity for outputs near 0.
+	* Results were virtually identical to those obtained above (run 86465), except that lane
+	  2 starts ended immediately after the masking. So the change of activation function had
+	  no effect.
+	* With inference on lane 2 run, I verified that the zone flag for reachable is working
+	  correctly as agent passes the various key points, but the drivable flag does not. After
+	  agent changed to lane 1 then passed the end of lane 2, its zones 3, 6, 9 were still
+	  showing the drivable flag as true.
+
+6/22/23
+
+* Studied how to do action masking with RLlib
+	* They provide an environment wrapper, ActionMaskEnv, that supplements the env's obs
+	  outputs by adding a dict of illegal actions, but it only works for a discrete action
+	  space.
+
+* Run 77444 training level 3 from scratch with SAC
+	* Restored the desired lane command interpretation to the original design.
+	* Relaxed initial lane choice so that it is now lane 0 30%, lane 1 20%, lane 2 50%.
+	* Added HP tuning for SAC tau and n_step, and set alpha = 2, since the action space is
+	  2 long.
+	* Set the burn-in period to 800 iterations, to allow things to settle more.
+	* Took a little longer for the various trials to converge on the "best" performance,
+	  but they all did.
+	* Same results as before. rmax ~8, rmean in [-6, -3] from ~700k steps onward for all
+	  trials. Didn't do inference on anything yet.
+
+6/24/23
+
+* Run 6bfd4 training level 3 from scratch with SAC, after re-reading the original SAC paper
+	* Turned off explicit exploration, allowing the SAC entropy to do it implicitly.
+	* Set up alpha as a tune HP, allowing it to vary in [0.01, 10.0] as an initial value
+	  (not a perturbable HP for now).
+	* Starting to get decent results. All trials rmax > 12, rmean rougly in [3, 7]. All
+	  trials ended with alpha either 0.11 or 0.02.
+	* Inference on trail 2 (ending rmean = 6) shows lanes 0 & 1 work better than before
+	  (lane 0 stays in lane for most of the route), but speed is ~21 m/s. Lane 2 starts
+	  stay in lane almost to the merge point, then drive off; but it slows way down to
+	  9 m/s.  Still needs to learn more. Trial 9 performed similarly.
+
+* Run 589er training level 3 from scratch with SAC
+	* Added debugging for perturb control actions involved with annealing keepalive
+	  reward.
+	* Increased speed penalty multiplier from 0.15 to 0.2.
+	* Narrowed the HP search space on alpha to [0.01, 0.3]
 
 
 
 Todo
-- Change to tanh activation
+- fix zone drivable flag calculations when passing end of lane 2
 - collect stats on action distribution in each channel.
 - add full action masking to avoid illegal lane changes ever (annealed)
 - Maybe a similar redefinition of speed command?
+- Try DDPG
 
 
 

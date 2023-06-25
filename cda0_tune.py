@@ -8,6 +8,7 @@ from ray.tune.logger import pretty_print
 from ray.air import RunConfig
 import ray.rllib.algorithms.ppo as ppo
 import ray.rllib.algorithms.sac as sac
+import ray.rllib.algorithms.ddpg as ddpg
 
 from stop_simple import StopSimple
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
@@ -44,6 +45,8 @@ def main(argv):
     ray.init()
 
     # Define which learning algorithm we will use and set up is default config params
+    #algo = "DDPG"
+    #cfg = ddpg.DDPGConfig()
     algo = "SAC"
     cfg = sac.SACConfig()
     cfg.framework("torch")
@@ -58,7 +61,7 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     chkpt_int           = 10    #num iters between storing new checkpoints
-    burn_in_period      = 200   #num iterations before we consider stopping or promoting to next level
+    burn_in_period      = 800   #num iterations before we consider stopping or promoting to next level
     perturb_int         = 200   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
     max_iterations      = 1600
     num_trials          = 10
@@ -97,8 +100,8 @@ def main(argv):
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
     explore_config["scale_timesteps"]           = 1000000  #tune.choice([100000, 400000]) #was 900k
-    cfg.exploration(explore = True, exploration_config = explore_config)
-    #cfg.exploration(explore = False)
+    #cfg.exploration(explore = True, exploration_config = explore_config)
+    cfg.exploration(explore = False)
 
     # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
     # Use max_concurrent_trials in the TuneConfig area to limit the number of trials being run in parallel.
@@ -166,9 +169,24 @@ def main(argv):
     model_config["fcnet_activation"]            = "relu"
     cfg.training(model = model_config)
 
-    """
-    # ===== Training algorithm HPs for SAC ==================================================
+    # ===== Training algorithm HPs for DDPG =================================================
 
+    cfg.training(   actor_hiddens               = [256, 256],
+                    actor_hidden_activation     = "relu",
+                    actor_lr                    = tune.loguniform(1e-6, 1e-3),
+
+                    critic_hiddens              = [256, 256],
+                    critic_hidden_activation    = "relu",
+                    critic_lr                   = tune.loguniform(1e-6, 1e-3),
+
+                    n_step                      = tune.choice([1, 2, 3]),
+                    gamma                       = 0.995,
+                    tau                         = tune.choice([0.001, 0.002, 0.003, 0.004, 0.005]),
+
+    )
+    """
+
+    # ===== Training algorithm HPs for SAC ==================================================
     opt_config = cfg_dict["optimization"]
     opt_config["actor_learning_rate"]           = tune.loguniform(1e-6, 1e-3) #default 0.0003
     opt_config["critic_learning_rate"]          = tune.loguniform(1e-6, 1e-3) #default 0.0003
@@ -185,9 +203,9 @@ def main(argv):
     cfg.training(   twin_q                      = True,
                     gamma                       = 0.995,
                     train_batch_size            = 256, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    initial_alpha               = 1.0,
+                    initial_alpha               = tune.loguniform(0.01, 0.3),
                     tau                         = 0.005,
-                    n_step                      = 1,
+                    n_step                      = tune.choice([1, 2, 3]), #1,
                     optimization_config         = opt_config,
                     policy_model_config         = policy_config,
                     q_model_config              = q_config,
@@ -195,8 +213,8 @@ def main(argv):
 
     # ===== Final setup =========================================================================
 
-    #print("\n///// {} training params are:\n".format(algo))
-    #print(pretty_print(cfg.to_dict()))
+    print("\n///// {} training params are:\n".format(algo))
+    print(pretty_print(cfg.to_dict()))
 
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation
@@ -211,16 +229,19 @@ def main(argv):
                                                                         #False:  each trial finishes & decides based on available info at that time,
                                                                         # then immediately moves on. If True and one trial dies, then PBT hangs and all
                                                                         # remaining trials go into perpetual PAUSED state.
-                    hyperparam_mutations={                              #resample distributions
-                        #for SAC:
-                        "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
-                        "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
-                        "optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
-                        # for PPO:
-                    #   "lr"                                    :   tune.loguniform(1e-6, 2e-4),
-                    #   "entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
-                    #   "kl_coeff"                              :   tune.uniform(0.3, 0.8),
-                    #   "clip_param"                            :   tune.uniform(0.05, 0.4),
+                    hyperparam_mutations = {                            #resample distributions
+                    #for SAC:
+                        #"optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
+                        #"optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
+                        #"optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
+                    #for DDPG:
+                        "actor_lr"                              :   tune.loguniform(1e-6, 1e-3),
+                        "critic_lr"                             :   tune.loguniform(1e-6, 1e-3),
+                    # for PPO:
+                        #"lr"                                    :   tune.loguniform(1e-6, 2e-4),
+                        #"entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
+                        #"kl_coeff"                              :   tune.uniform(0.3, 0.8),
+                        #"clip_param"                            :   tune.uniform(0.05, 0.4),
                     },
     )
 
