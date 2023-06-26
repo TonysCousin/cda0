@@ -203,7 +203,7 @@ class PerturbationController:
 
         count = self.get_algo_init_count()
         res = int(max(count - 8, 0)) // 16
-        print("///// PerturbationController.get_num_perturb_cycles: init count = {}. Returning {}".format(count, res))
+        #print("///// PerturbationController.get_num_perturb_cycles: init count = {}. Returning {}".format(count, res))
         return res
 
 

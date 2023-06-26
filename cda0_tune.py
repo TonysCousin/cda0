@@ -57,12 +57,12 @@ def main(argv):
     # let_it_run can be a single value if it applies to all phases.
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
-    success_threshold   = [9.5,         9.5,        9.5,        14.5,       9.5]
+    success_threshold   = [9.5,         9.5,        9.5,        10.0,       9.5]
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     chkpt_int           = 10    #num iters between storing new checkpoints
-    burn_in_period      = 800   #num iterations before we consider stopping or promoting to next level
-    perturb_int         = 200   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
+    burn_in_period      = 400   #num iterations before we consider stopping or promoting to next level
+    perturb_int         = 400   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
     max_iterations      = 1600
     num_trials          = 10
 
@@ -188,9 +188,9 @@ def main(argv):
 
     # ===== Training algorithm HPs for SAC ==================================================
     opt_config = cfg_dict["optimization"]
-    opt_config["actor_learning_rate"]           = tune.loguniform(1e-6, 1e-3) #default 0.0003
-    opt_config["critic_learning_rate"]          = tune.loguniform(1e-6, 1e-3) #default 0.0003
-    opt_config["entropy_learning_rate"]         = tune.loguniform(1e-4, 1e-3) #default 0.0003
+    opt_config["actor_learning_rate"]           = tune.loguniform(1e-6, 1e-4) #default 0.0003
+    opt_config["critic_learning_rate"]          = tune.loguniform(1e-6, 1e-4) #default 0.0003
+    opt_config["entropy_learning_rate"]         = tune.loguniform(1e-4, 1e-4) #default 0.0003
 
     policy_config = cfg_dict["policy_model_config"]
     policy_config["fcnet_hiddens"]              = [256, 256]
@@ -203,9 +203,9 @@ def main(argv):
     cfg.training(   twin_q                      = True,
                     gamma                       = 0.995,
                     train_batch_size            = 256, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    initial_alpha               = tune.loguniform(0.0004, 0.006),
+                    initial_alpha               = tune.loguniform(0.001, 0.008),
                     tau                         = 0.005,
-                    n_step                      = 2, #tune.choice([1, 2, 3]), #1,
+                    n_step                      = tune.choice([1, 2, 3]), #1,
                     optimization_config         = opt_config,
                     policy_model_config         = policy_config,
                     q_model_config              = q_config,

@@ -483,6 +483,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     else:
                         max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(5e5 - initial_steps) + physical_limit,
                                         10.0) #decreases over time steps
+                        print("///// reset: max_distance degraded to {:.1f} for lane {} pre-perturb".format(max_distance, ego_lane_id))
                     ego_p = self.prng.random() * max_distance + ego_lane_start
                 ego_speed = self.prng.random() * 5.0 + 30.0 #value in [5, 35] m/s
 
@@ -1353,7 +1354,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 reward = -10.0
                 # Assign a different value if agent is in lane 2 so we can see in the logs which episodes are in this lane
                 if self.vehicles[0].lane_id == 2:
-                    reward = -12.0
+                    reward = -11.0
                 explanation = "Ran off road. "
 
             # Else if the vehicle just stopped in the middle of the road then
@@ -1384,10 +1385,12 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         else:
 
             # Reward for staying alive
-            INITIAL_BONUS = 0.03
+            INITIAL_BONUS = 0.01
             bonus = INITIAL_BONUS
-            keepalive_begin_steps   = 2e5
-            keepalive_end_steps     = 8e5
+            tune_steps = 1
+            """
+            keepalive_begin_steps   = 2e6 #effectively prevents it from being annealed
+            keepalive_end_steps     = 8e6
             tune_steps = self.total_steps
             if self.training:
                 tune_steps += perturb_ctrl.get_num_perturb_cycles() * 100000 #keeps counting across perturb events
@@ -1396,13 +1399,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     bonus = 0.0
                 else:
                     bonus -= INITIAL_BONUS * (tune_steps - keepalive_begin_steps) / (keepalive_end_steps - keepalive_begin_steps)
+            """
             reward += bonus
             if tune_steps % 1000 == 0: #TODO debug only
                 print("///// reward step = {}, keepalive bonus = {:.4f}".format(tune_steps, bonus))
 
             # Small penalty for widely varying lane commands
             cmd_diff = abs(self.obs[self.EGO_DES_LN] - self.obs[self.EGO_DES_LN_PREV])
-            penalty = 0.01 * cmd_diff * cmd_diff
+            penalty = 0.1 * cmd_diff * cmd_diff
             reward -= penalty
             if penalty > 0.0001:
                 explanation += "Ln cmd pen {:.4f}. ".format(penalty)
@@ -1416,7 +1420,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     explanation += "Spd cmd pen {:.4f}. ".format(penalty)
 
             # Penalty for deviating from roadway speed limit
-            speed_mult = 0.2
+            speed_mult = 0.25
             if self.difficulty_level == 1  or  self.difficulty_level == 2:
                 speed_mult *= 2.0
 
@@ -1430,7 +1434,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
-                penalty = 0.02 + 0.01*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
+                penalty = 0.1 + 0.02*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
                 reward -= penalty
                 explanation += "Ln chg pen {:.4f}. ".format(penalty)
 

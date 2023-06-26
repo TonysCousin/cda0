@@ -2647,22 +2647,64 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 		* lane 2 start drives close to 36 m/s, stays in lane 2 until its very end
 		  then changes to 1, then quickly alternates between 0 and 1 for the
 		  remainder of the route.
+		* It seems the entropy term is still swamping the finer reward signal
+		  elements, such as the per-time step penalties.
 	* Found that PerturbController still doesn't see past a perturb event when the
 	  worker is deleted and a new one started. In that case the num init count resets
 	  to 0, which it should not do.
 
 6/25/23
 
-* Run ce983 training level 3 from scratch with SAC
-	* Set n_step = 2 (fixed) and changed tuning range for alpha to [0.0004, 0.006].
+* Run 22c9e training level 3 from scratch with SAC
+	* Set n_step = 2 (fixed) and changed tuning range for alpha to [0.0005, 0.01].
 	* Changed completion reward to peak at 130 steps and degrade on both sides instead
 	  of just for slower routes.
 	* Fixed problem in _update_obs_zones() to report the correct drivable flag for
 	  neighbor lanes as they come into and go out of existence along the route.
+	* No good. rmean ended in [-4, 2] for all trials. Some had rmax in [8, 10]. Trials
+	  had alpha either 0.00092 or 0.0018.
+	* Inference shows lane 0 & 1 start drives smoothly to end, but at speeds ~17 m/s.
+	  A lane 1 start changed lanes once to 0.  Lane 2 starts end after 4 steps due to
+	  illegal lane change.
+
+6/26/23
+08:21 - 08:33 = 0:12
+14:17 - 
+
+* Run 7800e training level 3 from scratch with SAC
+	* Allowed n_step to vary in [1, 2, 3]. Changed range of alpha to [0.0009, 0.006].
+	* No good. rmean all in [-4, -1], rmin all -12.
+	* Inference on lanes 0 & 1 worked pretty well, running at steady 30 m/s (slightly
+	  over speed limit), with one or two extra lane changes, but scoring ~9 points.
+	  But lane 2 runs always run off road right away.
+	* Best trial was 9, with alpha = 0.0017, actor LR = 8.3e-4, critic LR = 1.7e-6,
+	  entropy LR = 7.0e-4 and n_step = 1. However, there were several trials that
+	  ended with n_step = 3.
+	* I am starting to believe that reward scaling is a problem. There is too much
+	  variation between the large reward signals and the small ones, that they can't
+	  both balance against the entropy term with a single alpha, so the reward signal
+	  maybe needs to have its dynamic range reduced.
+
+* Run ? training level 3 from scratch with SAC
+	* Changed HP search range slighly for alpha to [0.001, 0.008].
+	* Changed top end of the 3 LR search ranges from 1e-3 to 1e-4.
+	* Changed penalties for in-progress time steps:
+		* keepalive bonus went from 0.03 to 0.01 (accumulates to ~1.3), and made
+		  it constant (no annealing)
+		* lane cmd penatly multiplier went from 0.01 to 0.1 (accumulates to 1-2)
+		* increased speed penalty mult from 0.2 to 0.25 (accumulates to 5+ for a
+		  continued 20% deviation)
+		* increased LC penalty from 0.02 + 0.01*delay to 0.1 + 0.02*delay
+		  (accumulates to 1 for short-sighted LC)
+	* Changed perturb params for burn-in from 800 to 400 and for perturb interval to
+	  go from 200 to 400 iterations.
 
 
 
 Todo
+- change replay buffer capacity from 1e6 to smaller.
+- use grad_clip.
+- turn off randomized start.
 - fix perturb controller not counting past new worker environments after beiing perturbed.
 - collect stats on action distribution in each channel.
 - add full action masking to avoid illegal lane changes ever (annealed)
