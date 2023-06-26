@@ -203,9 +203,9 @@ def main(argv):
     cfg.training(   twin_q                      = True,
                     gamma                       = 0.995,
                     train_batch_size            = 256, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    initial_alpha               = tune.loguniform(0.01, 0.3),
+                    initial_alpha               = tune.loguniform(0.0004, 0.006),
                     tau                         = 0.005,
-                    n_step                      = tune.choice([1, 2, 3]), #1,
+                    n_step                      = 2, #tune.choice([1, 2, 3]), #1,
                     optimization_config         = opt_config,
                     policy_model_config         = policy_config,
                     q_model_config              = q_config,

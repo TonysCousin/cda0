@@ -2632,16 +2632,38 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  stay in lane almost to the merge point, then drive off; but it slows way down to
 	  9 m/s.  Still needs to learn more. Trial 9 performed similarly.
 
-* Run 589er training level 3 from scratch with SAC
+* Run 9eb13 training level 3 from scratch with SAC
 	* Added debugging for perturb control actions involved with annealing keepalive
 	  reward.
 	* Increased speed penalty multiplier from 0.15 to 0.2.
-	* Narrowed the HP search space on alpha to [0.01, 0.3]
+	* Narrowed the HP search space on alpha to [0.001, 0.5]
+	* Very good at first glance! All trials ended with rmean > 8 and rmin ~0! All ended
+	  up with alpha = 0.0046 and n_step = 2. Best trial was 5.
+	* Inference on trial 5 shows
+		* lane 0 start does a lot of jumping between lanes 0 and 1, and runs up to
+		  36 m/s, seemingly ignoring the penalties for those actions.
+		* lane 1 start performs similarly. In both cases, completion reward was 10
+		  even though it used 109-116 steps.
+		* lane 2 start drives close to 36 m/s, stays in lane 2 until its very end
+		  then changes to 1, then quickly alternates between 0 and 1 for the
+		  remainder of the route.
+	* Found that PerturbController still doesn't see past a perturb event when the
+	  worker is deleted and a new one started. In that case the num init count resets
+	  to 0, which it should not do.
+
+6/25/23
+
+* Run ce983 training level 3 from scratch with SAC
+	* Set n_step = 2 (fixed) and changed tuning range for alpha to [0.0004, 0.006].
+	* Changed completion reward to peak at 130 steps and degrade on both sides instead
+	  of just for slower routes.
+	* Fixed problem in _update_obs_zones() to report the correct drivable flag for
+	  neighbor lanes as they come into and go out of existence along the route.
 
 
 
 Todo
-- fix zone drivable flag calculations when passing end of lane 2
+- fix perturb controller not counting past new worker environments after beiing perturbed.
 - collect stats on action distribution in each channel.
 - add full action masking to avoid illegal lane changes ever (annealed)
 - Maybe a similar redefinition of speed command?

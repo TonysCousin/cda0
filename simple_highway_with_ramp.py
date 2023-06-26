@@ -1135,34 +1135,43 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
        # Get the current roadway geometry
         ego_lane_id = self.vehicles[0].lane_id
         ego_p = self.vehicles[0].p
-        ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_p)
         if self.debug > 1:
-            print("///// Entering update_obs_zones: ego_lane_id = {}, ego_p = {:.1f}, ego_rem = {:.1f}, base = {}"
-                  .format(ego_lane_id, ego_p, ego_rem, base))
+            print("///// Entering update_obs_zones: ego_lane_id = {}, ego_p = {:.1f}, base = {}"
+                  .format(ego_lane_id, ego_p, base))
 
         # Determine pavement existence and reachability in each zone
         # CAUTION: this block is dependent on the specific roadway geometry for this experiment, and is not generalized
-        if lid >= 0: #there's a lane to the left
-            for row in range(1, 4):
-                zone = 3*(row - 1) + 1
-                offset = base + (zone - 1)*num_zone_fields
-                self.obs[offset + 0] = 1.0 #drivable
+        for row in range(1, 4):
+            zone_front = ((3 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH #distance downtrack from ego vehicle, m
+            zone_rear = zone_front - SimpleHighwayRamp.OBS_ZONE_LENGTH
+            zone_mid_p = ego_p + 0.5*(zone_front + zone_rear)
+            ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_p)
 
-                zone_front = ((3 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH #distance downtrack from ego vehicle, m
-                zone_rear = zone_front - SimpleHighwayRamp.OBS_ZONE_LENGTH
-                if la <= zone_rear  and  lb >= zone_front: #TODO: this may be too conservative a requirement
-                    self.obs[offset + 1] = 1.0 #reachable
+            # Determine if there is pavement in the left-hand zone and it's reachable
+            if lid >= 0: #the lane exists somewhere along the route
 
-        if rid >= 0: #there's a lane to the right
-            for row in range(1, 4):
-                zone = 3*(row - 1) + 3
-                offset = base + (zone - 1)*num_zone_fields
-                self.obs[offset + 0] = 1.0 #drivable
+                # Determine if the left lane exists next to the middle of this zone
+                start_p = self.roadway.get_lane_start_p(lid)
+                if start_p <= zone_mid_p <= start_p + self.roadway.get_total_lane_length(lid):
+                    _, _, la, lb, _, _, _, _, _ = self.roadway.get_current_lane_geom(ego_lane_id, zone_mid_p)
+                    l_zone = 3*(row - 1) + 1
+                    l_offset = base + (l_zone - 1)*num_zone_fields
+                    self.obs[l_offset + 0] = 1.0 #drivable
+                    if la <= zone_rear  and  lb >= zone_front: #TODO: this may be too conservative a requirement
+                        self.obs[l_offset + 1] = 1.0 #reachable
 
-                zone_front = ((3 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH #distance downtrack from ego vehicle, m
-                zone_rear = zone_front - SimpleHighwayRamp.OBS_ZONE_LENGTH
-                if ra <= zone_rear  and  rb >= zone_front:
-                    self.obs[offset + 1] = 1.0 #reachable
+            # Determine if there is pavement in the right-hand zone and it's reachable
+            if rid >= 0: #there's a lane to the right somewhere along this route
+
+                # Determine if the left lane exists next to the middle of this zone
+                start_p = self.roadway.get_lane_start_p(rid)
+                if start_p <= zone_mid_p <= start_p + self.roadway.get_total_lane_length(rid):
+                    _, _, _, _, _, _, ra, rb, _ = self.roadway.get_current_lane_geom(ego_lane_id, zone_mid_p)
+                    r_zone = 3*(row - 1) + 3
+                    r_offset = base + (r_zone - 1)*num_zone_fields
+                    self.obs[r_offset + 0] = 1.0 #drivable
+                    if ra <= zone_rear  and  rb >= zone_front:
+                        self.obs[r_offset + 1] = 1.0 #reachable
 
         # We know there's a lane in the center, but not how far it extends in either direction so look at each zone in this column
         for row in range(1, 5):
@@ -1365,7 +1374,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
                 else:
                     if self.reward_for_completion:
-                        reward = min(max(10.0 - 0.2*(self.steps_since_reset - 130), 0.0), 10.0)
+                        dist = abs(self.steps_since_reset - 130)
+                        reward = min(max(10.0 - 0.2*dist, 0.0), 10.0)
                         explanation = "Successful episode! {} steps".format(self.steps_since_reset)
                     else:
                         explanation = "Completed episode, but no bonus due to rule violation."
