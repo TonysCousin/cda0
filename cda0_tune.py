@@ -100,8 +100,8 @@ def main(argv):
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
     explore_config["scale_timesteps"]           = 1000000  #tune.choice([100000, 400000]) #was 900k
-    #cfg.exploration(explore = True, exploration_config = explore_config)
-    cfg.exploration(explore = False)
+    cfg.exploration(explore = True, exploration_config = explore_config)
+    #cfg.exploration(explore = False)
 
     # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
     # Use max_concurrent_trials in the TuneConfig area to limit the number of trials being run in parallel.
@@ -203,9 +203,9 @@ def main(argv):
     cfg.training(   twin_q                      = True,
                     gamma                       = 0.995,
                     train_batch_size            = 256, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    initial_alpha               = tune.loguniform(0.001, 0.008),
+                    initial_alpha               = tune.loguniform(0.001, 0.1),
                     tau                         = 0.005,
-                    n_step                      = tune.choice([1, 2, 3]), #1,
+                    n_step                      = 1, #tune.choice([1, 2, 3]),
                     optimization_config         = opt_config,
                     policy_model_config         = policy_config,
                     q_model_config              = q_config,

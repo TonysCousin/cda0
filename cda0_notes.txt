@@ -2669,7 +2669,9 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 6/26/23
 08:21 - 08:33 = 0:12
-14:17 - 
+14:17 - 15:52 = 1:35
+17:58 - 18:07 = 0:09
+23:43 - 23:53 = 0:10
 
 * Run 7800e training level 3 from scratch with SAC
 	* Allowed n_step to vary in [1, 2, 3]. Changed range of alpha to [0.0009, 0.006].
@@ -2685,7 +2687,7 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  both balance against the entropy term with a single alpha, so the reward signal
 	  maybe needs to have its dynamic range reduced.
 
-* Run ? training level 3 from scratch with SAC
+* Run cacb4 training level 3 from scratch with SAC
 	* Changed HP search range slighly for alpha to [0.001, 0.008].
 	* Changed top end of the 3 LR search ranges from 1e-3 to 1e-4.
 	* Changed penalties for in-progress time steps:
@@ -2698,10 +2700,38 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 		  (accumulates to 1 for short-sighted LC)
 	* Changed perturb params for burn-in from 800 to 400 and for perturb interval to
 	  go from 200 to 400 iterations.
+	* Verified that randomized start location limit should gradually degrade from
+	  physical limit to 10 m over 60k to 500k steps, but it is susceptible to
+	  restarting at each perturb cycle.
+	* Trial 1 was climbing well until ~158k steps when rmax suddenly dropped from
+	  +10 to -10, and didn't recover for a long time. Debug stmts prove that the
+	  max_distance was degrading smoothly, so that should not have been a factor.
+	  Trial 0 did a similar thing ~step 260k. This doesn't correlate to any annealing
+	  so it could be just a sign of instability in the solution, possibly indicating
+	  the need for a larger alpha? Most trials performed similarly.
+	* No good. All rmax were bouncing between -10 and +2. Worse than previous runs.
+	  All trials ended with alpha in [0.001, 0.004] - maybe this is too low?
+
+* Run a55b0 training level 3 from scratch with SAC
+	* No more HP tuning on n_step - left it at 1.
+	* Change HP search range for alpha to [0.001, 0.1]
+	* Not very good, but best of the day. A few trials had rmax up to 10, but not
+	  dropped to 5 or 6 by 1600 iterations. These had rmean in [-4, -1] at their end.
+	* Inference on trial 2 shows lane 0 & 1 starts both drive in lane 1 at 23 m/s.
+	  Lane 2 starts go offroad immediately.
+
+* Run c0533 training level 3 from scratch with SAC
+	* Turned on Gaussian noise.
+	* No good. One trial had rmax drift up to 9 by the end, but the rest floundered
+	  between -10 and 0, with rmean mostly at -10.
+
+6/27/23
+19:00 - 
 
 
 
 Todo
+- turn off PBT
 - change replay buffer capacity from 1e6 to smaller.
 - use grad_clip.
 - turn off randomized start.

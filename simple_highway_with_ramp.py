@@ -483,7 +483,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     else:
                         max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(5e5 - initial_steps) + physical_limit,
                                         10.0) #decreases over time steps
-                        print("///// reset: max_distance degraded to {:.1f} for lane {} pre-perturb".format(max_distance, ego_lane_id))
                     ego_p = self.prng.random() * max_distance + ego_lane_start
                 ego_speed = self.prng.random() * 5.0 + 30.0 #value in [5, 35] m/s
 
