@@ -2809,6 +2809,9 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
   change command, which is relative to the current lane, and doesn't care about the lane ID.
 
 * Run 85a79 training level 3 from scratch with SAC - first run using new lane change command
+	* No good. rmax climbed to 6 on a couple trials before dropping back to -10. rmean
+	  climbed above -10 on a few trials after 400k steps, but never reached more than
+	  -8. Two were starting to climb at the end of 1600 iterations (1.05M steps).
 
 
 Todo
