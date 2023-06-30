@@ -247,7 +247,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         #   Occupant's speed relative to ego vehicle, if occupant exists (delta-S / speed limit), in approx [-1.2, 1.2]
 
         # Indices into the observation vector
-        self.EGO_LANE_ID        =  0 #index of the lane the agent is occupying
+        self.UNUSED             =  0 ### index 0 is UNUSED - should always contain value 0.0
         self.EGO_P              =  1 #agent's P coordinate in parametric frame (center of bounding box), m
         self.EGO_LANE_REM       =  2 #distance remaining in the agent's current lane, m     #TODO: is this redundant with zone info?
         self.EGO_SPEED          =  3 #agent's actual forward speed, m/s
@@ -257,8 +257,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                                      # ego vehicle or -1 if it is behind the ego vehicle. If no neigbhor is present, value = 0
         self.EGO_DES_SPEED      =  7 #agent's most recent speed command, m/s (action feedback from this step)
         self.EGO_DES_SPEED_PREV =  8 #desired speed from previous time step, m/s
-        self.EGO_DES_LN         =  9 #agent's most recent desired lane (action feedback from this time step)
-        self.EGO_DES_LN_PREV    = 10 #desired lane from previous time step
+        self.LC_CMD             =  9 #agent's most recent lane change command, quantized (values map to the enum class LaneChange)
+        self.LC_CMD_PREV        = 10 #lane change command from previous time step, quantized
 
         self.Z1_DRIVEABLE       = 11 #is all of this zone drivable pavement? (bool 0 or 1)
         self.Z1_REACHABLE       = 12 #is all of this zone reachable from ego's lane? (bool 0 or 1)
@@ -321,9 +321,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # So here we must anticipate that scaling and leave the limits open enough to accommodate it.
         max_rel_speed = SimpleHighwayRamp.MAX_SPEED / SimpleHighwayRamp.ROAD_SPEED_LIMIT
         lower_obs = np.zeros((self.OBS_SIZE)) #most values are 0, so only the others are explicitly set below
-        lower_obs[self.EGO_LANE_ID]         = -1.0 #should be in [0, 2], but will be scaled to [-1, 1]
-        lower_obs[self.EGO_DES_LN]          = -1.0 #should be in [0, 2], but will be scaled to [-1, 1]
-        lower_obs[self.EGO_DES_LN_PREV]     = -1.0
+        lower_obs[self.LC_CMD]              = LaneChange.CHANGE_LEFT
+        lower_obs[self.LC_CMD_PREV]         = LaneChange.CHANGE_LEFT
         lower_obs[self.NEIGHBOR_IN_EGO_ZONE]= -1.0
         lower_obs[self.Z1_REL_SPEED]        = -max_rel_speed
         lower_obs[self.Z2_REL_SPEED]        = -max_rel_speed
@@ -336,15 +335,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         lower_obs[self.Z9_REL_SPEED]        = -max_rel_speed
 
         upper_obs = np.ones(self.OBS_SIZE) #most values are 1
-        upper_obs[self.EGO_LANE_ID]         = SimpleHighwayRamp.NUM_LANES - 1
         upper_obs[self.EGO_P]               = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_SPEED_PREV]      = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_DES_SPEED]       = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_DES_SPEED_PREV]  = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_LANE_REM]        = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
-        upper_obs[self.EGO_DES_LN]          = SimpleHighwayRamp.NUM_LANES - 1
-        upper_obs[self.EGO_DES_LN_PREV]     = SimpleHighwayRamp.NUM_LANES - 1
+        upper_obs[self.LC_CMD]              = LaneChange.CHANGE_RIGHT
+        upper_obs[self.LC_CMD_PREV]         = LaneChange.CHANGE_RIGHT
         upper_obs[self.STEPS_SINCE_LN_CHG]  = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
         upper_obs[self.Z1_REL_SPEED]        = max_rel_speed
         upper_obs[self.Z2_REL_SPEED]        = max_rel_speed
@@ -391,8 +389,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.episode_count = 0      #number of training episodes (number of calls to reset())
         self.neighbor_print_latch = True #should the neighbor vehicle info be printed when initiated?
         self.rollout_id = hex(int(self.prng.random() * 65536))[2:].zfill(4) #random int to ID this env object in debug logging
-        self.debug_ln_cmd = [0, 0, 0] #TODO for debugging only
-        self.debug_init_lane = -4   #TODO for debugging only
         print("///// Initializing env environment ID {} at level {}".format(self.rollout_id, self.difficulty_level))
 
         #assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -594,9 +590,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.vehicles[0].lane_change_status = "none"
 
         self.obs = np.zeros(self.OBS_SIZE)
-        self.obs[self.EGO_LANE_ID]          = ego_lane_id
-        self.obs[self.EGO_DES_LN]           = ego_lane_id
-        self.obs[self.EGO_DES_LN_PREV]      = ego_lane_id
+        self.obs[self.LC_CMD]               = LaneChange.STAY_IN_LANE
+        self.obs[self.LC_CMD_PREV]          = LaneChange.STAY_IN_LANE
         self.obs[self.EGO_P]                = ego_p
         self.obs[self.EGO_SPEED]            = ego_speed
         self.obs[self.EGO_SPEED_PREV]       = ego_speed
@@ -614,11 +609,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.reward_for_completion = True
         self.episode_count += 1
         self._verify_obs_limits("end of reset")
-
-        #TODO this block for debugging only
-        print("///// reset: prev episode desired lane distribution: ", self.debug_ln_cmd, ", init lane = ", self.debug_init_lane)
-        self.debug_ln_cmd = [0, 0, 0]
-        self.debug_init_lane = ego_lane_id #TODO debug only
 
         if self.debug > 0:
             print("///// End of reset().")
@@ -663,9 +653,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Unscale the action inputs (both actions are in [-1, 1])
         desired_speed = (action[0] + 1.0)/2.0 * SimpleHighwayRamp.MAX_SPEED
-        desired_lane = int(math.floor(action[1] + 0.5) + 1.0)
-        assert 0 <= desired_lane <= 2, "///// step ERROR: desired_lane = {}, action[1] = {}".format(desired_lane, action[1])
-        self.debug_ln_cmd[desired_lane] += 1 #TODO debug only
+        lc_cmd = int(math.floor(action[1] + 0.5))
 
         # Move all of the vehicles downtrack. This doesn't account for possible lane changes, which are handled seperately in the next section.
         new_ego_p = None
@@ -704,12 +692,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # lane change commands until the underway maneuver is complete, which takes several time steps.
         # It's legal, but not desirable, to command opposite lane change directions in consecutive time steps.
         ran_off_road = False
-        lc_cmd = LaneChange.STAY_IN_LANE
-        if desired_lane < self.vehicles[0].lane_id: #could be different by 1 or 2; assumes lane IDs increase left-to-right
-            lc_cmd = LaneChange.CHANGE_LEFT
-        elif desired_lane > self.vehicles[0].lane_id:
-            lc_cmd = LaneChange.CHANGE_RIGHT
-
         if lc_cmd != LaneChange.STAY_IN_LANE  or  self.vehicles[0].lane_change_status != "none":
             if self.vehicles[0].lane_change_status == "none": #count should always be 0 in this case, so initiate a new count
                 if lc_cmd == LaneChange.CHANGE_LEFT:
@@ -791,10 +773,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     .format(self.vehicles[0].lane_change_status, new_ego_lane, tgt_lane, self.lane_change_count, done, self.obs[self.STEPS_SINCE_LN_CHG]))
 
         # Update the obs vector with the new state info
-        self.obs[self.EGO_LANE_ID] = new_ego_lane
         self.obs[self.EGO_LANE_REM] = new_ego_rem
-        self.obs[self.EGO_DES_LN_PREV] = self.obs[self.EGO_DES_LN]
-        self.obs[self.EGO_DES_LN] = desired_lane
+        self.obs[self.LC_CMD_PREV] = self.obs[self.LC_CMD]
+        self.obs[self.LC_CMD] = lc_cmd
         self._update_obs_zones()
         self._verify_obs_limits("step after updating obs vector")
 
@@ -1404,7 +1385,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 print("///// reward step = {}, keepalive bonus = {:.4f}".format(tune_steps, bonus))
 
             # Small penalty for widely varying lane commands
-            cmd_diff = abs(self.obs[self.EGO_DES_LN] - self.obs[self.EGO_DES_LN_PREV])
+            cmd_diff = abs(self.obs[self.LC_CMD] - self.obs[self.LC_CMD_PREV])
             penalty = 0.1 * cmd_diff * cmd_diff
             reward -= penalty
             if penalty > 0.0001:

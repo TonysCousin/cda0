@@ -2106,7 +2106,7 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 * Run a7e09 included fix for Roadway to avoid the above mentioned assertion exception.
 	* After ~400 iterations, 7 of the 10 trials had errored out, wiping out all the promising solutions.
 
-3/26/23
+5/26/23
 
 * Run bee8a redo of previous run.
 	* There were no error trials, but every trial dove to rmax = -10.
@@ -2637,7 +2637,7 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  reward.
 	* Increased speed penalty multiplier from 0.15 to 0.2.
 	* Narrowed the HP search space on alpha to [0.001, 0.5]
-	* Very good at first glance! All trials ended with rmean > 8 and rmin ~0! All ended
+***	* Very good at first glance! All trials ended with rmean > 8 and rmin ~0! All ended
 	  up with alpha = 0.0046 and n_step = 2. Best trial was 5.
 	* Inference on trial 5 shows
 		* lane 0 start does a lot of jumping between lanes 0 and 1, and runs up to
@@ -2726,11 +2726,93 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  between -10 and 0, with rmean mostly at -10.
 
 6/27/23
-19:00 - 
+19:00 - 19:20 = 0:20
+23:18 - 23:37 = 0:19
 
+* Created new branch "sac-tweaks" off of the 6/24 commit after run 9eb13 that had best
+  success so far. Starting to work on that branch. Noise is off at this point.
+
+* Run c7084 training level 3 from scratch with SAC
+	* Changes from that commit only involve, limiting the SAC LRs to [1e-6, 1e-4]
+	  and setting the range of initial_alpha to [0.001, 0.3]. n_step is left as a
+	  choice of {1, 2, 3}, but I don't think it has a material effect.
+	* Found and fixed a defect in the entropy_learning_rate range (both for the PBT
+	  mutations and for the initial setting in SAC training. It was [1e-4, 1e-3], so
+	  I changed it to [1e-6, 1e-3] to be like the others.  I'm sure I was using all
+	  3 to be the same.
+	* Not as good as 9eb13, but better than I've seen since. Lanes 0 & 1 starts went
+	  all the way at ~30 m/s, but lane 2 starts went offroad right away every time.
+	  rmax = 10, rmean for most trials ended in [1.5, 4]. Almost all trials, including
+	  best 2 had alpha = 0.0039.
+
+* Run d96d1 training level 3 from scratch with SAC
+	* Limited entropy LR range to [1e-5, 1e-3].
+	* Limited alpha range to [0.001, 0.01].
+	* Turned on Gaussian noise with stdev chosen (one time) in [0.1, 0.5].
+	* Modest results. rmeans ended in [1, 5], with trial 5 being the best at the end.
+	  rmax was all > 9.5.
+	* Inference on trial 5 shows lane 0 & 1 starts are great - accelerate to 26-27 m/s
+	  and stay in lane 0 so rewards > 8. But lane 2 starts always go offroad right
+	  away. I verified that it is training lane 2 sufficiently (roughly 50% of the
+	  episodes, as is intended).
+
+6/28/23
+22:47 - 23:16 = 0:29
+
+* Run 9a8e6 training level 3 from scratch with SAC
+	* Added in mods to _update_obs_zones() that were applied in the new-obs-actions
+	  branch to fix the drivable flag in certain cases.
+	* Shifted initial lane assignments to be: 0 20%, 1 20%, 2 60%.
+	* Modest again. rmax ~ 10 in all trials, with rmean in [-1, 4].
+	* Inference performs similarly to prev run, with steady speeds on lanes 0 & 1
+	  ~31 m/s, but lane 2 never starting.
+
+6/29/23
+09:12 - 09:22 = 0:10
+18:21 - 18:28 = 0:07
+23:52 - 
+
+* Run f5285 training level 3 from scratch with SAC
+	* Changed _select_init_lane() to do lane 0 10%, lane 1 10%, lane 2 80% of the time.
+	* No good. rmean were in [-2, 1].
+	* Inference again showed lane 2 starts never got anywhere, running off road immediately.
+
+* Fed up with lane 2 starts never working. Reviewed all my journal back to 4/29, when I got the
+  advice from Kevin. Since that time, there were only 2 times that lane 2 starts showed any
+  success:  on 6/6 and on 6/17. Both of these occurred while I was using a massively large alpha
+  and one of them also included training limited to 2 lanes. So I don't believe they are
+  examples I can use.
+	* However, I am concerned that the notion of "initial" alpha being used as an HP may be
+	  getting bastardized by the PBT perturbations copying that HP into a trial that is
+	  already underway - how does the ongoing alpha value get affected by this shift?  Maybe
+	  SAC is inherently incompatible with PBT?
+	* Also, based on an observation on 6/17, it may be that I recently haven't let the trials
+	  run long enough.
+
+* Run 28979 training level 3 from scratch with SAC - no PBT
+	* Setting total number of iterations from 1600 to 2500 to allow extra time for learning.
+	* Reset _select_init_lane() to more evenly balance the choices to give lane 0 25%,
+	  lane 1 25%, lane 2 50%.
+	* Set PBT burn-in time to 2500 iterations, effectively turning off PBT without changing
+	  the scheduling code.
+	* No good. All trials converged to rmax ~8, rmean to [-4, -1] in 1.7M steps. Aroung 50%
+	  of final iteration episodes had length 4 steps, which correlates to all lane 2 starts
+	  driving off road.
+	* Not clear if the PBT-SAC interaction is bad or not.
+
+6/30/23
+10:22 - 
+
+* Moving back to the new-obs-actions branch (no merging), but then created new branch lc-cmd
+  from there to support the next activity.
+* Modified the environment & wrapper to replace the desired (absolute) lane ID with a lane
+  change command, which is relative to the current lane, and doesn't care about the lane ID.
+
+* Run 85a79 training level 3 from scratch with SAC - first run using new lane change command
 
 
 Todo
+- Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
 - turn off PBT
 - change replay buffer capacity from 1e6 to smaller.
 - use grad_clip.
