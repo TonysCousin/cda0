@@ -61,9 +61,9 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     chkpt_int           = 10    #num iters between storing new checkpoints
-    burn_in_period      = 400   #num iterations before we consider stopping or promoting to next level
+    burn_in_period      = 4000  #num iterations before we consider stopping or promoting to next level
     perturb_int         = 400   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
-    max_iterations      = 1600
+    max_iterations      = 4000
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -231,12 +231,9 @@ def main(argv):
                                                                         # remaining trials go into perpetual PAUSED state.
                     hyperparam_mutations = {                            #resample distributions
                     #for SAC:
-                        #"optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
-                        #"optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
-                        #"optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
-                    #for DDPG:
-                        "actor_lr"                              :   tune.loguniform(1e-6, 1e-3),
-                        "critic_lr"                             :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
                     # for PPO:
                         #"lr"                                    :   tune.loguniform(1e-6, 2e-4),
                         #"entropy_coeff"                         :   tune.uniform(0.0005, 0.008),

@@ -2668,10 +2668,6 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  illegal lane change.
 
 6/26/23
-08:21 - 08:33 = 0:12
-14:17 - 15:52 = 1:35
-17:58 - 18:07 = 0:09
-23:43 - 23:53 = 0:10
 
 * Run 7800e training level 3 from scratch with SAC
 	* Allowed n_step to vary in [1, 2, 3]. Changed range of alpha to [0.0009, 0.006].
@@ -2726,8 +2722,6 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  between -10 and 0, with rmean mostly at -10.
 
 6/27/23
-19:00 - 19:20 = 0:20
-23:18 - 23:37 = 0:19
 
 * Created new branch "sac-tweaks" off of the 6/24 commit after run 9eb13 that had best
   success so far. Starting to work on that branch. Noise is off at this point.
@@ -2757,7 +2751,6 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  episodes, as is intended).
 
 6/28/23
-22:47 - 23:16 = 0:29
 
 * Run 9a8e6 training level 3 from scratch with SAC
 	* Added in mods to _update_obs_zones() that were applied in the new-obs-actions
@@ -2768,9 +2761,6 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  ~31 m/s, but lane 2 never starting.
 
 6/29/23
-09:12 - 09:22 = 0:10
-18:21 - 18:28 = 0:07
-23:52 - 
 
 * Run f5285 training level 3 from scratch with SAC
 	* Changed _select_init_lane() to do lane 0 10%, lane 1 10%, lane 2 80% of the time.
@@ -2801,7 +2791,6 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Not clear if the PBT-SAC interaction is bad or not.
 
 6/30/23
-10:22 - 
 
 * Moving back to the new-obs-actions branch (no merging), but then created new branch lc-cmd
   from there to support the next activity.
@@ -2809,12 +2798,26 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
   change command, which is relative to the current lane, and doesn't care about the lane ID.
 
 * Run 85a79 training level 3 from scratch with SAC - first run using new lane change command
+	* BOGUS RUN - see notes on 7/13.
 	* No good. rmax climbed to 6 on a couple trials before dropping back to -10. rmean
 	  climbed above -10 on a few trials after 400k steps, but never reached more than
 	  -8. Two were starting to climb at the end of 1600 iterations (1.05M steps).
 
+7/13/23
+
+* After a long break, I reviewed notes above and code on the lc-cmd branch. It appears that
+  the previous run (85a79) was only done with 1600 iteration limit and 400 iter burn-in so that
+  PBT was, in fact, being used. The log shows that perturbations were being done, so the above
+  run was bogus.
+
+* Run ? training level 3 from scratch with SAC on lc-cmd branch. Redoing first run with the new
+  lane change command code. Noise is on.
+	* Set max_iterations = 4000 and burn_in_iters = 4000.
+	* Also fixed tune defect that was scheduling perturbation of DDPG vars but nothing else.
+
 
 Todo
+- turn on/off noise
 - Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
 - turn off PBT
 - change replay buffer capacity from 1e6 to smaller.
