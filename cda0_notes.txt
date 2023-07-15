@@ -2810,16 +2810,72 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
   PBT was, in fact, being used. The log shows that perturbations were being done, so the above
   run was bogus.
 
-* Run ? training level 3 from scratch with SAC on lc-cmd branch. Redoing first run with the new
-  lane change command code. Noise is on.
+* Run 7c45c training level 3 from scratch with SAC on lc-cmd branch. Redoing first run with the new
+  lane change command code. Noise is on. Coincides with git commit a594a35.
 	* Set max_iterations = 4000 and burn_in_iters = 4000.
 	* Also fixed tune defect that was scheduling perturbation of DDPG vars but nothing else.
+	* Not very good. A couple trials achieved peak rmax ~10, but only one of them held it near
+	  the end. This trial (#4) achieved rmean ~-7 towards its end. Only one other trial got
+	  that high a rmean.
+	* Inference run on lane 0 immediately stopped with "ran off road", even though action[1]
+	  was 0. All obs zone info looks correct.
+	* Inference run on lane 1 ran the whole route, but somewhat slowly, so achieved a final
+	  score of -4.5. Obs zone data all looks correct along the path. All action[1] values were
+	  near 0.0.
+	* Inference on lane 2 ran off road, even though action[1] value was 0.0.
+	* Found a defect in step() that was doing incorrect action masking on the LC cmd (left over
+	  from the absolute desired lane code).
+
+7/14/23
+
+* Run cb759 training level 3 from scratch with SAC on lc-cmd branch. Redoing first run with new lane
+  change command code, now fixed - no PBT.
+	* Fixed defect in lane change command masking at top of step().
+	* Reduced iteration limit to 2000.
+	* Pretty poor results. Most trials got rmax > 4 at some point, but had a hard time holding
+	  it. Four of them got rmax ~10. The best rmeans were ~0.
+	* Inference on the best trial (#3) where it reached its max rmean (iteration 1360) shows
+	  it driving a steady pace in all lanes, but ~21 m/s, which incurs a sizeable time step
+	  penalty, thus final score is < 0. While lane 2 finally drives to the end, it refuses to
+	  change lanes at any point, so always runs off road. Noise was on in this run.
+	* Trial 3 used noise stddev = 0.23, initial_alpha = 0.0011, actor LR = 7.0e-5, critic LR
+	  = 5.1e-4, entropy LR = 6.8e-4.
+
+* Run 629df training level 3 from scratch with SAC on lc-cmd branch - no PBT.
+	* Set up exploration as a tuning variable, so it is chosen to be on or off.  If on, then
+	  its stddev initial value is a tuning variable also, in [0.1, 0.7], which anneals to 0.1
+	  of its initial value over 1M time steps.
+	* Not very good. Six trials reached rmax > 8, four of them ending there, but best rmean was
+	  ~0.3.
+	* Inference on best trial (#9) shows similar performance to previous, with speeds steady
+	  ~21 m/s, and never a lane change (lane 2 runs off the end).
+	* Of the trials that reached high rmax, 3 had exploration on and 3 had it off. These were 
+		* Trial 3, noise off, init alpha = 0.018; erratic rewards, settled at -10.
+		* Trial 6, noise off, init alpha = 0.071; somewhat erratic rmax that climbed back
+		  to +8 just before the end.
+		* Trial 2, noise off, init alpha = 0.011; very smooth rmax climb to +7 at the end,
+		  and had one of the better rmeans at -3. Looks like more iterations would have
+		  done really well.
+		* Trial 8, noise on at 0.15, init alpha = 0.0026; erratic rmax spent more time < 0
+		  than high.
+		* Trial 9, noise on at 0.28, init alpha = 0.0052; rmax suddenly jumped from -10 to
+		  +8 then smoothly climbed to +10. rmean was best of all, at +0.3, the only one > 0.
+		* Trial 5, noise on at 0.30, init alpha = 0.040; somewhat erratic but steady climb
+		  of rmax to +8. Had 2nd best ending rmean at -2.
+
+7/15/23
+
+* Run a0334 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Set noise level to start at 0.3, with multiplier ending at 0.3 instead of 0.1 at 1M steps.
+	* Set tuning choice to 2/3 true for noise addition.
+	* Increased max iterations from 2000 to 3000 to allow more time for things to mature.
+	* Restricted the range of initial_alpha to [0.002, 0.04].
+
 
 
 Todo
-- turn on/off noise
+- Test wider entropy LR range
 - Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
-- turn off PBT
 - change replay buffer capacity from 1e6 to smaller.
 - use grad_clip.
 - turn off randomized start.

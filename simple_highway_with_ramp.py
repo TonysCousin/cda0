@@ -645,11 +645,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Apply command masking for first few steps to avoid startup problems with the feedback observations
         action = [None]*2
         action[0] = cmd[0]
-        des_ln = cmd[1]
+        action[1] = cmd[1]
         if self.steps_since_reset < 4:
-            des_ln = self.vehicles[0].lane_id - 1.0 #action is still scaled
-            assert -1.0 <= des_ln <= 1.0, "///// step ERROR: command masked action[1] = {} is illegal.".format(action[1])
-        action[1] = des_ln
+            action[1] = 0.0
 
         # Unscale the action inputs (both actions are in [-1, 1])
         desired_speed = (action[0] + 1.0)/2.0 * SimpleHighwayRamp.MAX_SPEED

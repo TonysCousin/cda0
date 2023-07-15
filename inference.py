@@ -113,7 +113,7 @@ def main(argv):
 
         # Command masking for first few steps to allow feedback obs to populate
         if step < 4:
-            action[1] = obs[env.EGO_LANE_ID]
+            action[1] = 0.0
 
         # Move the environment forward one time step
         raw_obs, reward, done, truncated, info = env.step(np.ndarray.tolist(action)) #obs returned is UNSCALED
