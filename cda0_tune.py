@@ -63,7 +63,7 @@ def main(argv):
     chkpt_int           = 10    #num iters between storing new checkpoints
     burn_in_period      = 4000  #num iterations before we consider stopping or promoting to next level
     perturb_int         = 400   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
-    max_iterations      = 3000
+    max_iterations      = 4000
     num_trials          = 10
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
@@ -95,12 +95,12 @@ def main(argv):
     explore_config = cfg_dict["exploration_config"]
     #print("///// Explore config:\n", pretty_print(explore_config))
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = 0.3 #tune.uniform(0.1, 0.7) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = 0.4 #tune.uniform(0.1, 0.7) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
-    explore_config["final_scale"]               = 0.3 #tune.choice([1.0, 0.01])
+    explore_config["final_scale"]               = 0.6 #tune.choice([1.0, 0.01])
     explore_config["scale_timesteps"]           = 1000000  #tune.choice([100000, 400000]) #was 900k
-    exp_switch                                  = tune.choice([False, True, True])
+    exp_switch                                  = True #tune.choice([False, True, True])
     cfg.exploration(explore = exp_switch, exploration_config = explore_config)
     #cfg.exploration(explore = False)
 

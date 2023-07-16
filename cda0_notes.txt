@@ -2865,11 +2865,35 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 7/15/23
 
-* Run a0334 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+* Run a0334 training level 3 from scratch with SAC on lc-cmd branch, no PBT. Running commit 4847cc2.
 	* Set noise level to start at 0.3, with multiplier ending at 0.3 instead of 0.1 at 1M steps.
 	* Set tuning choice to 2/3 true for noise addition.
 	* Increased max iterations from 2000 to 3000 to allow more time for things to mature.
 	* Restricted the range of initial_alpha to [0.002, 0.04].
+	* Not very good. Only 4 trials got rmax > 0, and only one reached > 8 late in the game, but
+	  it dropped to ~4 by the end. Its rmean was the best, only reaching +1 near its end. This
+	  trial had noise on and initial_alpha = 0.0024.
+	* Inference on trial 4 (best) shows that it did try to change lanes at end of lane 2, but
+	  started about 1 time step too late. It initiated the change the time step after zone 5
+	  became unreachable. Prior to that, I see that zones 1 and 4 (to the left) show they are
+	  not reachable for several time steps, even while zone 5 is still drivable/reachable. I
+	  believe the reachable flag is incorrect. I doubt this is a major factor in this particular
+	  situation, but could improve the training a bit. One more time step and the LC would have
+	  been successful, but it was going a little above speed limit (~33 m/s) so ran out of
+	  pavement.  If training runs were going slower, the zone 5 disappearing would have been a
+	  reasonable signal to initiate the LC.  More training (maybe with more noise) would have
+	  helped this situation.
+	* Inference on lane 1 shows a clean run with score +3, but drove a little fast (~33 m/s),
+	  so kept incurring speed penalties.  More training should take care of this.
+
+* Run 45ec8 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Changed code for obs zones to make the reachable flag more liberal on the side zones,
+	  so it is now reachable if any part of the zone overlaps with an adjacent drivable lane.
+	* Forcing noise on for all trials, and increased the magnitude a bit: initial stddev
+	  increased from 0.3 to 0.4 and final scale factor increased from 0.3 to 0.6.
+	* Increased max iterations to 4000.
+	* Changed step() action masking to only mask on the first time step of an episode, instead
+	  of the first 4 steps.
 
 
 

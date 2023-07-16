@@ -646,12 +646,14 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         action = [None]*2
         action[0] = cmd[0]
         action[1] = cmd[1]
-        if self.steps_since_reset < 4:
+        if self.steps_since_reset < 1:
             action[1] = 0.0
 
         # Unscale the action inputs (both actions are in [-1, 1])
         desired_speed = (action[0] + 1.0)/2.0 * SimpleHighwayRamp.MAX_SPEED
         lc_cmd = int(math.floor(action[1] + 0.5))
+        print("///// step: incoming cmd[1] = {:.2f}, lc_cmd = {}, current lane = {}, steps = {}".format(cmd[1], lc_cmd, self.vehicles[0].lane_id,
+                                                                                                        self.steps_since_reset))
 
         # Move all of the vehicles downtrack. This doesn't account for possible lane changes, which are handled seperately in the next section.
         new_ego_p = None
@@ -1136,7 +1138,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     l_zone = 3*(row - 1) + 1
                     l_offset = base + (l_zone - 1)*num_zone_fields
                     self.obs[l_offset + 0] = 1.0 #drivable
-                    if la <= zone_rear  and  lb >= zone_front: #TODO: this may be too conservative a requirement
+                    if la <= zone_front  and  lb >= zone_rear:
                         self.obs[l_offset + 1] = 1.0 #reachable
 
             # Determine if there is pavement in the right-hand zone and it's reachable
@@ -1149,7 +1151,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     r_zone = 3*(row - 1) + 3
                     r_offset = base + (r_zone - 1)*num_zone_fields
                     self.obs[r_offset + 0] = 1.0 #drivable
-                    if ra <= zone_rear  and  rb >= zone_front:
+                    if ra <= zone_front  and  rb >= zone_rear:
                         self.obs[r_offset + 1] = 1.0 #reachable
 
         # We know there's a lane in the center, but not how far it extends in either direction so look at each zone in this column
