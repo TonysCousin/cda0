@@ -2886,7 +2886,8 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Inference on lane 1 shows a clean run with score +3, but drove a little fast (~33 m/s),
 	  so kept incurring speed penalties.  More training should take care of this.
 
-* Run 45ec8 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+* Run 45ec8 training level 3 from scratch with SAC on lc-cmd branch, no PBT. Running from commit
+  4b652b4.
 	* Changed code for obs zones to make the reachable flag more liberal on the side zones,
 	  so it is now reachable if any part of the zone overlaps with an adjacent drivable lane.
 	* Forcing noise on for all trials, and increased the magnitude a bit: initial stddev
@@ -2894,11 +2895,48 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Increased max iterations to 4000.
 	* Changed step() action masking to only mask on the first time step of an episode, instead
 	  of the first 4 steps.
+	* No good. Run died after 6 trials completed, presumably due to power failure. But at that
+	  point no trial had exceeded rmean = -8, even though two had reached rmax > 4. Best trials
+	  were 4 and 2, with initial_alpha of 0.019 and 0.032, respectively.
+	* Inference shows that no LC is ever commanded on any lane.
+	* Training log shows that lane 2 episodes got punished often for attempted LCs in step 1,
+	  then seem to have learned to seldom try them later. Not clear from this log where the
+	  agent was along the lane when these happened (randomized start loc is on). Maybe need
+	  more noise?
+
+7/16/23
+
+* Run 21d5a training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Increased initial noise stddev to 0.7. Added logging info to see agent's p location at
+	  each step, along with its commanded actions.
+	* Widened the search range for entropy LR by reducing the lower limit from 1e-4 to 1e-6.
+	* No good. No trial even got rmax > -10, except for one that had a few quick spikes up
+	  to -9.
+	* Logs from the step() method show very few steps on lane 2 - not clear if this is because
+	  that lane just dies quickly.
+
+* Run 4d754 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Increased random start loc applicability from 500k steps to 1M steps.
+	* Added logging in reset() to understand initial lane and location distributions.
+	* No good. Again, no trial had rmax > -10 for any significant amount of time.
+***	* Log shows that as time goes on the initial lane selection is skewed away from lane 2
+	  quite a bit (should be 50%). I am now concerned about the reliability of the prng. After
+	  analyzing many pages of log output, I conclude that the PRNG is faulty, in that it only
+	  generates values in [0.5, 1] a little less than 1/3 of the time. Since my lane selector
+	  was using this range to assign lane 2 starts, lane 2 has been badly underrepresented in
+	  the training.
+
+*** Wrote a new PRNG class (HpPrng) and did a sanity check on its output to help ensure that it
+    will perform as intended.  Included this into the env model.
+
+* Run 813e3 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Using the new HpPrng generator instead of the numpy default generator.
+	* Reduced the Gaussian noise level from 0.7 to 0.3, and reduced its final scale from 0.6
+	  to 0.2 (at 1M steps).
 
 
 
 Todo
-- Test wider entropy LR range
 - Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
 - change replay buffer capacity from 1e6 to smaller.
 - use grad_clip.

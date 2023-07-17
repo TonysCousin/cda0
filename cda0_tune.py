@@ -95,10 +95,10 @@ def main(argv):
     explore_config = cfg_dict["exploration_config"]
     #print("///// Explore config:\n", pretty_print(explore_config))
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = 0.4 #tune.uniform(0.1, 0.7) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = 0.3 #tune.uniform(0.1, 0.7) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
-    explore_config["final_scale"]               = 0.6 #tune.choice([1.0, 0.01])
+    explore_config["final_scale"]               = 0.2 #tune.choice([1.0, 0.01])
     explore_config["scale_timesteps"]           = 1000000  #tune.choice([100000, 400000]) #was 900k
     exp_switch                                  = True #tune.choice([False, True, True])
     cfg.exploration(explore = exp_switch, exploration_config = explore_config)
@@ -191,7 +191,7 @@ def main(argv):
     opt_config = cfg_dict["optimization"]
     opt_config["actor_learning_rate"]           = tune.loguniform(1e-6, 1e-4) #default 0.0003
     opt_config["critic_learning_rate"]          = tune.loguniform(1e-6, 1e-4) #default 0.0003
-    opt_config["entropy_learning_rate"]         = tune.loguniform(1e-4, 1e-4) #default 0.0003
+    opt_config["entropy_learning_rate"]         = tune.loguniform(1e-6, 1e-4) #default 0.0003
 
     policy_config = cfg_dict["policy_model_config"]
     policy_config["fcnet_hiddens"]              = [256, 256]
@@ -234,7 +234,7 @@ def main(argv):
                     #for SAC:
                         "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
                         "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
-                        "optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
+                        "optimization/entropy_learning_rate"     :   tune.loguniform(1e-6, 1e-3),
                     # for PPO:
                         #"lr"                                    :   tune.loguniform(1e-6, 2e-4),
                         #"entropy_coeff"                         :   tune.uniform(0.0005, 0.008),

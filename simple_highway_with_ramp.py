@@ -2,13 +2,13 @@ from collections import deque
 from statistics import mean
 from typing import Tuple, Dict, List
 import math
-import time
 from gymnasium.spaces import Box
 import numpy as np
 from ray.rllib.env.env_context import EnvContext
 from ray.rllib.env.apis.task_settable_env import TaskSettableEnv
 from ray.tune.logger import pretty_print
 from perturbation_control import PerturbationController
+from hp_prng import HpPrng
 
 perturb_ctrl = PerturbationController() #create this outside the class and curriculum function so both can access it
 
@@ -200,7 +200,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Store the arguments
         #self.seed = seed #Ray 2.0.0 chokes on the seed() method if this is defined (it checks for this attribute also)
         #TODO: try calling self.seed() without storing it as an instance attribute
-        self.prng = np.random.default_rng(seed = seed)
+        self.prng = HpPrng(seed = seed)
         self.render_mode = render_mode
 
         self._set_initial_conditions(config)
@@ -477,7 +477,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     if self.total_steps <= initial_steps:
                         max_distance = physical_limit
                     else:
-                        max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(5e5 - initial_steps) + physical_limit,
+                        max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(1e6 - initial_steps) + physical_limit,
                                         10.0) #decreases over time steps
                     ego_p = self.prng.random() * max_distance + ego_lane_start
                 ego_speed = self.prng.random() * 5.0 + 30.0 #value in [5, 35] m/s
@@ -540,6 +540,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             raise NotImplementedError("///// Neighbor vehicle motion not defined for difficulty level {}".format(self.difficulty_level))
         if self.debug > 1:
             print("///// reset: ego defined: lane = {}, p = {:.1f}, speed = {:.1f}".format(ego_lane_id, ego_p, ego_speed))
+        print("///// reset: ego_lane_id = {}, ego_p = {:6.1f}, max_distance = {:6.1f}, total_steps = {}"
+              .format(ego_lane_id, ego_p, max_distance, self.total_steps))
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1
         #TODO: revise this for levels 4+
@@ -652,8 +654,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Unscale the action inputs (both actions are in [-1, 1])
         desired_speed = (action[0] + 1.0)/2.0 * SimpleHighwayRamp.MAX_SPEED
         lc_cmd = int(math.floor(action[1] + 0.5))
-        print("///// step: incoming cmd[1] = {:.2f}, lc_cmd = {}, current lane = {}, steps = {}".format(cmd[1], lc_cmd, self.vehicles[0].lane_id,
-                                                                                                        self.steps_since_reset))
+        print("///// step: incoming cmd[1] = {:5.2f}, lc_cmd = {:2}, current lane = {}, p = {:7.2f}, steps = {}"
+              .format(cmd[1], lc_cmd, self.vehicles[0].lane_id, self.vehicles[0].p, self.steps_since_reset))
 
         # Move all of the vehicles downtrack. This doesn't account for possible lane changes, which are handled seperately in the next section.
         new_ego_p = None
@@ -1144,7 +1146,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # Determine if there is pavement in the right-hand zone and it's reachable
             if rid >= 0: #there's a lane to the right somewhere along this route
 
-                # Determine if the left lane exists next to the middle of this zone
+                # Determine if the right lane exists next to the middle of this zone
                 start_p = self.roadway.get_lane_start_p(rid)
                 if start_p <= zone_mid_p <= start_p + self.roadway.get_total_lane_length(rid):
                     _, _, _, _, _, _, ra, rb, _ = self.roadway.get_current_lane_geom(ego_lane_id, zone_mid_p)
