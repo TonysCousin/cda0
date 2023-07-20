@@ -2933,14 +2933,77 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Using the new HpPrng generator instead of the numpy default generator.
 	* Reduced the Gaussian noise level from 0.7 to 0.3, and reduced its final scale from 0.6
 	  to 0.2 (at 1M steps).
+	* Not so good. At least now we see rmax reacing ~+10 on more than a couple trials, but
+	  rmean is still stuck ~0 in the best case (trial 2 got rmean ~+2 for a while).
+	* Inference on trial 2 shows all lanes use a steady speed around 21-23 m/s, and never a
+	  lane change.  It runs off the end of lane 2.
+	* Log shows that there are very few instances of agent in lane 2 within the merge zone
+	  and commanding a left lane change, so it has very little opportunity to learn that this
+	  is a good move. It seems that gradually reducing the max start location is hurting its
+	  opportunity for this kind of exposure.
+	* Aborted during trial 6/7.
+
+* Run 8c50c training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Changed reset() to prevent annealing of the agent's start location by setting 
+	  initial_steps = 6M (longer than the trial will go). This should give a lot more
+	  opportunity for the agent to experience the merge zone in lane 2 and explore what can
+	  be done there.
+	* No good. Best trial was #7, which ended with rmean = 0. Most trials got rmax > 0, with
+	  several near 10.
+	* Inference showed identical performance as previous run.
+
+7/18/23
+
+* Run df22a training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Added grad_clip HP to the SAC algorithm, with tuning range in [0.5, 1.0].
+	* No good. All trials reached rmax > 5 at some point and some stayed near 10 for a while.
+	  But none had rmean > 0.
+	* Inference on lane 2 start same as before, with steady speed ~20 m/s and no attempt to
+	  change lanes. The action[1] is very close to 0 the whole time.
+
+* Run 4ce18 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Turned off randomized start location. With the keepalive bonus it should still find its
+	  way.
+	* No good. All trials reached rmax > 3, and several reached 10 at least once, but none
+	  achieved rmean > 0.
+	* Inference showed same story as prior runs.
+
+7/19/23
+
+* Run 7f13dc training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Changed _select_init_lane() to return 2 always, forcing the agent to learn just how to
+	  drive lane 2.
+	* No good. Aborted after 6 trials complete and no rmax making significant dent > 0.
+	* Perhaps the keepalive reward wasn't enough for all episodes starting at beginning? I
+	  don't think this is the problem. An inference run on one of the completed checkpoints
+	  shows that it drove the length of lane 2 okay, it just didn't know to change lanes.
+
+* Run 9b926 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Turned on randomized start loc. Still training ONLY LANE 2.
+	* No good. Trials 5-9 died due to sigfault, but the first 5 trials showed no better
+	  behavior than seen recently.
+	* Inference on two different trials shows same behavior as before - drives all of lane
+	  2 at a somewhat slow speed, but never attempts to change lanes.
+	* Scrutinizing inference log to ensure that obs data is correct throughout an episode.
+		* obs[EGO_P] is not providing any valuable info, and could be distracting the NN,
+		  so maybe needs to be removed.
+		* Found a defect in calculation of reachable flag for adjacent lanes. It was
+		  a few hundred meters off, which could have taught the agent to ignore this
+		  signal, since it would lead to off-roading.
+
+* Run b0774 training level 3 from scratch (LANE 2 ONLY) with SAC on lc-cmd branch, no PBT.
+	* Applied fix for the reachable flag defect.
+	* Removed EGO_P from the obs vector.
+
 
 
 
 Todo
+- try just lane 2 starts
+- try n_step = 2 or 5
 - Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
 - change replay buffer capacity from 1e6 to smaller.
-- use grad_clip.
-- turn off randomized start.
+- remove time step bonus.
 - fix perturb controller not counting past new worker environments after beiing perturbed.
 - collect stats on action distribution in each channel.
 - add full action masking to avoid illegal lane changes ever (annealed)

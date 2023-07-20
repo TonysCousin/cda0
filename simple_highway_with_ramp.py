@@ -248,7 +248,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Indices into the observation vector
         self.UNUSED             =  0 ### index 0 is UNUSED - should always contain value 0.0
-        self.EGO_P              =  1 #agent's P coordinate in parametric frame (center of bounding box), m
+        self.UNUSED             =  1 ### INDEX 1 IS unused - should always contain value 0.0
         self.EGO_LANE_REM       =  2 #distance remaining in the agent's current lane, m     #TODO: is this redundant with zone info?
         self.EGO_SPEED          =  3 #agent's actual forward speed, m/s
         self.EGO_SPEED_PREV     =  4 #agent's actual speed in previous time step, m/s
@@ -335,7 +335,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         lower_obs[self.Z9_REL_SPEED]        = -max_rel_speed
 
         upper_obs = np.ones(self.OBS_SIZE) #most values are 1
-        upper_obs[self.EGO_P]               = SimpleHighwayRamp.SCENARIO_LENGTH
         upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_SPEED_PREV]      = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_DES_SPEED]       = SimpleHighwayRamp.MAX_SPEED
@@ -473,7 +472,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
                 if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
                     physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
-                    initial_steps = 60000 #num steps to wait before starting to shrink the max distance
+                    initial_steps = 6000000 #num steps to wait before starting to shrink the max distance
                     if self.total_steps <= initial_steps:
                         max_distance = physical_limit
                     else:
@@ -594,7 +593,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.obs = np.zeros(self.OBS_SIZE)
         self.obs[self.LC_CMD]               = LaneChange.STAY_IN_LANE
         self.obs[self.LC_CMD_PREV]          = LaneChange.STAY_IN_LANE
-        self.obs[self.EGO_P]                = ego_p
         self.obs[self.EGO_SPEED]            = ego_speed
         self.obs[self.EGO_SPEED_PREV]       = ego_speed
         self.obs[self.EGO_DES_SPEED]        = ego_speed
@@ -678,7 +676,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                         .format(i, new_speed_cmd, new_speed, new_p))
 
         # Update ego vehicle obs vector
-        self.obs[self.EGO_P] = new_ego_p
         self.obs[self.EGO_SPEED_PREV] = self.obs[self.EGO_SPEED]
         self.obs[self.EGO_SPEED] = new_ego_speed
         self.obs[self.EGO_DES_SPEED_PREV] = self.obs[self.EGO_DES_SPEED]
@@ -1084,6 +1081,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Level 3 needs to emphasize lanes 0 & 2 since the agent naturally prefers lane 1
         elif self.difficulty_level == 3:
+            return 2 #TODO temp testing
+
             draw = self.prng.random()
             if draw < 0.3:
                 return 0
@@ -1127,8 +1126,12 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         for row in range(1, 4):
             zone_front = ((3 - row) + 0.5)*SimpleHighwayRamp.OBS_ZONE_LENGTH #distance downtrack from ego vehicle, m
             zone_rear = zone_front - SimpleHighwayRamp.OBS_ZONE_LENGTH
-            zone_mid_p = ego_p + 0.5*(zone_front + zone_rear)
+            zone_mid_p = ego_p + 0.5*(zone_front + zone_rear) #absolute coordinate in p-frame
+            # Get updated roadway geometry; NB all distances returned are relative to current ego location
             ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_p)
+            if self.debug > 1:
+                print("///// _update_obs_zones: row = {}, ego_p = {:.1f}, zone_front = {:.1f}, zone_rear = {:.1f}, zone_mid = {:.1f}, la = {:.1f}, lb = {:.1f}"
+                        .format(row, ego_p, zone_front, zone_rear, zone_mid_p, la, lb))
 
             # Determine if there is pavement in the left-hand zone and it's reachable
             if lid >= 0: #the lane exists somewhere along the route
@@ -1136,7 +1139,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 # Determine if the left lane exists next to the middle of this zone
                 start_p = self.roadway.get_lane_start_p(lid)
                 if start_p <= zone_mid_p <= start_p + self.roadway.get_total_lane_length(lid):
-                    _, _, la, lb, _, _, _, _, _ = self.roadway.get_current_lane_geom(ego_lane_id, zone_mid_p)
                     l_zone = 3*(row - 1) + 1
                     l_offset = base + (l_zone - 1)*num_zone_fields
                     self.obs[l_offset + 0] = 1.0 #drivable
@@ -1149,14 +1151,18 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 # Determine if the right lane exists next to the middle of this zone
                 start_p = self.roadway.get_lane_start_p(rid)
                 if start_p <= zone_mid_p <= start_p + self.roadway.get_total_lane_length(rid):
-                    _, _, _, _, _, _, ra, rb, _ = self.roadway.get_current_lane_geom(ego_lane_id, zone_mid_p)
                     r_zone = 3*(row - 1) + 3
                     r_offset = base + (r_zone - 1)*num_zone_fields
                     self.obs[r_offset + 0] = 1.0 #drivable
                     if ra <= zone_front  and  rb >= zone_rear:
                         self.obs[r_offset + 1] = 1.0 #reachable
 
-        # We know there's a lane in the center, but not how far it extends in either direction so look at each zone in this column
+        # We know there's a lane in the center, but not how far it extends in either direction so look at each zone in this column.
+        # Note that the "reachable" determination here is different from those above. Since the above represent adjacent lanes, they
+        # can afford to be more liberal in that they say reachable = True if any part of the adjacent pavement borders any part of the
+        # zone in question (i.e. the entire zone edge does not need to touch adjacent pavement). Whereas, for the ego's own lane, it
+        # is more important to know as soon as the pavement disappears in _any_ part of its forward zone, so it can prepare to change
+        # lanes.
         for row in range(1, 5):
             zone = 3*(row - 1) + 2
             if row == 3: #ego zone

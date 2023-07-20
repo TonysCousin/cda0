@@ -86,10 +86,8 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
 
         """Converts a raw observation vector from the parent environment to a scaled vector usable by a NN."""
 
-        scaled = [None]*self.OBS_SIZE
+        scaled = [0.0]*self.OBS_SIZE
 
-        scaled[self.UNUSED]             = obs[self.UNUSED]
-        scaled[self.EGO_P]              = obs[self.EGO_P]               / SimpleHighwayRamp.SCENARIO_LENGTH     #range [0, 1]
         scaled[self.EGO_LANE_REM]       = min(obs[self.EGO_LANE_REM]    / SimpleHighwayRamp.SCENARIO_LENGTH, 1.1) #range [0, 1.1]
         scaled[self.EGO_SPEED]          = obs[self.EGO_SPEED]           / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
         scaled[self.EGO_SPEED_PREV]     = obs[self.EGO_SPEED_PREV]      / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]

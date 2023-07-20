@@ -207,6 +207,7 @@ def main(argv):
                     initial_alpha               = tune.loguniform(0.002, 0.04),
                     tau                         = 0.005,
                     n_step                      = 1, #tune.choice([1, 2, 3]),
+                    grad_clip                   = tune.uniform(0.5, 1.0),
                     optimization_config         = opt_config,
                     policy_model_config         = policy_config,
                     q_model_config              = q_config,
