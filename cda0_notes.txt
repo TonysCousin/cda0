@@ -2992,14 +2992,54 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 		  signal, since it would lead to off-roading.
 
 * Run b0774 training level 3 from scratch (LANE 2 ONLY) with SAC on lc-cmd branch, no PBT.
+  Corresponds to git commit dcf37c6.
 	* Applied fix for the reachable flag defect.
 	* Removed EGO_P from the obs vector.
+	* No good. Some trials reached rmax > 5, but didn't stay. Only trial 6 reached rmean ~0,
+	  and its rmax was ~8 then stayed above 5 for ~400k steps at the end. This was the best
+	  one.
+	* Inference on trial 6 showed steady speeds, higher than before ~25 m/s, but never a
+	  lane change. However, the LC command quickly jumped up to -0.41 in the last few time
+	  steps, so it seems to be thinking about it. Maybe more training would take care of it?
 
+7/20/23
 
+* Run 7b4c9 training level 3 from previous run's trial 6 checkpoint (LANE 2 ONLY) with SAC on
+  lc-cmd branch, no PBT.
+	* No changes, just continuing from a promising checkpoint.
+	* No good. For most trials, rmax in [2, 4] was eventually achieved, with rmean ~-2. All
+	  plots were quite smooth & steady, indicating not much additional learning.
+	* It feels like noise is not quite enough. With the Gaussian stddev at 0.3 (at its
+	  largest), that is seldom going to be enough to move the LC cmd over by a whole lane
+	  (typically requires moving it from 0.0 to -0.5 or more). It seems that noise >= 0.5
+	  is needed, for long enough to give it ample opportunity to learn, but then it needs
+	  to taper down so that it can refine its policy.
+
+* Run 54b7f training level 3 from scratch (LANE 2 ONLY) with SAC on lc-cmd branch, no PBT.
+	* Changed Gaussian noise stddev to 0.6 and taper from 1.0 to 0.1 over 2M steps, with
+	  100k steps of random at the beginning.
+	* No good. Only 2 trials had rmax > 0, and one of those had rmean > -10.
+
+7/21/23
+
+* Run d8b1e training level 3 from scratch (LANE 2 ONLY) with SAC on lc-cmd branch, no PBT.
+	* Modified noise stddev to be a tunable HP in [0.2, 0.6].
+	* Initial lane selector modified to select 2 70% of the time and 1 30%. When 1 is
+	  selected, starting loc will only be at 800 m or greater, to give it experience
+	  driving this lane to the finish line (includes change in reset() also).
+	* No good. Only one trial got rmax > 0, and it reached ~4. All trials had
+	  rmean ~-10 or less. The trial with best rmax had noise stddev = 0.24 and
+	  initial_alpha = 0.034.
+	* I verified in the log that initial lane assignments & initial locations were as
+	  expected.
+	* Inference on this trial had a steady speed of ~19 m/s, and no attempt to change
+	  lanes. When started in lane 1 it drove that lane to the end at 19 m/s.
+
+* Run b1e24 training level 3 from scratch with SAC (LANE 2 ONLY) on lc-cmd branch, no PBT.
+	* Changed SAC n_step from 1 to 5.
 
 
 Todo
-- try just lane 2 starts
 - try n_step = 2 or 5
 - Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
 - change replay buffer capacity from 1e6 to smaller.

@@ -479,6 +479,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                         max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(1e6 - initial_steps) + physical_limit,
                                         10.0) #decreases over time steps
                     ego_p = self.prng.random() * max_distance + ego_lane_start
+                    if ego_lane_id == 1:    #TODO: for testing lane 2 learning only!
+                        ego_p = self.prng.random() * (max_distance - 800.0) + 800.0
                 ego_speed = self.prng.random() * 5.0 + 30.0 #value in [5, 35] m/s
 
             elif self.difficulty_level == 4:
@@ -1081,12 +1083,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         # Level 3 needs to emphasize lanes 0 & 2 since the agent naturally prefers lane 1
         elif self.difficulty_level == 3:
-            return 2 #TODO temp testing
 
             draw = self.prng.random()
             if draw < 0.3:
-                return 0
-            elif draw < 0.5:
                 return 1
             else:
                 return 2
