@@ -3036,11 +3036,36 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  lanes. When started in lane 1 it drove that lane to the end at 19 m/s.
 
 * Run b1e24 training level 3 from scratch with SAC (LANE 2 ONLY) on lc-cmd branch, no PBT.
+  Corresponds to commit bcc3750.
 	* Changed SAC n_step from 1 to 5.
+	* No good. Only a couple trials reached rmax ~0, and all rmean < -10.
+***	* I have concluded that I am doing something fundamentally wrong with SAC, and need
+	  to go back and try this with one of the standard gymnasium environments.
+
+7/30/23
+
+* Played with Kevin's deepyrl engine to run my environment (details not recorded here). It
+  is using SAC with gamma = 0.995 and max_grad_norm = 1. It seems to have solved it (lots
+  of episodes with scores > 4) in about 30 min (10k episodes). It is using a very old version
+  of the environment (prior to early June), but running difficulty level 4.
+* I also spent time playing with RLlib's SAC implementation on the MountainCarContinuous-v0
+  env. It seems that I found a solution (running very slowly), the key being to set
+  train_batch_size = 1024 instead of 256. It also seems that the initial_alpha doesn't need
+  to be tuned, as the entropy LR will guide alpha to its optimum value over time - just pick
+  one that is in the ballpark. Also, a nn of [256, 256] was necessary to find a winner, as
+  [64, 64] was not working.
+
+* Run ? training level 4 from scratch with SAC on lc-cmd branch, no PBT. Trying to configure
+  more like Kevin's run and with lessons learned from recent MountainCar activity.
+	* Changed from level 3 to 4.
+	* Removed starting lane restrictions.
+	* Changed n_step back to 1
+	* Set train_batch_size = 1024
+	* Fixed initial_alpha = 0.02
+	* Fixed grad_clip = 1.0
 
 
 Todo
-- try n_step = 2 or 5
 - Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
 - change replay buffer capacity from 1e6 to smaller.
 - remove time step bonus.

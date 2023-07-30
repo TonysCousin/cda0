@@ -113,10 +113,10 @@ def main(argv):
     #       if gpu is to be used for local workder only, then the number of gpus available need to be divided among the
     #       number of possible simultaneous trials (as well as gpu memory).
     # This config will run 5 parallel trials on the Tensorbook.
-    cfg.resources(  num_gpus                    = 0.5, #for the local worker, which does the learning & evaluation runs
-                    num_cpus_for_local_worker   = 1,
-                    num_cpus_per_worker         = 1, #also applies to the local worker and evaluation workers
-                    num_gpus_per_worker         = 0  #this has to allow gpu left over for local worker & evaluation workers also
+    cfg.resources(  num_gpus                    = 0.1, #for the local worker, which does the learning & evaluation runs
+                    #num_cpus_for_local_worker   = 1,
+                    #num_cpus_per_worker         = 1, #also applies to the local worker and evaluation workers
+                    num_gpus_per_worker         = 0.1  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
     cfg.rollouts(   #num_rollout_workers         = 1, #num remote workers _per trial_ (remember that there is a local worker also)
@@ -135,7 +135,7 @@ def main(argv):
                     evaluation_duration         = 15, #units specified next
                     evaluation_duration_unit    = "episodes",
                     evaluation_parallel_to_training = True, #True requires evaluation_num_workers > 0
-                    evaluation_num_workers      = 2,
+                    evaluation_num_workers      = 1,
     )
 
     # Debugging assistance
@@ -195,19 +195,19 @@ def main(argv):
 
     policy_config = cfg_dict["policy_model_config"]
     policy_config["fcnet_hiddens"]              = [256, 256]
-    policy_config["fcnet_activation"]           = "tanh"
+    policy_config["fcnet_activation"]           = "relu"
 
     q_config = cfg_dict["q_model_config"]
     q_config["fcnet_hiddens"]                   = [256, 256]
-    q_config["fcnet_activation"]                = "tanh"
+    q_config["fcnet_activation"]                = "relu"
 
     cfg.training(   twin_q                      = True,
                     gamma                       = 0.995,
-                    train_batch_size            = 256, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    initial_alpha               = tune.loguniform(0.002, 0.04),
+                    train_batch_size            = 1024, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
+                    initial_alpha               = 0.02, #tune.loguniform(0.002, 0.04),
                     tau                         = 0.005,
-                    n_step                      = 5, #tune.choice([1, 2, 3]),
-                    grad_clip                   = tune.uniform(0.5, 1.0),
+                    n_step                      = 1, #tune.choice([1, 2, 3]),
+                    grad_clip                   = 1.0, #tune.uniform(0.5, 1.0),
                     optimization_config         = opt_config,
                     policy_model_config         = policy_config,
                     q_model_config              = q_config,

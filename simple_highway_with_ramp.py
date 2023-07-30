@@ -541,8 +541,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             raise NotImplementedError("///// Neighbor vehicle motion not defined for difficulty level {}".format(self.difficulty_level))
         if self.debug > 1:
             print("///// reset: ego defined: lane = {}, p = {:.1f}, speed = {:.1f}".format(ego_lane_id, ego_p, ego_speed))
-        print("///// reset: ego_lane_id = {}, ego_p = {:6.1f}, max_distance = {:6.1f}, total_steps = {}"
-              .format(ego_lane_id, ego_p, max_distance, self.total_steps))
+        #print("///// reset: ego_lane_id = {}, ego_p = {:6.1f}, max_distance = {:6.1f}, total_steps = {}"
+        #      .format(ego_lane_id, ego_p, max_distance, self.total_steps))
 
         # Neighbor vehicles always go a constant speed, always travel in lane 1
         #TODO: revise this for levels 4+
@@ -654,8 +654,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Unscale the action inputs (both actions are in [-1, 1])
         desired_speed = (action[0] + 1.0)/2.0 * SimpleHighwayRamp.MAX_SPEED
         lc_cmd = int(math.floor(action[1] + 0.5))
-        print("///// step: incoming cmd[1] = {:5.2f}, lc_cmd = {:2}, current lane = {}, p = {:7.2f}, steps = {}"
-              .format(cmd[1], lc_cmd, self.vehicles[0].lane_id, self.vehicles[0].p, self.steps_since_reset))
+        #print("///// step: incoming cmd[1] = {:5.2f}, lc_cmd = {:2}, current lane = {}, p = {:7.2f}, steps = {}"
+        #      .format(cmd[1], lc_cmd, self.vehicles[0].lane_id, self.vehicles[0].p, self.steps_since_reset))
 
         # Move all of the vehicles downtrack. This doesn't account for possible lane changes, which are handled seperately in the next section.
         new_ego_p = None
