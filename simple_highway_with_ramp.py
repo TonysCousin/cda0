@@ -353,7 +353,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         upper_obs[self.Z8_REL_SPEED]        = max_rel_speed
         upper_obs[self.Z9_REL_SPEED]        = max_rel_speed
 
-        self.observation_space = Box(low=lower_obs, high=upper_obs, dtype=np.float)
+        self.observation_space = Box(low = lower_obs, high = upper_obs, dtype = float)
         if self.debug == 2:
             print("///// observation_space = ", self.observation_space)
 
@@ -367,7 +367,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Specify these for what the NN will deliver, not world scale
         lower_action = np.array([-1.0, -1.0])
         upper_action = np.array([ 1.0,  1.0])
-        self.action_space = Box(low=lower_action, high=upper_action, dtype=np.float)
+        self.action_space = Box(low=lower_action, high = upper_action, dtype = float)
         if self.debug == 2:
             print("///// action_space = ", self.action_space)
 
@@ -592,7 +592,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.vehicles[0].cur_speed = ego_speed
         self.vehicles[0].lane_change_status = "none"
 
-        self.obs = np.zeros(self.OBS_SIZE)
+        self.obs = np.zeros(self.OBS_SIZE, dtype = float)
         self.obs[self.LC_CMD]               = LaneChange.STAY_IN_LANE
         self.obs[self.LC_CMD_PREV]          = LaneChange.STAY_IN_LANE
         self.obs[self.EGO_SPEED]            = ego_speed

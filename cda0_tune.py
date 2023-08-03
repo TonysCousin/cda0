@@ -42,7 +42,8 @@ def main(argv):
         difficulty_level = min(max(int(argv[1]), 0), SimpleHighwayRampWrapper.NUM_DIFFICULTY_LEVELS)
     print("\n///// Tuning with initial environment difficulty level {}".format(difficulty_level))
 
-    ray.init()
+    # Initialize per https://docs.ray.io/en/latest/workflows/management.html?highlight=local%20storage#storage-configuration
+    ray.init() #storage = "~/ray_results/cda0")
 
     # Define which learning algorithm we will use and set up is default config params
     #algo = "DDPG"
@@ -61,10 +62,10 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     chkpt_int           = 10    #num iters between storing new checkpoints
-    burn_in_period      = 4000  #num iterations before we consider stopping or promoting to next level
+    burn_in_period      = 10000  #num iterations before we consider stopping or promoting to next level
     perturb_int         = 400   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
-    max_iterations      = 3000
-    num_trials          = 10
+    max_iterations      = 5000
+    num_trials          = 4
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
     PerturbationController(_checkpoint_path, num_trials)
@@ -92,6 +93,8 @@ def main(argv):
     cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config, env_task_fn = curriculum_fn)
 
     # Add exploration noise params
+    #cfg.rl_module(_enable_rl_module_api = False) #disables the RL module API, which allows exploration config to be defined for ray 2.6
+
     explore_config = cfg_dict["exploration_config"]
     #print("///// Explore config:\n", pretty_print(explore_config))
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
@@ -253,13 +256,15 @@ def main(argv):
 
     run_config = RunConfig(
                     name                        = "cda0",
-                    local_dir                   = "~/ray_results",
+                    local_dir                   = "~/ray_results", #for ray <= 2.5
+                    #storage_path                = "~/ray_results", #required if not using remote storage for ray 2.6
                     stop                        = stopper,
                     #stop                        = {"episode_reward_mean":       success_threshold[difficulty_level],
                     #                               "training_iteration":        max_iterations,
                     #                               },
-                    sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
-                    verbose                     = 3, #3 is default
+                    sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir, ray 2.5
+                    #sync_config                 = tune.SyncConfig(syncer = None, upload_dir = None), #for single-node or shared checkpoint dir, ray 2.6
+                    #verbose                     = 3, #3 is default
                     checkpoint_config           = air.CheckpointConfig(
                                                     checkpoint_frequency        = chkpt_int,
                                                     checkpoint_score_attribute  = "episode_reward_mean",

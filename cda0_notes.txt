@@ -3055,7 +3055,7 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
   one that is in the ballpark. Also, a nn of [256, 256] was necessary to find a winner, as
   [64, 64] was not working.
 
-* Run ? training level 4 from scratch with SAC on lc-cmd branch, no PBT. Trying to configure
+* Run 32cbb training level 4 from scratch with SAC on lc-cmd branch, no PBT. Trying to configure
   more like Kevin's run and with lessons learned from recent MountainCar activity.
 	* Changed from level 3 to 4.
 	* Removed starting lane restrictions.
@@ -3063,9 +3063,55 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Set train_batch_size = 1024
 	* Fixed initial_alpha = 0.02
 	* Fixed grad_clip = 1.0
+	* All 10 iterations errored out, three before they ever started running! The most
+	  iterations achieved was 600 in only one of the trials. In all cases the error log
+	  indicates unknown error, possibly a SIGSEGV or high memory usage. Log shows that
+	  most of them were a SIGSEGV on a particular cpu (different one each time) when
+	  executing rllib/policy/sample_batch.py at line 81 in its __init__() method. It is
+	  logged as a fatal Python error.
+
+* Attempted to update python to 3.9.13 in the cda0 conda env, but got a zstd decompression error.
+  Found that the recent Nvidia (cuda) update hosed up my conda and/or pip so that I can't 
+  install much of anything. Spending the rest of the night reinstalling conda.
+
+
+===== Ray 2.6.1 debacle - back to Ray 2.5.1 =====
+
+
+8/1/23
+
+* Stopped to reinstall all of the conda sw and all of its environments from scratch. Built a new
+  cda0 env based on python 3.10, torch 2.0.1, Ray 2.6.1.
+	* Also installed pygame 2.5.0 with pip (not available via conda).
+
+8/2/23
+
+* Made a trial run of cda0_tune and found that there are some new warnings and deprecations that
+  need attention. Attempted to address them, but getting lots of problems with using local storage.
+  Submitted a topic on Ray Discuss (https://discuss.ray.io/t/trouble-starting-tune-job-on-local-machine/11653)
+  but cannot move forward at this point. Am also starting to see a lot of segfaults, so maybe
+  v2.6.1 is a premature upgrade.
+
+* After playing with the tune program some more, determined there must be a defect in Ray that prevents my
+  situation from working. I therefore created a conda env rllib25 and installed Ray 2.5.1 there. Made a new
+  env cda0 built on that (but I had to manually install ray 2.5.1 there also, after doing the torch/cuda
+  reinstall trick - see conda notes).
+
+* Run c2d29 training level 4 from scratch with SAC on lc-cmd branch, no PBT.
+	* Only running 4 trials, since I'm concerned that having 10 might have been contributing to all the
+	  segfaults earlier (too much heating or possible conflict in the processor allocations?).
+	* Otherwise, same as run 32cbb on 7/30.
+	* 3 trials showed lots of promise, with rmax climing to > 8, and two of them had rmean ~0, but...
+	* All 4 trials crashed for unexplained reasons (3 of them). Trial 3 died due to logical comparison
+	  defect in the Ray code.  Results saved in ~/ray_results/trial3-defect.
+
+* Run c74ed training level 4 with SAC on lc-cmd branch, same as previous run.
+
 
 
 Todo
+- try running ray.train instead of all the tuning jobs
+- redo rewards per recent paper suggestions
 - Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
 - change replay buffer capacity from 1e6 to smaller.
 - remove time step bonus.
