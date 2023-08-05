@@ -180,6 +180,20 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                  render_mode:   int             = None  #Ray rendering info, unused in this version
                 ):
 
+        """Wrapper for the real initialization in order to trap stray exceptions."""
+
+        try:
+            self._init(config, seed, render_mode)
+        except Exception as e:
+            print("\n///// Exception trapped in SimpleHighwayRamp.__init__: ", e)
+
+
+    def _init(self,
+                 config:        EnvContext,             #dict of config params
+                 seed:          int             = None, #seed for PRNG
+                 render_mode:   int             = None  #Ray rendering info, unused in this version
+                ):
+
         """Initialize an object of this class.  Config options are:
             time_step_size: duration of a time step, s (default = 0.5)
             debug:          level of debug printing (0=none (default), 1=moderate, 2=full details)
@@ -433,6 +447,20 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
               options:      dict            = None
              ) -> Tuple[np.array, dict]:
 
+        """Wrapper around the real reset method to trap for unhandled exceptions."""
+
+        try:
+            return self._reset(seed, options)
+        except Exception as e:
+            print("\n///// Exception trapped in SimpleHighwayRamp.reset: ", e)
+            return (None, None)
+
+
+    def _reset(self, *,
+              seed:         int             = None,    #reserved for a future version of gym.Environment
+              options:      dict            = None
+             ) -> Tuple[np.array, dict]:
+
         """Reinitializes the environment to prepare for a new episode.  This must be called before
             making any calls to step().
 
@@ -620,6 +648,19 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
     def step(self,
                 cmd     : list      #list of floats; 0 = speed command, 1 = desired lane, scaled
             ) -> Tuple[np.array, float, bool, bool, Dict]:
+
+     """Wrapper around the real step method to trap unhandled exceptions."""
+
+     try:
+         return self._step(cmd)
+     except Exception as e:
+         print("\n///// Exception trapped in SimpleHighwayRamp.step: ", e)
+
+
+     def _step(self,
+                cmd     : list      #list of floats; 0 = speed command, 1 = desired lane, scaled
+            ) -> Tuple[np.array, float, bool, bool, Dict]:
+
         """Executes a single time step of the environment.  Determines how the input commands (actions) will alter the
             simulated world and returns the resulting observations to the agent.
 

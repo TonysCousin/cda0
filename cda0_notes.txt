@@ -3106,10 +3106,35 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  defect in the Ray code.  Results saved in ~/ray_results/trial3-defect.
 
 * Run c74ed training level 4 with SAC on lc-cmd branch, same as previous run.
+	* Two trials died of segfaults early.
+	* Two other trials had some success, with rmax intermittently reaching as high as 6 in each case,
+	  but rmean never above -2. Then they both suddenly died without generating an error log of their
+	  own. The stdout log shows a UnicodeDecodeError way down in a message unpacker, apparently in
+	  Ray core.
+
+8/3/23
+
+* Run 936ba identical to previous run, trying to capture more info on segfault situation
+	* Using 0.8 / 1.0 GPU and 8.0 of 16.0 cpu.  htop shows total mem usage is 12 GB / 62 GB.
+	* Filed a new topic on Ray Discuss (https://discuss.ray.io/t/frequent-sigsegv-running-tune/11676).
+	* One trial died early on, then the whole job died due to a segfault.
+
+* Run 3a43b training level 4 with SAC on lc-cmd branch, no PBT.
+	* Commented out the whole call to cfg.resources(), which had been specifying gpu usage. Thinking
+	  this may be causing the segfault.
+	* Solution ran only on cpus, but still ran all 4 trials simultaneously.
+	* All 4 trials died before iteration 1000 with same unknown error.
+
+<date>
+
+* Run ?
+	* Added exception trapping wrappers on the 3 primary methods of the SimpleHighwayRamp class to
+	  help identify where the segfaults may be coming from.
 
 
 
 Todo
+- Add wrappers around all possible calls with exception traps
 - try running ray.train instead of all the tuning jobs
 - redo rewards per recent paper suggestions
 - Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)

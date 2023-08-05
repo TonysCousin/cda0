@@ -116,10 +116,10 @@ def main(argv):
     #       if gpu is to be used for local workder only, then the number of gpus available need to be divided among the
     #       number of possible simultaneous trials (as well as gpu memory).
     # This config will run 5 parallel trials on the Tensorbook.
-    cfg.resources(  num_gpus                    = 0.1, #for the local worker, which does the learning & evaluation runs
-                    #num_cpus_for_local_worker   = 1,
-                    #num_cpus_per_worker         = 1, #also applies to the local worker and evaluation workers
-                    num_gpus_per_worker         = 0.1  #this has to allow gpu left over for local worker & evaluation workers also
+    cfg.resources(  num_gpus                    = 0.5, #for the local worker, which does the learning & evaluation runs
+                    num_cpus_for_local_worker   = 1,
+                    num_cpus_per_worker         = 1, #also applies to the local worker and evaluation workers
+                    num_gpus_per_worker         = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
     cfg.rollouts(   #num_rollout_workers         = 1, #num remote workers _per trial_ (remember that there is a local worker also)
