@@ -3125,16 +3125,19 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Solution ran only on cpus, but still ran all 4 trials simultaneously.
 	* All 4 trials died before iteration 1000 with same unknown error.
 
-<date>
+8/6/23
 
-* Run ?
+* Run 1683e training level 4 with SAC on lc-cmd branch, no PBT.
 	* Added exception trapping wrappers on the 3 primary methods of the SimpleHighwayRamp class to
 	  help identify where the segfaults may be coming from.
+	* Changed GPU allocation from 0.1 for every worker to only 0.5 for local worker and none for
+	  sampling workers. This forces Ray to schedule only 2 trials simultaneously, as it had been
+	  doing for a long time. I hope this minimizes the segfaults.
 
 
 
 Todo
-- Add wrappers around all possible calls with exception traps
+- remove PBT schedule completely and the curriculum function
 - try running ray.train instead of all the tuning jobs
 - redo rewards per recent paper suggestions
 - Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)

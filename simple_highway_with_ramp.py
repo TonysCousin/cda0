@@ -450,7 +450,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         """Wrapper around the real reset method to trap for unhandled exceptions."""
 
         try:
-            return self._reset(seed, options)
+            return self._reset(seed = seed, options = options)
         except Exception as e:
             print("\n///// Exception trapped in SimpleHighwayRamp.reset: ", e)
             return (None, None)
@@ -649,15 +649,15 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 cmd     : list      #list of floats; 0 = speed command, 1 = desired lane, scaled
             ) -> Tuple[np.array, float, bool, bool, Dict]:
 
-     """Wrapper around the real step method to trap unhandled exceptions."""
+        """Wrapper around the real step method to trap unhandled exceptions."""
 
-     try:
-         return self._step(cmd)
-     except Exception as e:
-         print("\n///// Exception trapped in SimpleHighwayRamp.step: ", e)
+        try:
+            return self._step(cmd)
+        except Exception as e:
+            print("\n///// Exception trapped in SimpleHighwayRamp.step: ", e)
 
 
-     def _step(self,
+    def _step(self,
                 cmd     : list      #list of floats; 0 = speed command, 1 = desired lane, scaled
             ) -> Tuple[np.array, float, bool, bool, Dict]:
 
