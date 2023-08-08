@@ -42,7 +42,8 @@ def main(argv):
         difficulty_level = min(max(int(argv[1]), 0), SimpleHighwayRampWrapper.NUM_DIFFICULTY_LEVELS)
     print("\n///// Tuning with initial environment difficulty level {}".format(difficulty_level))
 
-    ray.init()
+    # Initialize per https://docs.ray.io/en/latest/workflows/management.html?highlight=local%20storage#storage-configuration
+    ray.init() #storage = "~/ray_results/cda0")
 
     # Define which learning algorithm we will use and set up is default config params
     #algo = "DDPG"
@@ -61,10 +62,10 @@ def main(argv):
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
     chkpt_int           = 10    #num iters between storing new checkpoints
-    burn_in_period      = 400   #num iterations before we consider stopping or promoting to next level
+    burn_in_period      = 10000  #num iterations before we consider stopping or promoting to next level
     perturb_int         = 400   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
-    max_iterations      = 1600
-    num_trials          = 10
+    max_iterations      = 5000
+    num_trials          = 4
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
     PerturbationController(_checkpoint_path, num_trials)
@@ -92,15 +93,18 @@ def main(argv):
     cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config, env_task_fn = curriculum_fn)
 
     # Add exploration noise params
+    #cfg.rl_module(_enable_rl_module_api = False) #disables the RL module API, which allows exploration config to be defined for ray 2.6
+
     explore_config = cfg_dict["exploration_config"]
     #print("///// Explore config:\n", pretty_print(explore_config))
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.1, 0.7) #this param is specific to GaussianNoise
-    explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
+    explore_config["stddev"]                    = tune.uniform(0.2, 0.6) #this param is specific to GaussianNoise
+    explore_config["random_timesteps"]          = 100000 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = 1000000  #tune.choice([100000, 400000]) #was 900k
-    cfg.exploration(explore = True, exploration_config = explore_config)
+    explore_config["scale_timesteps"]           = 2000000  #tune.choice([100000, 400000]) #was 900k
+    exp_switch                                  = True #tune.choice([False, True, True])
+    cfg.exploration(explore = exp_switch, exploration_config = explore_config)
     #cfg.exploration(explore = False)
 
     # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
@@ -134,7 +138,7 @@ def main(argv):
                     evaluation_duration         = 15, #units specified next
                     evaluation_duration_unit    = "episodes",
                     evaluation_parallel_to_training = True, #True requires evaluation_num_workers > 0
-                    evaluation_num_workers      = 2,
+                    evaluation_num_workers      = 1,
     )
 
     # Debugging assistance
@@ -190,22 +194,23 @@ def main(argv):
     opt_config = cfg_dict["optimization"]
     opt_config["actor_learning_rate"]           = tune.loguniform(1e-6, 1e-4) #default 0.0003
     opt_config["critic_learning_rate"]          = tune.loguniform(1e-6, 1e-4) #default 0.0003
-    opt_config["entropy_learning_rate"]         = tune.loguniform(1e-4, 1e-4) #default 0.0003
+    opt_config["entropy_learning_rate"]         = tune.loguniform(1e-6, 1e-4) #default 0.0003
 
     policy_config = cfg_dict["policy_model_config"]
     policy_config["fcnet_hiddens"]              = [256, 256]
-    policy_config["fcnet_activation"]           = "tanh"
+    policy_config["fcnet_activation"]           = "relu"
 
     q_config = cfg_dict["q_model_config"]
     q_config["fcnet_hiddens"]                   = [256, 256]
-    q_config["fcnet_activation"]                = "tanh"
+    q_config["fcnet_activation"]                = "relu"
 
     cfg.training(   twin_q                      = True,
                     gamma                       = 0.995,
-                    train_batch_size            = 256, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    initial_alpha               = tune.loguniform(0.001, 0.1),
+                    train_batch_size            = 1024, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
+                    initial_alpha               = 0.02, #tune.loguniform(0.002, 0.04),
                     tau                         = 0.005,
                     n_step                      = 1, #tune.choice([1, 2, 3]),
+                    grad_clip                   = 1.0, #tune.uniform(0.5, 1.0),
                     optimization_config         = opt_config,
                     policy_model_config         = policy_config,
                     q_model_config              = q_config,
@@ -231,12 +236,9 @@ def main(argv):
                                                                         # remaining trials go into perpetual PAUSED state.
                     hyperparam_mutations = {                            #resample distributions
                     #for SAC:
-                        #"optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
-                        #"optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
-                        #"optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
-                    #for DDPG:
-                        "actor_lr"                              :   tune.loguniform(1e-6, 1e-3),
-                        "critic_lr"                             :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/entropy_learning_rate"     :   tune.loguniform(1e-6, 1e-3),
                     # for PPO:
                         #"lr"                                    :   tune.loguniform(1e-6, 2e-4),
                         #"entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
@@ -254,13 +256,15 @@ def main(argv):
 
     run_config = RunConfig(
                     name                        = "cda0",
-                    local_dir                   = "~/ray_results",
+                    local_dir                   = "~/ray_results", #for ray <= 2.5
+                    #storage_path                = "~/ray_results", #required if not using remote storage for ray 2.6
                     stop                        = stopper,
                     #stop                        = {"episode_reward_mean":       success_threshold[difficulty_level],
                     #                               "training_iteration":        max_iterations,
                     #                               },
-                    sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
-                    verbose                     = 3, #3 is default
+                    sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir, ray 2.5
+                    #sync_config                 = tune.SyncConfig(syncer = None, upload_dir = None), #for single-node or shared checkpoint dir, ray 2.6
+                    #verbose                     = 3, #3 is default
                     checkpoint_config           = air.CheckpointConfig(
                                                     checkpoint_frequency        = chkpt_int,
                                                     checkpoint_score_attribute  = "episode_reward_mean",

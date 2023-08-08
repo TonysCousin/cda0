@@ -106,14 +106,14 @@ def main(argv):
     graphics.update(action, raw_obs, vehicles)
     obs = env.scale_obs(raw_obs)
     step = 0
-    time.sleep(2)
+    time.sleep(4)
     while not done:
         step += 1
         action = algo.compute_single_action(obs, explore = False)
 
         # Command masking for first few steps to allow feedback obs to populate
-        if step < 4:
-            action[1] = obs[env.EGO_LANE_ID]
+        if step < 2:
+            action[1] = 0.0
 
         # Move the environment forward one time step
         raw_obs, reward, done, truncated, info = env.step(np.ndarray.tolist(action)) #obs returned is UNSCALED
@@ -137,8 +137,8 @@ def main(argv):
         # Scale the observations to be ready for NN ingest next time step
         obs = env.scale_obs(raw_obs)
 
-        print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, p = {:.3f}, rem = {:4.0f}, r = {:7.4f} {}"
-                .format(step, action[0], action[1], raw_obs[0], raw_obs[3], raw_obs[1], raw_obs[2], reward, info["reward_detail"]))
+        print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = unsp, speed = {:.2f}, p = unsp, rem = {:4.0f}, r = {:7.4f} {}"
+                .format(step, action[0], action[1], raw_obs[3], raw_obs[2], reward, info["reward_detail"]))
 
         print("                   Z1    Z2    Z3    Z4    Z5    Z6    Z7    Z8    Z9, neighbor in ego zone = {:3.0f}".format(raw_obs[6]))
         b = 11 #base index of this attribute for Z1 in the obs vector
