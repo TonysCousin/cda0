@@ -1929,7 +1929,7 @@ program as a system test.
 4/29/23
 
 * I got some mentoring time from Kevin, who made several suggestions on how to change the approach.
-	1 Use PPO or SAC
+	1 Use PPO or SAC - I will use PPO for now, since it has been working well for me.
 	2 Use continuous action space, and discretize lane change action like I did originally.
 	3 Change the action space to reflect the agent's goals, not the process of getting there. Instead of
 	  accel and lane change, use speed and lane ID. Not sure how to generalize the lane ID part, but for
@@ -1940,14 +1940,1249 @@ program as a system test.
 	5 Be sure to penalize sudden, large changes in any action command (this is currently in place).
 	6 Keep the NN small, and go a little deeper (try 3 layers).
 
-AI next moves:
-- Add HPs for search: grad_clip, target_network_update_freq, twin_q
-- Change penalty for crash to -20.
+* Merged the git branch adv-level4 into develop, which now reflects the best of the above work in PPO.
+  Created new branch "new-obs-actions" off of develop for this next phase of work.
 
+* Run 72102 training level 4 from scratch, with suggestions #1 and #6 implemented (PPO).
+	* NN structure is now [256, 256, 128].
+	* Changed penalty for crash (with another vehicle) from -10 to -20 so it is worse than runnin off road.
+
+5/2/23
+
+	* After ~500k steps all trials settled into a noisy steady state where rmean fluctuates between
+	  +1 and +5 and rmin fluctuates between -20 and -10.
+	* Inference on best trial shows most runs on lane 2 drive off road in the first time step.
+
+* Code mods for uniform coordinate system - replacing the concept of measuring a vehicle's location relative
+  to its current lane's start point, since each lane may start at a different X value. Going forward, all
+  vehicle locations will be represented as X coordinates, regarless of which lane it is in. 
+	* Updated Roadway and Lane classes to support this concpet change.
+	* Changed all the rest of the environment code to convert from DDT to X coordinates.
+	* Ran a bit with debugging set to 1 and saw nothing crazy in the log.
+	* Ran a training job with same settings as previous one, to demonstrate that it performs the same.
+	  Results were pretty much like the previous run, so I'm comfortable moving forward.
+
+5/4/23
+
+	* Modified the action space from [accel cmd, LC cmd] to [desired speed, desired lane ID]. This
+	  satisfies suggestions #2 and #3.
+
+5/7/23
+
+	* Modified the obs space so that it includes a grid of zones surrounding the ego vehicle, rather
+	  than looking at data on specific neighbor and specific roadway geometry. This satisfies suggestions
+	  #4 and #5.
+
+5/9/23
+
+	* Misc testing & fixing defects. Still have a problem with obs[6] sometimes being out of bounds.
+	  I think I need to redefine the obs space only in terms of the scaled values, not the raw - need
+	  to experiment with this.
+
+5/11/23
+
+	* Created new branch, scaled-space, from new-obs-actions to play with scaling the obs space.
+	  Found that I can't do much with the derived class because it needs to overwrite the parent's member
+	  observation_space variable. Aborted this idea.
+	* Completed testing and began a new run...
+
+* Run c6e1e first training run with the new observations & action space, using PPO.
+	* Did not perform very well. rmean topped out ~4 for some trials, then dropped a bit.
+
+5/12/23
+
+	* Inference showed lane 0 works great, lane 1 starts often crashes into neighbors at the beginning.
+	  I believe this is restart() putting it too close to the back of the platoon and it doesn't have a
+	  chance to adjust. Lane 2 starts seem to always want to do an immediate lane change (to lane 1), so
+	  I never saw a run go past the first time step.
+	* Looked into updating the inference program for the new lane 2 schematic concept. Decided it's best
+	  to revise comments, variable names, & concepts throughout to support a true map frame (reflecting
+	  real geometry), a parametric frame (how the NN views it, with lanes parallel), and a display frame.
+	  This will take some time to draw out, so I ran inference several times just for the calculations,
+	  accepting that the graphics are bogus.
+
+AI: redo coordinate transforms, then verify latest results with new inference program.
+	- get_vehicle_dist_downtrack() should be removed (used by inference)
+
+5/16/23
+
+5/17/23
+
+5/18/23
+
+	* Completed conversion of env code to use the parametric coordinate frame (schematic concept) and
+	  support transforms between that and the map frame to ensure nothing gets confused between the two.
+
+* Training run 41240 using this new code
+	* Set the burn-in period to 200 iterations (was alwasy 100 prior) to ensure that there is plenty of
+	  recovery time for an agent after the initial randomized location gets turned off.
+	* Still having problems with initializing ego_p in reset() based on PBT perturb counter. Experiments
+	  with the tune prgm specifying num_trials (running 2 at a time) and the resulting envs that get
+	  started:
+		* 1 trial specified, 1 run = 17 envs	16*1 + 1
+		* 2 trials specified, 2 run = 33 envs	16*2 + 1
+		* 4 trials specified, 2 run = 35 envs	16*2 + 3
+		* 4 trials specified, 4 run = 67 envs	16*4 + 3
+		* 4 trials specified, 6 run = 101 envs	16*6 + 5
+		* 8 trials specified, 2 run = 32 envs	16*2
+		* 8 trials specified, 4 run = 66 envs	16*4 + 2
+		* 8 trials specified, 6 run = 95 envs	16*6 - 1
+		* 8 trials specified, 8 run = 129 envs	16*8 + 1
+		* 8 trials specified, 10 run = 163 env	16*10 + 3
+		* 8 trials specified, 12 run = 197 env	16*12 + 3
+		* 8 trials specified, 14 run = 231 env	16*14 + 7
+		* 10 trials specified, 2 run = 34 env	16*2 + 2
+		* 10 trials specified, 4 run = 68 env	16*4 + 4
+		* 10 trials specified, 6 run = 102 env	16*6 + 6
+		* 10 trials specified, 8 run = 136 env	16*8 + 8
+		* 10 trials specified, 10 run = 170 env	16*10 + 10
+		* 10 trials specified, 12 run = 201 env	16*12 + 9
+		* 10 trials specified, 14 run = 233 env	16*14 + 9
+	* Each time a new env is created, its "total_steps" variable starts at 0, so we never get a
+	  cumulative step count, and must therefore rely on this perturb state calculation.
+
+* Run 5ad76 with the new perturb-controlled random initial position for the first 33333 steps (per
+  env object).
+	* The randomized initial postition turned off after ~65k steps (total), but the first 200
+	  iterations lasted until ~220k, so could have set the threshold a bit higher, maybe 50k,
+	  to allow for better orientation with the training wheels on.
+
+5/19/23
+
+	* Results were terrible. All 4 trials whose rmax was positive died early (nan problem in
+	  Gaussian).
+
+* Run 6fa3a extended the randomized initial position up to 55k env steps, and limited to 800 total
+  iterations.
+	* Trial 6 was performing far better than others, with rmax ~10, rmean between -2 and 2,
+	  when it died at 500k steps due to the same Gaussian nan problem as before. I am starting
+	  to wonder if there's something in my env code or the way the observations are structured
+	  that forces this when the solution starts to work well.
+
+5/22/23
+
+	* Performing inference on trial 6 in lane 0, which is the only trial that had a positive rmean. 
+		* Ego started at 1 m/s, but it seems the neighbor vehicles did the same thing, and
+		  all accelerated together!
+		* Jerk penalty still being applied several time steps in when speed cmd hasn't changed
+		  and accel is constant. Jerk penalty seems to be inversely proportional to speed.
+		* Eventually, ego went slightly faster than neighbors, but the rel_ps never changed
+		* Neighbor rel_speed seems wrong = always 0.10.
+
+5/23/23
+
+* Code changes:
+	* Fixed a defect where a nan or 0 neighbor speed could have been used as a denominator and an
+	  arg to prng.normal().
+	* Added historical (prev time step) command feedback and reward penalty for each of them changing.
+
+* Run 3a029 with the above changes
+
+5/25/23
+
+	* Still had 6 trials end with errors, all the same nan problem in Normal() as before, being called
+	  by ppo_torch_policy. Five of these had rmax ~10, and no other trials showed such success, all
+	  others having rmax < 6, and mostly ~ -10.
+	* Trial 9 went the longest of the ones with a high rmax (> 500k steps), but its ending rmean was ~-10.
+	  Performed some inference on it for debug purposes.
+		* Neighbor rel_speed is incorrect and not changing as ego accelerates.
+		* Neighbor rel_p never changes as ego accelerates.
+		* neighbor_in_ego_zone flag is never set even though ego crashes into rear of n3.
+		* The zone driveable and reachable flags never update when ego changes lanes.
+
+* Run 1d440 with following changes:
+	* Removed the only call to prng.normal() (where reset() is defining the agent's relative_pos).
+	* Fixed several places where Vehicle.cur_speed was misspelled.
+	* Fixed step() where it forced new neighbor speed command to be the speed limit, rather than the
+	  current speed.
+	* Fixed step() missing a call to _update_obs_zones().
+	* Fixed step() defect in erasing the obs zone info from previous step.
+	* Fixed defect in Graphics._get_vehicle_coords() illegally referencing lane 2 start location.
+	* Ran several tests with inference program and extra debugging to ensure that env behavior is proper.
+	* Results: first 200 iterations showed a lot of promise, with 3 trials achieving rmax > 6 after the
+	  randomized initial location was turned off, and one trial approached rmean = -1. However, there
+	  were several exceptions thrown due to starting location in lane 2 prior to the lane's starting point.
+
+* Run a7e09 included fix for Roadway to avoid the above mentioned assertion exception.
+	* After ~400 iterations, 7 of the 10 trials had errored out, wiping out all the promising solutions.
+
+5/26/23
+
+* Run bee8a redo of previous run.
+	* There were no error trials, but every trial dove to rmax = -10.
+
+* Run 514fc redo of previous run.
+	* Similar problems with the promising performers throwing errors in normal distribution calcs.
+
+* Run cfe6a with several debug stmts in Ray code to try diagnosing the error problems.
+	* Also improved the reset() method of defining ego_p during the warmup phase, so it gradually moves
+	  the max_distance for starting location back toward beginning of route, instead of the suddedn
+	  restriction.
+	* It seems the debug stmts were generating too much output on the log file. The laptop locked up a
+	  couple times, and the log was way too big to open for editing (in vi). So I took most of them out
+	  and only left some new stuff for when an exception occurred in Normal.
+	* A couple runs showed that even the successful trials were gradually degrading (rmax) as start
+	  location got moved farther uptrack, and it never learned to recover. So maybe it needs more time
+	  using the full track before restricting the start location.
+
+* Run cc948 with fixes to ppo_torch_policy and adjusted my env randomized start distance initializations;
+  it is now using the full length for 50k steps, then fairly quickly restricts start dist to near the
+  beginning after 90k steps.
+	* In first 200 iterations, all trials crapped out, ending with rmax = -10.
+	* When trial 0 died it was due to the nan exception in Normal, but revealed that it is due to the
+	  logits tensor coming out of the model in ppo_torch_policy. I need to look into how the model code
+	  works to understand what might be causing that.  The entire tensor was nan values.
+
+* Run 6b67a adjusted the initialization constants to INITIAL_STEPS = 60k, FINAL_STEPS = 65k to make the
+  dropoff more dramatic like it was a few versions ago.
+	* Still no workie.
+
+* Researched possible problems on Ray Discuss. 
+	* Found that I had reported this same problem back in Sep 2022! with a simple mountain car prgm.
+	  Solution there was to reduce LR. I dialed back the max range of the LR here, but it looks like
+	  it's already in a good range.
+	* Someone else ran into a similar problem (not sure it's the same). The answer was to look for
+	  spikes (in Tensorboard) in total_loss, cur_kl_coeff, kl, and entropy. I did that and found
+	  nothing jumping out on the one trial that failed in this run.
+	* The above discussion also advised to try using grad_clip between 10 & 40, so I added that.
+
+5/29/23
+
+* Run 76b7c incorporates the 2 changes described under the previous run.
+
+5/30/23
+
+	* All trials dropped to rmax = -10 as soon as random initial location was removed, and never recovered.
+
+* Run 518f4 trains just to level 0 to use as a baseline for further learning.
+	* Trials 0 and 9 completed successfully (rmin = +10) in ~100k steps. Saving them for future use.
+
+* Run 1c07e training level 3 using the above result (trial 9) as the starting baseline. This still includes
+  initial location gradually getting reduced over 1.6M steps.
+
+5/31/23
+
+	* Three or four trials showed promise in the first 200k steps, with rmax ~10 and rmean between 0 and 4,
+	  then all of them dropped down to -1 or lower after the first perturb cycle, even though none of them
+	  got perturbed. Nothing ever recovered. I suspect the initial location randomization played a part here.
+
+* Run 0c256 training level 3 using the same baseline (518f4, trial09). Also turned off randomized_start_dist
+  and fixed code so that in levels 0-3 it initializes based on ego_lane_start, not blindly setting it to 0.
+
+6/1/23
+
+	* All trials ended with rmax ~10, rmean in [-4, -1] and rmin = -10, so not very good.
+
+* Run abe44 training level 1 using the 518f4 baseline and randomized_start_dist = False.
+	* Several trials completed successfully after ~100k steps.
+	* 4 trials also ended with the nan error described above.
+
+* Run 8cdf5 training level 4 from the abe44 (level 1) baseline, with randomized_start_dist = False.
+
+6/2/23
+
+	* Most trials ended with rmean in [-2, 0]. But individual iteration results show that an episode either
+	  succeeds very well or dies immediately due to running off road.  Inference runs show that starting in
+	  lanes 0 or 1 gives success, while starting in lane 2 it always does an illegal lane change immediately.
+	  Seems like more training is needed in lane 2.
+
+* Run 17455 training level 4 from the abe44 level 1 baseline. 
+	* Changed _select_init_lane() for level 4 to choose lane 2 80% of the time (was 50%).
+	* 7 of the 10 trials ended with errors - the same nan errors.
+	* All of the completed trials had rmean ~ -6. Inference on one of them showed that starting in lanes 0
+	  and 1 works fine, but every start in lane 2 had an immediate illegal lane change.
+
+* Run 18baa training level 3 from scratch to see if it can better learn to drive lane 2. Randomized start is
+  still off, and lane assignments are 60% lane 2, 30% lane 1, 10% lane 0.
+	* Turned on verify_obs to ensure that there are no "nan"s being propagated out of the environment.
+	* Fixed a defect in PerturbController that forced it to read the checkpoint file possibly used in the
+	  previous run (not clear, but probably the main instance used a different checkpoint than the env or
+	  callbacks instances). It now works whether previous info files are present or not.
+	* All trials quickly reached rmean = rmax = -10, having never found the finish line.
+
+* Run bad2c training level 3 from scratch, this time with randomized start location turned on.
+	* All trials converged to rmean in [-7, -5], representing actual episodes, much like above, with lanes
+	  0 and 1 showing good trajectories (although at full speed always), and lane 2 results in immediate
+	  lane change cmd & dies.
+	* I noticed that exploration was turned on, but none of the Gaussian params were included, so not sure
+	  how much exploration is actually going on.
+
+6/3/23
+
+* Run 23c74 training level 3 from scratch, with the old Gaussian noise params in use.
+	* All trials performed as before, with rmean ending in the [-4, -1] range after 500k steps, but
+	  rmin was usually -20. Checking a few sample results, rmin was usually -10, with an occasional -20,
+	  indicating it was probably crashing into the stopped neighbors at startup. Good performers scored
+	  +5 or better.
+	* Every trial errored out eventually, some took > 1M steps to do so. It appears all were the nan
+	  problems. For a couple of them, I note that the logged "results" section included learner_stats
+	  with cur_kl_coeff extremely small (order of 1e-217 or 1e-234) just before the nans showed up.
+	* One trial actually started to solve the puzzle, it appears, with rmin hitting -5 just before it
+	  died. It's prior cur_kl_coeff was 1e-34.
+	* Searching the log, I see that values of cur_kl_coeff start the run in O(1) to O(0.001) and gradually
+	  drop so that by the end of the run all of them are something like O(1e-200). This, despite the
+	  tuning program's limiting kl_coeff to [0.3, 0.8].
+
+* Investigated use of kl_coeff in the RLlib code:
+	* cur_kl_coeff is only used in one file, ppo_torch_policy.py. In there...
+	* In the loss() method it attempts to handle bad values by calling warn_if_infinite_kl_divergence(),
+	  which is from rllib.utils.torch_utils. However, it is testing the loss() variable mean_kl_loss
+	  for values near infinity, which is a different problem.
+	* The term "kl_loss" doesn't appear in the log anywhere. Further down in the loss() method it is
+	  multiplied by kl_coeff and added to the total loss. Log does show "total_loss", which is pretty
+	  steady over the course of the run, starting in O(1) to O(10) and ending in O(0.1).
+	* This class doesn't assing the value to its self.kl_coeff, which indicates that it is probably a
+	  derived member. The class has parents
+		TorchPolicyV2
+		ValueNetworkMixin
+		LearningRateSchedule
+		EntropyCoeffSchedule
+		KLCoeffMixin
+
+* Run 40b02 training level 3 from scratch
+	* Turned off perturbation of kl_coeff, although it is still an HP subject to tuning (static value).
+	  I am hoping this reduces the occurrences of the nan problem.
+	* Modified rewards so that going off road in lane 2 results in score of -12, while the other lanes
+	  continue to score -10. This will allow identifying those lane 2 cases in the logs.
+	* Every trial errored out. Most lasted to at least 600k steps, and some went to 900k. All stabilized
+	  with rmean in the -5 to -2 range, with rmin ~ -20.
+	* I confirmed through visual inspection that reset() is not placing the agent in an illegal
+	  downtrack location when starting on lane 2; it is limited to somewhere on that physical lane.
+	  However, this presents a challenge. When learning from scratch, it has a big leap even if starting
+	  from the end of lane 2, to change lanes then drive the entire rest of lane 1 without error before
+	  getting the big reward.
+
+* Run f2297 training level 3 from the level 1 baseline (abe44), since it seems the agent will never learn
+  to reach the finish line if it starts from scratch in lane 2 because it requires too many steps.
+	* I also changed reset() to force this run to ONLY start the agent in lane 2 for every episode,
+	  just to see if it can learn that lane alone. Given its baseline, it should know how to drive the
+	  remainder of lane 1 after changing lanes there, so it should only have to learn the lane change.
+	* All rewards dropped to -12 after the first perturbation, where the randomized initial location
+	  ended.
+
+6/4/23
+
+* Run ed762 training level 3 from level 1 baseline (abe44) - DRIVING LANE 2 ONLY!
+	* Modified the reward function to add a keep-alive component for every timestep, and scaled back
+	  the penalties possible to be less than that keep-alive value except in aggregious cases. This
+	  should motivate level 3 to progress downtrack on lane 2 instead of using its ingrained idea of
+	  always desiring lane 0, which previously had forced the least-cost episode (-10 in first time
+	  step vs -10 minus a penalty for doing something else wrong).
+	* 9 trials errored out, and after first perturb, they all had rmax = -12, so I killed it.
+
+* Run f8bb5 training level 3 from level 1 baseline (abe44) - DRIVING LANE 2 ONLY!
+	* Increased keep-alive reward from 0.05 to 0.1
+	* Increased burn-in period from 200 to 500 iterations and set the randomized start location to
+	  decay over 500k steps (approx 500 iterations) instead of 1M steps.
+	* 8 of 10 trials errored out by 600k steps. Spot check shows this is the nan problem still.
+	* Of the two that went to 1.4M steps, one showed some promise, achieving rmin as high as -3,
+	  with quite a bit of time > -10, and rmean > 0 in quite a few iterations.
+	* Running that trial in inference, it most recently learned to collect a few keep-alive points
+	  over ~40 time steps, then come to a stop, getting penalized with -10, rather than get hit with
+	  a -12 for going off road.
+	* I believe that using the level 1 baseline is a handicap, as it had learned to live in lane 0
+	  always, so that lesson seems to be hard to unlearn.
+
+* Run be359 training level 3 from scratch - DRIVING LANE 2 ONLY!
+	* Using no baseline allows it to learn lane choices more freely.
+	* Tweaked the reward function a bit to discourage stopping
+	* Killed it after 700 iterations, as all living trials (8 of 10) were showing rewards < -10.
+	  rmean is a gradual dive between 200k and 500k steps from a peak reward in the -5 to 0 range,
+	  as randomizes start location gets pushed uptrack. I had thought that it would learn the lower
+	  part of the track well, then gradually translate that knowledge into how to start from farther
+	  up, but it doesn't seem to be working.
+
+* Run bdc08 training level 3 from scratch - DRIVING LANE 2 ONLY
+	* Turned off randomized inital location, forcing agent to start near the beginning of the lane
+	  every time. Hoping that the keep-alive reward is enough to encourage it to drive downtrack.
+	* 4 trials completed early (between 200k and 500k steps), reaching rmean > 9.5, so this looks
+	  like the right approach. With the new keep-alive reward, rmax can get much bigger, so maybe
+	  the success criterion needs to be changed.
+	* Inference on one of the winners showed that speed was highly variable and generally well
+	  below speed limit, so penalties need to be a bit tougher for both those problems. Also, it
+	  looks like the agent jumped from lane 2 to lane 1 prior to the frog, although the log shows
+	  that it did a legal move. I need to check the geometry of that merge point in the parametric
+	  frame.
+	* Trials that succeeded tended to jump from rmax < 0 to rmean ~+10 very quickly - it might be
+	  better to extend the stopper criterion to require more time at a high rmean. This could also
+	  give it more time to address speed command problems.
+	* Only one trial had errored out when I killed it after 900 iterations.
+
+* Run 9a992 training level 3 from scratch - DRIVING LANE 2 ONLY
+	* Changed tune prgm to require 20 consecutive acceptable iterations before a stop signal is sent.
+	* Changed tune prgm to set success threshold from 9.5 to 15.0.
+	* Reduced the keep-alive reward from 0.08 to 0.06 per time step.
+	* Increased penalty for speed not at speed limit (multiplier from 0.06 to 0.08).
+
+6/5/23
+
+	* 5 of 10 trials completed, but none hit the success criterion, although they all got close.
+	  I think the criterion was set slightly unrealistically high.
+	* Inference on Ray's reported "best" trial proved that it was bogus. In fact, that trial, while
+	  it has the best rmean at the end, its final iteration included the nan error, so the NN wass
+	  hosed.
+	* Inference on another trial that completed 1000 iterations worked pretty well.  It had decent
+	  respect for speed desires, and made the lane change well. It did attempt an illegal lane
+	  change on step 1 a couple times, however.
+	* I have noticed for a long time, including this run, that a trial may often perform well in a
+	  given iteration (many episodes with ~100 steps), but will have several (or many) episodes with
+	  just 1 time step. It virtually never happens that it fails on step 2, 3, 4, 10 or 20; it
+	  either fails on first step or it succeeds. I suspect this has to do with the initial values
+	  of the feedback observation elements. Maybe they need to be tuned somehow.
+	* Inference runs show that there is definitely a longitudinal offset error between lanes 1 and 2
+	  in the graphics representation, at least.
+
+* Run a70cb training level 3 from scratch - DRIVING LANE 2 ONLY
+	* Adjusted rewards slightly to dial back the keep-alive a little and increase emphasis on speed
+	  penalty.
+	* Fixed a defect where obs element EGO_DES_LN_PREV was initialized to 0 instead of to the 
+	  currently assigned lane, which should improve first step failures.
+	* Changed success criterion from 15 to 13, anticipating that the above changes will make higher
+	  scores less likely.
+
+6/6/23
+
+	* 4 trials succeeded and 4 errored out. Inference on one of the successful trials shows...
+	* rmax got up to 15.
+	* Speed cmd penalty needs to be larger - is not having much effect.
+	* Speed penalty could be a little larger.
+	* Keep-alive reward could be a little smaller.
+
+* Run e6301 training level 3 from scratch (back to all lanes being trained)
+	* Fixed small defect in inference program's graphics display when vehicle is in lane 2 segment 1.
+	* Reduced keep-alive reward from 0.05 to 0.04
+	* Doubled the speed command variance penalty
+	* Increased speed penalty multiplier from 0.1 to 0.15
+	* I expect the rmax to be a little lower as a result of these, so leaving the success threshold
+	  the same at 13.0 to make it a little more difficult
+	* None of the trials could sustain rmean > 0. Several reached rmax ~14.5. There were quite a few
+	  examples of rmin = -20.
+	* 8 of 10 trials errored.
+
+* Run e04ff training level 3 from scratch
+	* Restored the keep-alive reward to 0.05 and the speed penalty multiplier to 0.1. This is now
+	  like run a70cb (yesterday) but with all 3 lanes and a larger speed command variance penalty.
+	* Trial 0 completed successfully. Inference on it showed that starting in lane 0 always wants to
+	  move to lane 2, so crashes into the parked neighbors. When starting in lane 1 it still prefers
+	  lane 2, and moves over there where it's legal, then moves back to complete the track. When
+	  starting in lane 2 performance was good, achieving total scores of ~15.3, while staying pretty
+	  close to the speed limit for most of the route.
+	* The skew in performance among the 3 starting lanes is probably due to the skew in how much
+	  each lane was trained (lane 0 10%, lane 1 30%, lane 2 60%).
+
+* run 8148a training level 3 from scratch
+	* Modified the level 3 success criterion from 13.0 to 14.5 for rmean.
+	* I modified _select_init_lane() to choose each lane equally for levels 3 & 4.
+	* 9 of 10 trials errored out.
+	* No trial sustained any rmean > 8 but most stayed above 0 for most of the time.
+	* Inference on trial 7 showed that lane 1 worked well, but starting in either of the other lanes
+	  immediately ran off-road because its desired lane is always 1. This checkpoint was 30 iterations
+	  prior to when it caught the nan disease. Trial 2 performed the same way.
+
+* Run 155e6 training level 3 from scratch
+	* Fixed a defect where the two desired speed feedback elements of the obs vector were allowed to
+	  initialize to 0 instead of the actual speed.
+	* Code inspection revealed no obvious reason that the agent would be learning to always desire
+	  lane 1.
+
+===== Upgraded to Ray 2.4.0 =====
+
+* Created new conda env rllib24 and upgraded the env cda0 to be built upon that. Note that ray 2.4.0
+  installs torch 2.0.1. It also installed torchvision 0.14.1 (in the rllib24 env). However, when
+  importing that to cda0, pip didn't like it, saying those versions are incompatible. So I had to
+  upgrade torchvision to 0.15.2. Also installed pygame 2.4.0 with pip.
+	* Initial run of the tune program resulted in a few errors from Ray, since it was trying to
+	  search for obsolete uses of gym (instead of gymnasium). I modified the Ray code in miniconda3
+	  to skip over these checks.
+	* It now runs, but continues to throw out some new messages (warnings?) about the backprop
+	  process.
+	* I have a small concern that maybe the upgrade left some old 2.3 remnants around, so maybe will
+	  need to do a full uninstall then reinstall of 2.4.0.
+
+* New run of the tune program just as it was before the upgrade
+	* Most of the trials errored out early in the process, with the nan problem. I killed it early.
+
+* New run, this time with exploration turned off.
+	* Still got lots of trials that errored out.
+
+6/9/23
+
+* Redid the Ray 2.4.0 installation (see the top level Notes.txt), then replaced the conda env cda0
+  with this new rllib24 env. It required an updated version of torchvision (0.15.2). Also installed
+  pygame 2.4.0.
+	* This time there was no need to modify the Ray source code to avoid those gym checks.
+
+* Run 1efa4 training level 3 to smoke test the new Ray installation.
+	* Still getting lots of trials with the nan error. I now realize the errors are coming from
+	  pytorch, not from ray. But they were happening in the old version of ray/torch, so dropping
+	  back to torch 1.13.1 (the lastest 1.x version) is not likely to change the problem. I need
+	  to look at what is being input to the distribution object.
+
+* A series of tuning runs training level 3 as before, just to get debugging info on Ray code.
+	* Put this work on a new git branch "nan-experiments" off of new-obs-actions.
+	* Added exception traps w/print stmts to several places in torch & rllib to help find the
+	  problem.
+	* Problem is first detected in TorchDiagGaussian constructor, which traps the exception from
+	  torch's distribution.normal.Normal.
+	* Up the call stack one notch is PPOTorchPolicy.loss(), which has logits of all nan. It
+	  reports on the exception then reraises it.
+	* loss() is called by _worker(), which is an embedded function in
+	  TorchPolicyV2._multi_gpu_paralle_grad_calc(). It passed model and sample_batch to loss(),
+	  which calls the model with its train_batch (the input sample_batch) to compute logits.
+	* model is a FullyConnectedNetwork that has a _logits layer of type SlimFC with 128 in_features
+	  and 4 out_features. I suspect the in_features is connected to the policy NN output but I have
+	  no idea where it gets 4 outputs.
+	* model is created in rllib.models.catalog.py line 718, which is called by 
+	  rllib.policy.torch_policy_v2.py line 490 (_init_model_and_dist_class). It is created with
+	  num_outputs = 4 and all flags vf_share_layers, free_log_std, no_final_linear all False.
+	  In call to DiagGaussian.required_model_output_shape() it multiplies the action_space shape
+	  by 2 to give the num_outputs. This seems to be to support that the DiagGaussian class 
+	  represents the action vector as 2 mean values followed by 2 std deviations.
+	* Run with no_final_linear = True and NN structure of [256, 256, 4] the final value must be
+	  exactly 2x the number of outputs. This avoids having a logits layer, which is always the
+	  one containing the nan values.
+		* Generated nan error very quickly on trial 1, indicating that the logits contains
+		  the offending content. This is the name given to the output of model.forward(),
+		  regardless of whether it has a _logits layer defined or not.
+	* Added diagnostics to the FullyConnectedNetwork.forward() method to see when things go south.
+		* When error occurs, FullyConnectedNetwork.forward() shows _features tensor is all
+		  nans, as is logits, but the obs tensor looks like probably reasonable values.
+		* When one trial errored, within 1000 steps prior the largest logit returned from the
+		  model was ~51. Most values I've seen in normal operation are O(0.01) to O(0.1).
+		* During one of the thread crashes, there is the error message, "RuntimeError: Expected
+		  scalars to be on CPU, got cuda:0 instead." from torch/optim/adam.py. Found a Discuss
+		  post sayiing this error is fixed in v2.5.
+		* When an exception was raised, the logits from the previous time step consistently
+		  contain somewhat large numbers in the 4th column, values ~50, while the other columns
+		  are all magnitude < 1. In another trial, 2nd column also had some suspiciously large
+		  values, ~+2. In another it was the 3rd column with large values, between 10 & 70.
+		  Meanwhile, the every-50-steps reports show the largest magnitude logit values are all
+		  < 1.0. So maybe it is reasonable to have the model clamp all of them at 1 or so?
+	* Created a temporary clamping mechanism in FullyConnectedNetwork.forward() to limit the output
+	  logits to be within [-1, 1] and to track how often this clamping was applied.
+		* Apparently this action is causing failure of the gradient calculation, as it can't
+		  trace backwards through the chain.
+
+* During above debugging, I continue to see the agent learning to get to lane 1 asap, which doesn't work
+  so thinking maybe it doesn't get enough exposure to the neighbors to understand how to behave near
+  them. Maybe training at level 4 is better and/or train with randomized start locaton on?
+
+
+===== Upgraded to Ray 2.5.0 =====
+
+6/16/23
+
+* Created conda env rllib25 (see ~/Notes), then built a new env cda0 on top of that. In cda0 I installed
+  pygame-2.4.0. The test_cuda program works after reboot.
+
+* Run 3da38 training level 3 with SAC, with randomize_start_dist off.
+	* This run used whatever configs were on for the previous days' debugging sessions, so may not
+	  be ideal.
+	* All trials converged to a rough performance band of rmax in [2, 6] and rmean in [-6, -2] after
+	  800 iterations. But there were no errors reported.
+
+* Run 979df training level 3 with SAC, as before.
+	* Added command masking logic to the step() method that forces desired lane command to be equal
+	  to the actual lane for the first 3 time steps, which allows the feedback obs to fully initialize.
+	* This run proved slightly better than the previous, with rmax in [3, 7] and starting to trend
+	  upward at the end, but rmean in [-5, -1] for the last half of the run.
+	* Inference shows it still consistenly wants to be in lane 1, so makes illegal lane changes when
+	  starting in 0 or 2. Also, when it runs in 1, desired speeed is too low, so rewards need adjusting.
+
+6/17/23
+
+* Several runs to debug desired lane command
+	* Adjusted rewards so that completion bonus is spread a bit wider on time step variation, and
+	  reduced the keep-alive bonus from 0.05 to 0.03 to encourage higher speeds.
+	* Inspected code dealing with lane assignment and lane change, and found no defects. Added print
+	  stmts to track down desired lane assignments to see how it really varies during training.
+	* Desired lane leans heavily to lane 1, regardless of initial lane assignment.
+	* Initial lane seems skewed to 0 and 1. But I verified that _select_init_lane() is evenly drawing
+	  from all 3 lanes.
+	* Fixed a minor initialization defect in the env wrapper, but it had no effect.
+	* Tried a run forcing all initial lane assignments to be either 0 or 2.
+		* Between 700 and 800 iters (the defined limit), three of the trials had a sudden burst
+		  of learning, where rmax reached 8 for one and 10 for another, and rmean > 0.
+		* On the best of these trials, inference shows that it can successfully run the track
+		  after starting in lane 2.  Speed is still a bit of a problem, but slightly less than
+		  earlier.
+
+* Run 3bbcf training level 3 with SAC
+	* Modified _select_init_lane() to choose 0 and 2 each with 45% probability and lane 1 at 10%.
+	* Increased the speed penalty multiplier from 0.1 to 0.15.
+	* Doubled the duration of the Gaussian noise from 500k to 1M time steps.
+	* Doubled the run duration from 800 to 1600 iterations.
+	* By the end of training 4 trials had rmax in [9, 10] and rmean in [0, 3], while all had
+	  rmin = -20. Looks like there's room for more improvement if training continues.
+	* Inference on trial 3 showed lane 0 starts always seem to crash. Turns out inference starts
+	  more consistently uptrack than traning did, so maybe it didn't get enough training exposure
+	  to the neighbor vehicles parked in lane 1.
+	* Inference in lane 1 shows better speed performance, holding steady ~21 m/s, but still
+	  incurring more speed penalty than the keep-alive bonus.
+	* Saved trial 3 checkpoint for future use.
+
+* Run 0392b training level 3 with SAC starting from checkpoint in 3bbcf trial03 for additional 800 iters
+	* Modified reset() to set the initial ego_p the same in training as it does in inference.
+	* Modified reward to increase multiplier on speed penalty from 0.15 to 0.2.
+	* Not so good. Best rmax ~9 and best rmean ~-2.
+
+* Run 122bb training level 3 with SAC from scratch for 2400 iterations. No other changes made.
+	* Very bad. No trial sustained an rmax > -5.
+
+6/18/23
+
+* Run 740f8 training level 3 from scratch with SAC
+	* Changed reset() to prevent agent starting in lane 0 to be beside the parked neighbors.
+	* This proved somewhat better, but not as good as 3bbcf yesterday. rmax up to 8 on a couple
+	  trials but most did a lot worse with rmean in [-3, 1] range.
+	* Inference looked fine, except that speeds are slow in lane 1 (~21 m/s). It runs fast during
+	  time in lane 2, but as soon as the lane change occurs, it slows down.
+	* It appears the low scores are all due to the desire for low speeds; the lane change maneuver
+	  normally happens just fine.
+
+* Run 1d15b training level 3 from scratch with SAC
+	* Tweaked reward keep-alive bonus from 0.03 to 0.02 and decreased speed penalty multiplier from
+	  0.2 to 0.15 (as it was yesterday).
+	* Terrible. All trials rmax ~ -6.
+	* It seems a big part of the problem is that it can't learn to drive the length of lane 2. Even
+	  after many iterations it attempts to change lanes after only 3 steps (forced to stay in lane).
+
+* Run de296 training level 3 from scratch with SAC
+	* Modified reward function to anneal the keepalive bonus from 0.03 down to 0 between 400k and
+	  800k steps.
+	* Changed _select_init_lane() to choose 0 40% of the time and 2 50% and 1 10%.
+	* Turned on randomized_start_dist to help it explore all parts of the track.
+	* A couple trials reached rmax ~12, with two of them (8 and 9) reaching rmean ~0 at the end
+	  with some spikes well above that earlier.
+	* Keepalive bonus never deviated from 0.03, so the annealing didn't happen. Mostly the step
+	  count stayed below 120k, with the highest I see at 147k. The counter is getting reset at each
+	  perturb event.
+	* Inference on trial 9 shows lane 0 start does really well, maintainin speed in 24-27 m/s,
+	  which is almost ideal, and scored 11 points. Same for lane 1 start. It never learned to
+	  start lane 2, however, running off road in 4th time step every time.
+
+6/20/23
+
+* Run d106d training level 3 from scratch with SAC
+	* Fixed reward function for annealing keepalive bonus across perturb events.
+	* Skewed more training time to lane 2 starts (70% vs 20% for lane 0 and 10% for lane 1).
+	* Not good. All rmax level at +8, all rmean noisy in [-6, -2] after 1600 iters.
+	* Same as before, lane 0 & 1 starts steered to lane 1 quickly and settled at 18-19 m/s
+	  (which happens to be real close to action[0] = 0). Lane 2 starts all end on first
+	  non-masked time step due to lane change attempt. Speeds are so slow that the speed
+	  penalty is about 2x the size of the keepalive bonus, so cumulative rewards are zero
+	  and the completion bonus isn't awarded due to late arrival.
+
+* Run 86465 training level 3 from scratch with SAC
+	* Altered step() unscaling of the desired lane command (action[1]) so that it maps
+	  action in [-1, 1] to desired_lane in [2, 0, 1] (the target was [0, 1, 2]). This will
+	  show if there is really an affinity for action[1] = 0 or an affinity to the physical
+	  lane 1.
+	* All trials ended with rmax ~8 and rmean ~-4.
+	* Inference shows lane 0 start stays in lane 0 (action[1] ~ 0.0) and speed ~18 m/s for
+	  a speed penalty ~-0.05 per time step compared to keepalive bonus of 0.03. Starting in
+	  lane 1 it immediately changes to lane 0 then stays there at ~18 m/s. Starting in lane
+	  2 it drives the lane fine until about 2 time steps before the merge point, then commands
+	  lane 1 (slightly prematurely), so runs offroad. In doing this, while it travels lane 2
+	  the lane command (action[1]) carries a value of 0.51-0.52 (just barely large enough to
+	  qualify for lane 2), then the illegal maneuver happens because the command dropped to
+	  0.49. So it has been staying as close to 0 as it can get the whole time.
+
+6/21/23
+
+* Run 1abe2 training level 3 from scratch with SAC
+	* Changed NN activations from relu to tanh for both the policy & value networks, thinking
+	  that relu may be forcing an affinity for outputs near 0.
+	* Results were virtually identical to those obtained above (run 86465), except that lane
+	  2 starts ended immediately after the masking. So the change of activation function had
+	  no effect.
+	* With inference on lane 2 run, I verified that the zone flag for reachable is working
+	  correctly as agent passes the various key points, but the drivable flag does not. After
+	  agent changed to lane 1 then passed the end of lane 2, its zones 3, 6, 9 were still
+	  showing the drivable flag as true.
+
+6/22/23
+
+* Studied how to do action masking with RLlib
+	* They provide an environment wrapper, ActionMaskEnv, that supplements the env's obs
+	  outputs by adding a dict of illegal actions, but it only works for a discrete action
+	  space.
+
+* Run 77444 training level 3 from scratch with SAC
+	* Restored the desired lane command interpretation to the original design.
+	* Relaxed initial lane choice so that it is now lane 0 30%, lane 1 20%, lane 2 50%.
+	* Added HP tuning for SAC tau and n_step, and set alpha = 2, since the action space is
+	  2 long.
+	* Set the burn-in period to 800 iterations, to allow things to settle more.
+	* Took a little longer for the various trials to converge on the "best" performance,
+	  but they all did.
+	* Same results as before. rmax ~8, rmean in [-6, -3] from ~700k steps onward for all
+	  trials. Didn't do inference on anything yet.
+
+6/24/23
+
+* Run 6bfd4 training level 3 from scratch with SAC, after re-reading the original SAC paper
+	* Turned off explicit exploration, allowing the SAC entropy to do it implicitly.
+	* Set up alpha as a tune HP, allowing it to vary in [0.01, 10.0] as an initial value
+	  (not a perturbable HP for now).
+	* Starting to get decent results. All trials rmax > 12, rmean rougly in [3, 7]. All
+	  trials ended with alpha either 0.11 or 0.02.
+	* Inference on trail 2 (ending rmean = 6) shows lanes 0 & 1 work better than before
+	  (lane 0 stays in lane for most of the route), but speed is ~21 m/s. Lane 2 starts
+	  stay in lane almost to the merge point, then drive off; but it slows way down to
+	  9 m/s.  Still needs to learn more. Trial 9 performed similarly.
+
+* Run 9eb13 training level 3 from scratch with SAC
+	* Added debugging for perturb control actions involved with annealing keepalive
+	  reward.
+	* Increased speed penalty multiplier from 0.15 to 0.2.
+	* Narrowed the HP search space on alpha to [0.001, 0.5]
+***	* Very good at first glance! All trials ended with rmean > 8 and rmin ~0! All ended
+	  up with alpha = 0.0046 and n_step = 2. Best trial was 5.
+	* Inference on trial 5 shows
+		* lane 0 start does a lot of jumping between lanes 0 and 1, and runs up to
+		  36 m/s, seemingly ignoring the penalties for those actions.
+		* lane 1 start performs similarly. In both cases, completion reward was 10
+		  even though it used 109-116 steps.
+		* lane 2 start drives close to 36 m/s, stays in lane 2 until its very end
+		  then changes to 1, then quickly alternates between 0 and 1 for the
+		  remainder of the route.
+		* It seems the entropy term is still swamping the finer reward signal
+		  elements, such as the per-time step penalties.
+	* Found that PerturbController still doesn't see past a perturb event when the
+	  worker is deleted and a new one started. In that case the num init count resets
+	  to 0, which it should not do.
+
+6/25/23
+
+* Run 22c9e training level 3 from scratch with SAC
+	* Set n_step = 2 (fixed) and changed tuning range for alpha to [0.0005, 0.01].
+	* Changed completion reward to peak at 130 steps and degrade on both sides instead
+	  of just for slower routes.
+	* Fixed problem in _update_obs_zones() to report the correct drivable flag for
+	  neighbor lanes as they come into and go out of existence along the route.
+	* No good. rmean ended in [-4, 2] for all trials. Some had rmax in [8, 10]. Trials
+	  had alpha either 0.00092 or 0.0018.
+	* Inference shows lane 0 & 1 start drives smoothly to end, but at speeds ~17 m/s.
+	  A lane 1 start changed lanes once to 0.  Lane 2 starts end after 4 steps due to
+	  illegal lane change.
+
+6/26/23
+
+* Run 7800e training level 3 from scratch with SAC
+	* Allowed n_step to vary in [1, 2, 3]. Changed range of alpha to [0.0009, 0.006].
+	* No good. rmean all in [-4, -1], rmin all -12.
+	* Inference on lanes 0 & 1 worked pretty well, running at steady 30 m/s (slightly
+	  over speed limit), with one or two extra lane changes, but scoring ~9 points.
+	  But lane 2 runs always run off road right away.
+	* Best trial was 9, with alpha = 0.0017, actor LR = 8.3e-4, critic LR = 1.7e-6,
+	  entropy LR = 7.0e-4 and n_step = 1. However, there were several trials that
+	  ended with n_step = 3.
+	* I am starting to believe that reward scaling is a problem. There is too much
+	  variation between the large reward signals and the small ones, that they can't
+	  both balance against the entropy term with a single alpha, so the reward signal
+	  maybe needs to have its dynamic range reduced.
+
+* Run cacb4 training level 3 from scratch with SAC
+	* Changed HP search range slighly for alpha to [0.001, 0.008].
+	* Changed top end of the 3 LR search ranges from 1e-3 to 1e-4.
+	* Changed penalties for in-progress time steps:
+		* keepalive bonus went from 0.03 to 0.01 (accumulates to ~1.3), and made
+		  it constant (no annealing)
+		* lane cmd penatly multiplier went from 0.01 to 0.1 (accumulates to 1-2)
+		* increased speed penalty mult from 0.2 to 0.25 (accumulates to 5+ for a
+		  continued 20% deviation)
+		* increased LC penalty from 0.02 + 0.01*delay to 0.1 + 0.02*delay
+		  (accumulates to 1 for short-sighted LC)
+	* Changed perturb params for burn-in from 800 to 400 and for perturb interval to
+	  go from 200 to 400 iterations.
+	* Verified that randomized start location limit should gradually degrade from
+	  physical limit to 10 m over 60k to 500k steps, but it is susceptible to
+	  restarting at each perturb cycle.
+	* Trial 1 was climbing well until ~158k steps when rmax suddenly dropped from
+	  +10 to -10, and didn't recover for a long time. Debug stmts prove that the
+	  max_distance was degrading smoothly, so that should not have been a factor.
+	  Trial 0 did a similar thing ~step 260k. This doesn't correlate to any annealing
+	  so it could be just a sign of instability in the solution, possibly indicating
+	  the need for a larger alpha? Most trials performed similarly.
+	* No good. All rmax were bouncing between -10 and +2. Worse than previous runs.
+	  All trials ended with alpha in [0.001, 0.004] - maybe this is too low?
+
+* Run a55b0 training level 3 from scratch with SAC
+	* No more HP tuning on n_step - left it at 1.
+	* Change HP search range for alpha to [0.001, 0.1]
+	* Not very good, but best of the day. A few trials had rmax up to 10, but not
+	  dropped to 5 or 6 by 1600 iterations. These had rmean in [-4, -1] at their end.
+	* Inference on trial 2 shows lane 0 & 1 starts both drive in lane 1 at 23 m/s.
+	  Lane 2 starts go offroad immediately.
+
+* Run c0533 training level 3 from scratch with SAC
+	* Turned on Gaussian noise.
+	* No good. One trial had rmax drift up to 9 by the end, but the rest floundered
+	  between -10 and 0, with rmean mostly at -10.
+
+6/27/23
+
+* Created new branch "sac-tweaks" off of the 6/24 commit after run 9eb13 that had best
+  success so far. Starting to work on that branch. Noise is off at this point.
+
+* Run c7084 training level 3 from scratch with SAC
+	* Changes from that commit only involve, limiting the SAC LRs to [1e-6, 1e-4]
+	  and setting the range of initial_alpha to [0.001, 0.3]. n_step is left as a
+	  choice of {1, 2, 3}, but I don't think it has a material effect.
+	* Found and fixed a defect in the entropy_learning_rate range (both for the PBT
+	  mutations and for the initial setting in SAC training. It was [1e-4, 1e-3], so
+	  I changed it to [1e-6, 1e-3] to be like the others.  I'm sure I was using all
+	  3 to be the same.
+	* Not as good as 9eb13, but better than I've seen since. Lanes 0 & 1 starts went
+	  all the way at ~30 m/s, but lane 2 starts went offroad right away every time.
+	  rmax = 10, rmean for most trials ended in [1.5, 4]. Almost all trials, including
+	  best 2 had alpha = 0.0039.
+
+* Run d96d1 training level 3 from scratch with SAC
+	* Limited entropy LR range to [1e-5, 1e-3].
+	* Limited alpha range to [0.001, 0.01].
+	* Turned on Gaussian noise with stdev chosen (one time) in [0.1, 0.5].
+	* Modest results. rmeans ended in [1, 5], with trial 5 being the best at the end.
+	  rmax was all > 9.5.
+	* Inference on trial 5 shows lane 0 & 1 starts are great - accelerate to 26-27 m/s
+	  and stay in lane 0 so rewards > 8. But lane 2 starts always go offroad right
+	  away. I verified that it is training lane 2 sufficiently (roughly 50% of the
+	  episodes, as is intended).
+
+6/28/23
+
+* Run 9a8e6 training level 3 from scratch with SAC
+	* Added in mods to _update_obs_zones() that were applied in the new-obs-actions
+	  branch to fix the drivable flag in certain cases.
+	* Shifted initial lane assignments to be: 0 20%, 1 20%, 2 60%.
+	* Modest again. rmax ~ 10 in all trials, with rmean in [-1, 4].
+	* Inference performs similarly to prev run, with steady speeds on lanes 0 & 1
+	  ~31 m/s, but lane 2 never starting.
+
+6/29/23
+
+* Run f5285 training level 3 from scratch with SAC
+	* Changed _select_init_lane() to do lane 0 10%, lane 1 10%, lane 2 80% of the time.
+	* No good. rmean were in [-2, 1].
+	* Inference again showed lane 2 starts never got anywhere, running off road immediately.
+
+* Fed up with lane 2 starts never working. Reviewed all my journal back to 4/29, when I got the
+  advice from Kevin. Since that time, there were only 2 times that lane 2 starts showed any
+  success:  on 6/6 and on 6/17. Both of these occurred while I was using a massively large alpha
+  and one of them also included training limited to 2 lanes. So I don't believe they are
+  examples I can use.
+	* However, I am concerned that the notion of "initial" alpha being used as an HP may be
+	  getting bastardized by the PBT perturbations copying that HP into a trial that is
+	  already underway - how does the ongoing alpha value get affected by this shift?  Maybe
+	  SAC is inherently incompatible with PBT?
+	* Also, based on an observation on 6/17, it may be that I recently haven't let the trials
+	  run long enough.
+
+* Run 28979 training level 3 from scratch with SAC - no PBT
+	* Setting total number of iterations from 1600 to 2500 to allow extra time for learning.
+	* Reset _select_init_lane() to more evenly balance the choices to give lane 0 25%,
+	  lane 1 25%, lane 2 50%.
+	* Set PBT burn-in time to 2500 iterations, effectively turning off PBT without changing
+	  the scheduling code.
+	* No good. All trials converged to rmax ~8, rmean to [-4, -1] in 1.7M steps. Aroung 50%
+	  of final iteration episodes had length 4 steps, which correlates to all lane 2 starts
+	  driving off road.
+	* Not clear if the PBT-SAC interaction is bad or not.
+
+6/30/23
+
+* Moving back to the new-obs-actions branch (no merging), but then created new branch lc-cmd
+  from there to support the next activity.
+* Modified the environment & wrapper to replace the desired (absolute) lane ID with a lane
+  change command, which is relative to the current lane, and doesn't care about the lane ID.
+
+* Run 85a79 training level 3 from scratch with SAC - first run using new lane change command
+	* BOGUS RUN - see notes on 7/13.
+	* No good. rmax climbed to 6 on a couple trials before dropping back to -10. rmean
+	  climbed above -10 on a few trials after 400k steps, but never reached more than
+	  -8. Two were starting to climb at the end of 1600 iterations (1.05M steps).
+
+7/13/23
+
+* After a long break, I reviewed notes above and code on the lc-cmd branch. It appears that
+  the previous run (85a79) was only done with 1600 iteration limit and 400 iter burn-in so that
+  PBT was, in fact, being used. The log shows that perturbations were being done, so the above
+  run was bogus.
+
+* Run 7c45c training level 3 from scratch with SAC on lc-cmd branch. Redoing first run with the new
+  lane change command code. Noise is on. Coincides with git commit a594a35.
+	* Set max_iterations = 4000 and burn_in_iters = 4000.
+	* Also fixed tune defect that was scheduling perturbation of DDPG vars but nothing else.
+	* Not very good. A couple trials achieved peak rmax ~10, but only one of them held it near
+	  the end. This trial (#4) achieved rmean ~-7 towards its end. Only one other trial got
+	  that high a rmean.
+	* Inference run on lane 0 immediately stopped with "ran off road", even though action[1]
+	  was 0. All obs zone info looks correct.
+	* Inference run on lane 1 ran the whole route, but somewhat slowly, so achieved a final
+	  score of -4.5. Obs zone data all looks correct along the path. All action[1] values were
+	  near 0.0.
+	* Inference on lane 2 ran off road, even though action[1] value was 0.0.
+	* Found a defect in step() that was doing incorrect action masking on the LC cmd (left over
+	  from the absolute desired lane code).
+
+7/14/23
+
+* Run cb759 training level 3 from scratch with SAC on lc-cmd branch. Redoing first run with new lane
+  change command code, now fixed - no PBT.
+	* Fixed defect in lane change command masking at top of step().
+	* Reduced iteration limit to 2000.
+	* Pretty poor results. Most trials got rmax > 4 at some point, but had a hard time holding
+	  it. Four of them got rmax ~10. The best rmeans were ~0.
+	* Inference on the best trial (#3) where it reached its max rmean (iteration 1360) shows
+	  it driving a steady pace in all lanes, but ~21 m/s, which incurs a sizeable time step
+	  penalty, thus final score is < 0. While lane 2 finally drives to the end, it refuses to
+	  change lanes at any point, so always runs off road. Noise was on in this run.
+	* Trial 3 used noise stddev = 0.23, initial_alpha = 0.0011, actor LR = 7.0e-5, critic LR
+	  = 5.1e-4, entropy LR = 6.8e-4.
+
+* Run 629df training level 3 from scratch with SAC on lc-cmd branch - no PBT.
+	* Set up exploration as a tuning variable, so it is chosen to be on or off.  If on, then
+	  its stddev initial value is a tuning variable also, in [0.1, 0.7], which anneals to 0.1
+	  of its initial value over 1M time steps.
+	* Not very good. Six trials reached rmax > 8, four of them ending there, but best rmean was
+	  ~0.3.
+	* Inference on best trial (#9) shows similar performance to previous, with speeds steady
+	  ~21 m/s, and never a lane change (lane 2 runs off the end).
+	* Of the trials that reached high rmax, 3 had exploration on and 3 had it off. These were 
+		* Trial 3, noise off, init alpha = 0.018; erratic rewards, settled at -10.
+		* Trial 6, noise off, init alpha = 0.071; somewhat erratic rmax that climbed back
+		  to +8 just before the end.
+		* Trial 2, noise off, init alpha = 0.011; very smooth rmax climb to +7 at the end,
+		  and had one of the better rmeans at -3. Looks like more iterations would have
+		  done really well.
+		* Trial 8, noise on at 0.15, init alpha = 0.0026; erratic rmax spent more time < 0
+		  than high.
+		* Trial 9, noise on at 0.28, init alpha = 0.0052; rmax suddenly jumped from -10 to
+		  +8 then smoothly climbed to +10. rmean was best of all, at +0.3, the only one > 0.
+		* Trial 5, noise on at 0.30, init alpha = 0.040; somewhat erratic but steady climb
+		  of rmax to +8. Had 2nd best ending rmean at -2.
+
+7/15/23
+
+* Run a0334 training level 3 from scratch with SAC on lc-cmd branch, no PBT. Running commit 4847cc2.
+	* Set noise level to start at 0.3, with multiplier ending at 0.3 instead of 0.1 at 1M steps.
+	* Set tuning choice to 2/3 true for noise addition.
+	* Increased max iterations from 2000 to 3000 to allow more time for things to mature.
+	* Restricted the range of initial_alpha to [0.002, 0.04].
+	* Not very good. Only 4 trials got rmax > 0, and only one reached > 8 late in the game, but
+	  it dropped to ~4 by the end. Its rmean was the best, only reaching +1 near its end. This
+	  trial had noise on and initial_alpha = 0.0024.
+	* Inference on trial 4 (best) shows that it did try to change lanes at end of lane 2, but
+	  started about 1 time step too late. It initiated the change the time step after zone 5
+	  became unreachable. Prior to that, I see that zones 1 and 4 (to the left) show they are
+	  not reachable for several time steps, even while zone 5 is still drivable/reachable. I
+	  believe the reachable flag is incorrect. I doubt this is a major factor in this particular
+	  situation, but could improve the training a bit. One more time step and the LC would have
+	  been successful, but it was going a little above speed limit (~33 m/s) so ran out of
+	  pavement.  If training runs were going slower, the zone 5 disappearing would have been a
+	  reasonable signal to initiate the LC.  More training (maybe with more noise) would have
+	  helped this situation.
+	* Inference on lane 1 shows a clean run with score +3, but drove a little fast (~33 m/s),
+	  so kept incurring speed penalties.  More training should take care of this.
+
+* Run 45ec8 training level 3 from scratch with SAC on lc-cmd branch, no PBT. Running from commit
+  4b652b4.
+	* Changed code for obs zones to make the reachable flag more liberal on the side zones,
+	  so it is now reachable if any part of the zone overlaps with an adjacent drivable lane.
+	* Forcing noise on for all trials, and increased the magnitude a bit: initial stddev
+	  increased from 0.3 to 0.4 and final scale factor increased from 0.3 to 0.6.
+	* Increased max iterations to 4000.
+	* Changed step() action masking to only mask on the first time step of an episode, instead
+	  of the first 4 steps.
+	* No good. Run died after 6 trials completed, presumably due to power failure. But at that
+	  point no trial had exceeded rmean = -8, even though two had reached rmax > 4. Best trials
+	  were 4 and 2, with initial_alpha of 0.019 and 0.032, respectively.
+	* Inference shows that no LC is ever commanded on any lane.
+	* Training log shows that lane 2 episodes got punished often for attempted LCs in step 1,
+	  then seem to have learned to seldom try them later. Not clear from this log where the
+	  agent was along the lane when these happened (randomized start loc is on). Maybe need
+	  more noise?
+
+7/16/23
+
+* Run 21d5a training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Increased initial noise stddev to 0.7. Added logging info to see agent's p location at
+	  each step, along with its commanded actions.
+	* Widened the search range for entropy LR by reducing the lower limit from 1e-4 to 1e-6.
+	* No good. No trial even got rmax > -10, except for one that had a few quick spikes up
+	  to -9.
+	* Logs from the step() method show very few steps on lane 2 - not clear if this is because
+	  that lane just dies quickly.
+
+* Run 4d754 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Increased random start loc applicability from 500k steps to 1M steps.
+	* Added logging in reset() to understand initial lane and location distributions.
+	* No good. Again, no trial had rmax > -10 for any significant amount of time.
+***	* Log shows that as time goes on the initial lane selection is skewed away from lane 2
+	  quite a bit (should be 50%). I am now concerned about the reliability of the prng. After
+	  analyzing many pages of log output, I conclude that the PRNG is faulty, in that it only
+	  generates values in [0.5, 1] a little less than 1/3 of the time. Since my lane selector
+	  was using this range to assign lane 2 starts, lane 2 has been badly underrepresented in
+	  the training.
+
+*** Wrote a new PRNG class (HpPrng) and did a sanity check on its output to help ensure that it
+    will perform as intended.  Included this into the env model.
+
+* Run 813e3 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Using the new HpPrng generator instead of the numpy default generator.
+	* Reduced the Gaussian noise level from 0.7 to 0.3, and reduced its final scale from 0.6
+	  to 0.2 (at 1M steps).
+	* Not so good. At least now we see rmax reacing ~+10 on more than a couple trials, but
+	  rmean is still stuck ~0 in the best case (trial 2 got rmean ~+2 for a while).
+	* Inference on trial 2 shows all lanes use a steady speed around 21-23 m/s, and never a
+	  lane change.  It runs off the end of lane 2.
+	* Log shows that there are very few instances of agent in lane 2 within the merge zone
+	  and commanding a left lane change, so it has very little opportunity to learn that this
+	  is a good move. It seems that gradually reducing the max start location is hurting its
+	  opportunity for this kind of exposure.
+	* Aborted during trial 6/7.
+
+* Run 8c50c training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Changed reset() to prevent annealing of the agent's start location by setting 
+	  initial_steps = 6M (longer than the trial will go). This should give a lot more
+	  opportunity for the agent to experience the merge zone in lane 2 and explore what can
+	  be done there.
+	* No good. Best trial was #7, which ended with rmean = 0. Most trials got rmax > 0, with
+	  several near 10.
+	* Inference showed identical performance as previous run.
+
+7/18/23
+
+* Run df22a training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Added grad_clip HP to the SAC algorithm, with tuning range in [0.5, 1.0].
+	* No good. All trials reached rmax > 5 at some point and some stayed near 10 for a while.
+	  But none had rmean > 0.
+	* Inference on lane 2 start same as before, with steady speed ~20 m/s and no attempt to
+	  change lanes. The action[1] is very close to 0 the whole time.
+
+* Run 4ce18 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Turned off randomized start location. With the keepalive bonus it should still find its
+	  way.
+	* No good. All trials reached rmax > 3, and several reached 10 at least once, but none
+	  achieved rmean > 0.
+	* Inference showed same story as prior runs.
+
+7/19/23
+
+* Run 7f13dc training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Changed _select_init_lane() to return 2 always, forcing the agent to learn just how to
+	  drive lane 2.
+	* No good. Aborted after 6 trials complete and no rmax making significant dent > 0.
+	* Perhaps the keepalive reward wasn't enough for all episodes starting at beginning? I
+	  don't think this is the problem. An inference run on one of the completed checkpoints
+	  shows that it drove the length of lane 2 okay, it just didn't know to change lanes.
+
+* Run 9b926 training level 3 from scratch with SAC on lc-cmd branch, no PBT.
+	* Turned on randomized start loc. Still training ONLY LANE 2.
+	* No good. Trials 5-9 died due to sigfault, but the first 5 trials showed no better
+	  behavior than seen recently.
+	* Inference on two different trials shows same behavior as before - drives all of lane
+	  2 at a somewhat slow speed, but never attempts to change lanes.
+	* Scrutinizing inference log to ensure that obs data is correct throughout an episode.
+		* obs[EGO_P] is not providing any valuable info, and could be distracting the NN,
+		  so maybe needs to be removed.
+		* Found a defect in calculation of reachable flag for adjacent lanes. It was
+		  a few hundred meters off, which could have taught the agent to ignore this
+		  signal, since it would lead to off-roading.
+
+* Run b0774 training level 3 from scratch (LANE 2 ONLY) with SAC on lc-cmd branch, no PBT.
+  Corresponds to git commit dcf37c6.
+	* Applied fix for the reachable flag defect.
+	* Removed EGO_P from the obs vector.
+	* No good. Some trials reached rmax > 5, but didn't stay. Only trial 6 reached rmean ~0,
+	  and its rmax was ~8 then stayed above 5 for ~400k steps at the end. This was the best
+	  one.
+	* Inference on trial 6 showed steady speeds, higher than before ~25 m/s, but never a
+	  lane change. However, the LC command quickly jumped up to -0.41 in the last few time
+	  steps, so it seems to be thinking about it. Maybe more training would take care of it?
+
+7/20/23
+
+* Run 7b4c9 training level 3 from previous run's trial 6 checkpoint (LANE 2 ONLY) with SAC on
+  lc-cmd branch, no PBT.
+	* No changes, just continuing from a promising checkpoint.
+	* No good. For most trials, rmax in [2, 4] was eventually achieved, with rmean ~-2. All
+	  plots were quite smooth & steady, indicating not much additional learning.
+	* It feels like noise is not quite enough. With the Gaussian stddev at 0.3 (at its
+	  largest), that is seldom going to be enough to move the LC cmd over by a whole lane
+	  (typically requires moving it from 0.0 to -0.5 or more). It seems that noise >= 0.5
+	  is needed, for long enough to give it ample opportunity to learn, but then it needs
+	  to taper down so that it can refine its policy.
+
+* Run 54b7f training level 3 from scratch (LANE 2 ONLY) with SAC on lc-cmd branch, no PBT.
+	* Changed Gaussian noise stddev to 0.6 and taper from 1.0 to 0.1 over 2M steps, with
+	  100k steps of random at the beginning.
+	* No good. Only 2 trials had rmax > 0, and one of those had rmean > -10.
+
+7/21/23
+
+* Run d8b1e training level 3 from scratch (LANE 2 ONLY) with SAC on lc-cmd branch, no PBT.
+	* Modified noise stddev to be a tunable HP in [0.2, 0.6].
+	* Initial lane selector modified to select 2 70% of the time and 1 30%. When 1 is
+	  selected, starting loc will only be at 800 m or greater, to give it experience
+	  driving this lane to the finish line (includes change in reset() also).
+	* No good. Only one trial got rmax > 0, and it reached ~4. All trials had
+	  rmean ~-10 or less. The trial with best rmax had noise stddev = 0.24 and
+	  initial_alpha = 0.034.
+	* I verified in the log that initial lane assignments & initial locations were as
+	  expected.
+	* Inference on this trial had a steady speed of ~19 m/s, and no attempt to change
+	  lanes. When started in lane 1 it drove that lane to the end at 19 m/s.
+
+* Run b1e24 training level 3 from scratch with SAC (LANE 2 ONLY) on lc-cmd branch, no PBT.
+  Corresponds to commit bcc3750.
+	* Changed SAC n_step from 1 to 5.
+	* No good. Only a couple trials reached rmax ~0, and all rmean < -10.
+***	* I have concluded that I am doing something fundamentally wrong with SAC, and need
+	  to go back and try this with one of the standard gymnasium environments.
+
+7/30/23
+
+* Played with Kevin's deepyrl engine to run my environment (details not recorded here). It
+  is using SAC with gamma = 0.995 and max_grad_norm = 1. It seems to have solved it (lots
+  of episodes with scores > 4) in about 30 min (10k episodes). It is using a very old version
+  of the environment (prior to early June), but running difficulty level 4.
+* I also spent time playing with RLlib's SAC implementation on the MountainCarContinuous-v0
+  env. It seems that I found a solution (running very slowly), the key being to set
+  train_batch_size = 1024 instead of 256. It also seems that the initial_alpha doesn't need
+  to be tuned, as the entropy LR will guide alpha to its optimum value over time - just pick
+  one that is in the ballpark. Also, a nn of [256, 256] was necessary to find a winner, as
+  [64, 64] was not working.
+
+* Run 32cbb training level 4 from scratch with SAC on lc-cmd branch, no PBT. Trying to configure
+  more like Kevin's run and with lessons learned from recent MountainCar activity.
+	* Changed from level 3 to 4.
+	* Removed starting lane restrictions.
+	* Changed n_step back to 1
+	* Set train_batch_size = 1024
+	* Fixed initial_alpha = 0.02
+	* Fixed grad_clip = 1.0
+	* All 10 iterations errored out, three before they ever started running! The most
+	  iterations achieved was 600 in only one of the trials. In all cases the error log
+	  indicates unknown error, possibly a SIGSEGV or high memory usage. Log shows that
+	  most of them were a SIGSEGV on a particular cpu (different one each time) when
+	  executing rllib/policy/sample_batch.py at line 81 in its __init__() method. It is
+	  logged as a fatal Python error.
+
+* Attempted to update python to 3.9.13 in the cda0 conda env, but got a zstd decompression error.
+  Found that the recent Nvidia (cuda) update hosed up my conda and/or pip so that I can't 
+  install much of anything. Spending the rest of the night reinstalling conda.
+
+
+===== Ray 2.6.1 debacle - back to Ray 2.5.1 =====
+
+
+8/1/23
+
+* Stopped to reinstall all of the conda sw and all of its environments from scratch. Built a new
+  cda0 env based on python 3.10, torch 2.0.1, Ray 2.6.1.
+	* Also installed pygame 2.5.0 with pip (not available via conda).
+
+8/2/23
+
+* Made a trial run of cda0_tune and found that there are some new warnings and deprecations that
+  need attention. Attempted to address them, but getting lots of problems with using local storage.
+  Submitted a topic on Ray Discuss (https://discuss.ray.io/t/trouble-starting-tune-job-on-local-machine/11653)
+  but cannot move forward at this point. Am also starting to see a lot of segfaults, so maybe
+  v2.6.1 is a premature upgrade.
+
+* After playing with the tune program some more, determined there must be a defect in Ray that prevents my
+  situation from working. I therefore created a conda env rllib25 and installed Ray 2.5.1 there. Made a new
+  env cda0 built on that (but I had to manually install ray 2.5.1 there also, after doing the torch/cuda
+  reinstall trick - see conda notes).
+
+* Run c2d29 training level 4 from scratch with SAC on lc-cmd branch, no PBT.
+	* Only running 4 trials, since I'm concerned that having 10 might have been contributing to all the
+	  segfaults earlier (too much heating or possible conflict in the processor allocations?).
+	* Otherwise, same as run 32cbb on 7/30.
+	* 3 trials showed lots of promise, with rmax climing to > 8, and two of them had rmean ~0, but...
+	* All 4 trials crashed for unexplained reasons (3 of them). Trial 3 died due to logical comparison
+	  defect in the Ray code.  Results saved in ~/ray_results/trial3-defect.
+
+* Run c74ed training level 4 with SAC on lc-cmd branch, same as previous run.
+	* Two trials died of segfaults early.
+	* Two other trials had some success, with rmax intermittently reaching as high as 6 in each case,
+	  but rmean never above -2. Then they both suddenly died without generating an error log of their
+	  own. The stdout log shows a UnicodeDecodeError way down in a message unpacker, apparently in
+	  Ray core.
+
+8/3/23
+
+* Run 936ba identical to previous run, trying to capture more info on segfault situation
+	* Using 0.8 / 1.0 GPU and 8.0 of 16.0 cpu.  htop shows total mem usage is 12 GB / 62 GB.
+	* Filed a new topic on Ray Discuss (https://discuss.ray.io/t/frequent-sigsegv-running-tune/11676).
+	* One trial died early on, then the whole job died due to a segfault.
+
+* Run 3a43b training level 4 with SAC on lc-cmd branch, no PBT.
+	* Commented out the whole call to cfg.resources(), which had been specifying gpu usage. Thinking
+	  this may be causing the segfault.
+	* Solution ran only on cpus, but still ran all 4 trials simultaneously.
+	* All 4 trials died before iteration 1000 with same unknown error.
+
+8/6/23
+
+* Run 1683e training level 4 with SAC on lc-cmd branch, no PBT. Coincides with commit be4ed1a.
+	* Added exception trapping wrappers on the 3 primary methods of the SimpleHighwayRamp class to
+	  help identify where the segfaults may be coming from.
+	* Changed GPU allocation from 0.1 for every worker to only 0.5 for local worker and none for
+	  sampling workers. This forces Ray to schedule only 2 trials simultaneously, as it had been
+	  doing for a long time. I hope this minimizes the segfaults.
+	* All 4 trials completed their 5000 iterations - no segfaults!
+	* All 4 showed rmean > 0 between 1M and 2M steps, then generally stayed in that region for the
+	  remainder of their ~3M total steps. Two of them achieved rmean > 5, one for a sustained time.
+	  All had rmax > 8, the best ones were in the 9.8 to 10.2 vicinity. However, all had rmin ~-10,
+	  except for a few short excursions to ~0.
+	* Troublingly, all trials showed evaluation results with rmax ~-10 throughout.
+
+	* Got warning "install gputil for system monitoring"
+
+***	* THIS WORKED!!! Many inference runs all go to completion, with total reward > 2, usually ~8,
+	  regardless of the starting lane. For lane 2 starts, I ran several cases with starting relative
+	  position of 0-4. In every case, the agent quickly adjusted its speed downward as necessary to
+	  fall in line behind the neighbor platoon. Close scrutiny of the log shows that it was actively
+	  adjusting speed to narrowly avoid neighbor 3 as it changed lanes right behind it, and just
+	  before lane 2 disappeared (initiated with < 150 m remaining). This report is for trial #1,
+	  checkpoint 4510.
+	* Trial #2, checkpoint 5000, performs similarly, but not quite as well. It is better at not
+	  immediately getting out of lane 1. But on some lane 2 starts it attempts to change lanes just
+	  before the merge point, so goes off-roading. However, many times it does the merge just fine.
+	* In both trials it is obvious the agent has learned to slow down & get behind the neighbors
+	  rather than speed up to get in front.
+	* I can't explain why the eval rewards were so terrible - they don't reflect my inference.
+	* Both of these trials are now saved in the project directory, under
+	  training/SAC/p256-256-v256-256/L4-1683e. Saved screen shots/videos there as well.
+
+* Installed kazam (with apt install) in the cda0 conda env to allow capturing of screen videos.
+
+
+
+Todo
+- remove PBT schedule completely and the curriculum function
+- try running ray.train instead of all the tuning jobs
+- redo rewards per recent paper suggestions
+- Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
+- change replay buffer capacity from 1e6 to smaller.
+- remove time step bonus.
+- fix perturb controller not counting past new worker environments after beiing perturbed.
+- collect stats on action distribution in each channel.
+- add full action masking to avoid illegal lane changes ever (annealed)
+- Maybe a similar redefinition of speed command?
+
+
+
+
+Near-term considerations:
 - implement level 5 with random lanes & crash avoidance neighbors
+
+Longer term considerations:
 - study graph ML
 - study path planning to replace near-sighted agent
-- switch to raster map
 
 
 *** Variables under manual control:
@@ -1962,8 +3197,5 @@ AI next moves:
 	** observation space design
 	** reward structure
 
-AI: change coord system so that x is distance to finish line. Otherwise, comparing ego_x in lane 2 go nx_x in lane 1 is
-    too confusing, and maybe even wrong. Lanes shouldn't have separate coord systems.
 AI: track down where Trainable/Algorithm object is instantiated and its setup() method is called, since this happens at
     the beginning of each trial, and at each perturbation of each trial in PBT.
-AI: change reward structure so that gradients aren't so steep on failure.  Maybe total episode range should be [-1, 1]?

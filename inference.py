@@ -2,13 +2,12 @@ from cmath import inf
 import sys
 import math
 import time
+from typing import List
 import numpy as np
-import gym
+import gymnasium
 import ray
 import ray.rllib.algorithms.ppo as ppo
-#import ray.rllib.algorithms.ddpg as ddpg
-#import ray.rllib.algorithms.td3  as td3
-#import ray.rllib.algorithms.sac as sac
+import ray.rllib.algorithms.sac as sac
 from ray.tune.logger import pretty_print
 import pygame
 from pygame.locals import *
@@ -51,39 +50,39 @@ def main(argv):
                     "debug":                0,
                     "difficulty_level":     learning_level,
                     "init_ego_lane":        start_lane,
-                    "neighbor_speed":       29.1,
-                    "neighbor_start_loc":   0.0, #dist downtrack from beginning of lane 1 for n3, m
+                    #"neighbor_speed":       29.1,
+                    #"neighbor_start_loc":   0.0, #dist downtrack from beginning of lane 1 for n3, m
                     "merge_relative_pos":   relative_pos, #neighbor vehicle that we want ego to be beside when starting in lane 2
                 }
     env = SimpleHighwayRampWrapper(env_config)
     #print("///// Environment configured. Params are:")
     #print(pretty_print(cfg.to_dict()))
+    env.reset()
 
     # Algorithm-specific configs - NN structure needs to match the checkpoint being read
+    """
     cfg = ppo.PPOConfig()
     cfg.framework("torch").exploration(explore = False)
     model = cfg.to_dict()["model"]
-    model["fcnet_hiddens"]                  = [256, 128]
+    model["no_final_linear"]                = True
+    model["fcnet_hiddens"]                  = [256, 256, 4]
     model["fcnet_activation"]               = "relu"
     model["post_fcnet_activation"]          = "linear"
     cfg.training(model = model)
-
     """
+
     cfg = sac.SACConfig()
     cfg.framework("torch").exploration(explore = False)
     cfg_dict = cfg.to_dict()
     policy_config = cfg_dict["policy_model_config"]
-    policy_config["fcnet_hiddens"]              = [256, 128]
+    policy_config["fcnet_hiddens"]              = [256, 256]
     policy_config["fcnet_activation"]           = "relu"
     q_config = cfg_dict["q_model_config"]
-    q_config["fcnet_hiddens"]                   = [256, 128]
+    q_config["fcnet_hiddens"]                   = [256, 256]
     q_config["fcnet_activation"]                = "relu"
     cfg.training(policy_model_config = policy_config, q_model_config = q_config)
-    """
 
-    cfg.environment(env = SimpleHighwayRampWrapper,
-                    env_config = env_config
-                   )
+    cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config)
 
     # Restore the selected checkpoint file
     # Note that the raw environment class is passed to the algo, but we are only using the algo to run the NN model,
@@ -102,18 +101,26 @@ def main(argv):
     done = False
     action = [0, 0]
     raw_obs, _ = env.unscaled_reset()
-    graphics.update(action, raw_obs)
+    vehicles = env.get_vehicle_data()
+    print("///// Neighbor speeds:  {:.1f}, {:.1f}, {:.1f}".format(vehicles[1].cur_speed, vehicles[2].cur_speed, vehicles[3].cur_speed))
+    graphics.update(action, raw_obs, vehicles)
     obs = env.scale_obs(raw_obs)
     step = 0
-    time.sleep(2)
+    time.sleep(4)
     while not done:
         step += 1
         action = algo.compute_single_action(obs, explore = False)
+
+        # Command masking for first few steps to allow feedback obs to populate
+        if step < 2:
+            action[1] = 0.0
+
+        # Move the environment forward one time step
         raw_obs, reward, done, truncated, info = env.step(np.ndarray.tolist(action)) #obs returned is UNSCALED
         episode_reward += reward
 
         # Display current status of all the vehicles
-        graphics.update(action, raw_obs)
+        graphics.update(action, raw_obs, env.get_vehicle_data())
 
         # Wait for user to indicate okay to begin animation
         """
@@ -130,14 +137,31 @@ def main(argv):
         # Scale the observations to be ready for NN ingest next time step
         obs = env.scale_obs(raw_obs)
 
-        print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = {}, speed = {:.2f}, dist = {:.3f}, rem = {:4.0f}, r = {:7.4f} {}"
-                .format(step, action[0], action[1], raw_obs[0], raw_obs[2], raw_obs[1], raw_obs[12], reward, info["reward_detail"]))
-        print("      lft ln: Id = {:2.0f}, conn_a = {:6.0f}, conn_b = {:6.0f}, rem = {:6.0f}"
-                .format(raw_obs[18], raw_obs[19], raw_obs[20], raw_obs[21]))
-        print("      rgt ln: Id = {:2.0f}, conn_a = {:6.0f}, conn_b = {:6.0f}, rem = {:6.0f}"
-                .format(raw_obs[22], raw_obs[23], raw_obs[24], raw_obs[25]))
-        print("   SC lft ln: Id = {:2.0f}, conn_a = {:7.4f}, conn_b = {:7.4f}, rem = {:7.4f}, ego rem = {:.4f}"
-                .format(obs[18], obs[19], obs[20], obs[21], obs[12]))
+        print("///// step {:3d}: scaled action = [{:5.2f} {:5.2f}], lane = unsp, speed = {:.2f}, p = unsp, rem = {:4.0f}, r = {:7.4f} {}"
+                .format(step, action[0], action[1], raw_obs[3], raw_obs[2], reward, info["reward_detail"]))
+
+        print("                   Z1    Z2    Z3    Z4    Z5    Z6    Z7    Z8    Z9, neighbor in ego zone = {:3.0f}".format(raw_obs[6]))
+        b = 11 #base index of this attribute for Z1 in the obs vector
+        s = 5 #size of each zone in the obs vector
+        print("      driveable: {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
+              .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
+                      raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
+        b += 1 #base index of this attribute for Z1 in the obs vector
+        print("      reachable: {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
+              .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
+                      raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
+        b += 1 #base index of this attribute for Z1 in the obs vector
+        print("      occupied:  {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
+              .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
+                      raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
+        b += 1 #base index of this attribute for Z1 in the obs vector
+        print("      rel p:     {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
+              .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
+                      raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
+        b += 1 #base index of this attribute for Z1 in the obs vector
+        print("      rel speed: {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f} {:5.2f}"
+              .format(raw_obs[b+0*s], raw_obs[b+1*s], raw_obs[b+2*s], raw_obs[b+3*s], raw_obs[b+4*s], raw_obs[b+5*s],
+                      raw_obs[b+6*s], raw_obs[b+7*s], raw_obs[b+8*s]))
 
         if done:
             print("///// Episode complete: {}. Total reward = {:.2f}".format(info["reason"], episode_reward))
@@ -174,7 +198,7 @@ class Graphics:
 
 
     def __init__(self,
-                 env    : gym.Env
+                 env    : gymnasium.Env
                 ):
         """Initializes the graphics and draws the roadway background display."""
 
@@ -258,18 +282,19 @@ class Graphics:
 
     def update(self,
                action  : list,      #vector of actions for the ego vehicle for the current time step
-               obs     : list       #vector of observations of the ego vehicle for the current time step
+               obs     : list,      #vector of observations of the ego vehicle for the current time step
+               vehicles: list,      #list of Vehicle objects, with item [0] as the ego vehicle
               ):
         """Paints all updates on the display screen, including the new motion of every vehicle and any data plots."""
 
         # Loop through each vehicle in the scenario
-        for v_idx in range(4):
+        for v_idx in range(len(vehicles)):
 
             # Grab the background under where we want the vehicle to appear & erase the old vehicle
             pygame.draw.circle(self.windowSurface, Graphics.BLACK, (self.prev_veh_r[v_idx], self.prev_veh_s[v_idx]), self.veh_radius, 0)
 
             # Display the vehicle in its new location.  Note that the obs vector is not scaled at this point.
-            new_x, new_y = self._get_vehicle_coords(obs, v_idx)
+            new_x, new_y = self._get_vehicle_coords(vehicles, v_idx)
             new_r = int(self.scale*(new_x - self.roadway_center_x)) + self.display_center_r
             new_s = Graphics.WINDOW_SIZE_Y - int(self.scale*(new_y - self.roadway_center_y)) - self.display_center_s
             pygame.draw.circle(self.windowSurface, self.veh_colors[v_idx], (new_r, new_s), self.veh_radius, 0)
@@ -331,42 +356,37 @@ class Graphics:
 
 
     def _get_vehicle_coords(self,
-                            obs         : list, #the unscaled observation vector
+                            vehicles    : List, #list of all Vehicles in the scenario
                             vehicle_id  : int   #ID of the vehicle; 0=ego, 1-3=neighbor vehicles
                            ) -> tuple:
-        """Returns the map coordinates of the indicated vehicle based on its lane ID and distance downtrack.
-
-            ASSUMES that this method is called first for the ego vehicle, then updates each of the neighbors in
-            each update loop.
+        """Returns the map frame coordinates of the indicated vehicle based on its lane ID and distance downtrack.
 
             CAUTION: these calcs are hard-coded to the specific roadway geometry in this code,
             it is not a general solution.
         """
+
         assert 0 <= vehicle_id <= 3, "///// _get_vehicle_coords: invalid vehicle_id = {}".format(vehicle_id)
-        lane_id_idx = self.env.EGO_LANE_ID  + 3*vehicle_id
-        x_idx = self.env.EGO_X              + 3*vehicle_id
 
-        x = None
+        road = self.env.roadway
+        lane = vehicles[vehicle_id].lane_id
+        x = road.param_to_map_frame(vehicles[vehicle_id].p, lane)
         y = None
-        ddt = self.env.get_vehicle_dist_downtrack(vehicle_id) #get this directly from env since obs only has delta X
-        lane = int(obs[lane_id_idx])
         if lane < 2:
-            x = ddt
-            y = self.env.roadway.lanes[lane].segments[0][1]
+            y = road.lanes[lane].segments[0][1]
         else:
-            if ddt < self.env.roadway.lanes[2].segments[0][4]: #vehicle is in seg 0
-                seg0x0 = self.env.roadway.lanes[2].segments[0][0]
-                seg0y0 = self.env.roadway.lanes[2].segments[0][1]
-                seg0x1 = self.env.roadway.lanes[2].segments[0][2]
-                seg0y1 = self.env.roadway.lanes[2].segments[0][3]
+            ddt = (x - road.lanes[2].start_x)/Roadway.COS_LANE2_ANGLE
+            if ddt < road.lanes[2].segments[0][4]: #vehicle is in seg 0
+                seg0x0 = road.lanes[2].segments[0][0]
+                seg0y0 = road.lanes[2].segments[0][1]
+                seg0x1 = road.lanes[2].segments[0][2]
+                seg0y1 = road.lanes[2].segments[0][3]
 
-                factor = ddt / self.env.roadway.lanes[2].segments[0][4]
+                factor = ddt / road.lanes[2].segments[0][4]
                 x = seg0x0 + factor*(seg0x1 - seg0x0)
                 y = seg0y0 + factor*(seg0y1 - seg0y0)
 
             else: #vehicle is in seg 1
-                x = self.env.roadway.lanes[2].segments[1][0] + ddt - self.env.roadway.lanes[2].segments[0][4]
-                y = self.env.roadway.lanes[2].segments[1][1]
+                y = road.lanes[2].segments[1][1]
 
         return x, y
 

@@ -7,9 +7,8 @@ from ray.tune.tune_config import TuneConfig
 from ray.tune.logger import pretty_print
 from ray.air import RunConfig
 import ray.rllib.algorithms.ppo as ppo
-#import ray.rllib.algorithms.a2c as a2c
-#import ray.rllib.algorithms.sac as sac
-#import ray.rllib.algorithms.ddpg as ddpg
+import ray.rllib.algorithms.sac as sac
+import ray.rllib.algorithms.ddpg as ddpg
 
 from stop_simple import StopSimple
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
@@ -26,51 +25,14 @@ from perturbation_control import PerturbationController
 # Identify a baseline checkpoint from which to continue training
 _checkpoint_path = None
 
-# Didn't quite finish training level 0
-#_checkpoint_path = "/home/starkj/projects/cda0/training/SAC/p256-128-v256-128/L0-32efc/trial10/checkpoint_001001"
+# Completed level 0 on 5/30/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L0-518f4/trial09/checkpoint_000086"
 
-# Completed level 0 solidly with PPO and discrete action space
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-b948a/trial04/checkpoint_000490"
+# Completed level 1 on 6/1/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-256-128/L1-abe44/trial03/checkpoint_000059"
 
-# Completed level 2 solidly with PPO and discrete action space on 4/3/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-d9e0d/trial06/checkpoint_002000"
-
-# Completed level 3 solidly with PPO and discrete actions pace on 4/4/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-0ed7f/trial06/checkpoint_000622"
-
-# Completed level 4 moderately challenged with PPO and discrete action space on 4/4/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-2ce8a/trial03/checkpoint_001190"
-
-# Completed level 4 challenging course with PPO and discrete action space on 4/5/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-65cf4/trial00/checkpoint_002000"
-
-# Completed level 0 with PPO and discrete actions in [256, 128] NN using symmetrical speed penalty on 4/10/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-5f786/trial01/checkpoint_000412"
-
-# Completed level 2 with PPO and discrete actions in [256, 128] NN using symmetrical speed penalty on 4/10/23
-
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-c23d4/trial08/checkpoint_000800"
-
-# Completed level 3 with PPO and discrete actions in [256, 128] NN using symmetrical speed penalty on 4/10/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-9e59e/trial07/checkpoint_001000"
-
-# Comopleted level 4 with mediocre success; PPO, discrete actions, [256, 128] NN, symmetrical speed penalty, 4/11/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-75472/trial05/checkpoint_001000"
-
-
-########## Items below are for the new observation structure, built on 4/13/23 ##########
-
-# Completed level 0, NN [256, 128], PPO, discrete actions on 4/14/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L0-31b3b/trial09/checkpoint_000477"
-
-# Completed level 2 on 4/14/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L2-6428b/trial02/checkpoint_000800"
-
-# Completed level 3, NN [256, 128], PPO, discrete actions on 4/20/23
-#_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L3-6ad8f/trial02/checkpoint_001205"
-
-# Completed level 4 with decent success, NN [256, 128], PPO, discrete actions on 4/22/23
-_checkpoint_path = "/home/starkj/projects/cda0/training/PPO/p256-128/L4-c4c9f/trial00/checkpoint_001350"
+# Completed level 3 with SAC on 6/17/23
+#_checkpoint_path = "/home/starkj/projects/cda0/training/SAC/p256-256-v256-256/L3-3bbcf/trial03/checkpoint_001600"
 
 
 def main(argv):
@@ -80,11 +42,14 @@ def main(argv):
         difficulty_level = min(max(int(argv[1]), 0), SimpleHighwayRampWrapper.NUM_DIFFICULTY_LEVELS)
     print("\n///// Tuning with initial environment difficulty level {}".format(difficulty_level))
 
-    ray.init()
+    # Initialize per https://docs.ray.io/en/latest/workflows/management.html?highlight=local%20storage#storage-configuration
+    ray.init() #storage = "~/ray_results/cda0")
 
     # Define which learning algorithm we will use and set up is default config params
-    algo = "PPO"
-    cfg = ppo.PPOConfig()
+    #algo = "DDPG"
+    #cfg = ddpg.DDPGConfig()
+    algo = "SAC"
+    cfg = sac.SACConfig()
     cfg.framework("torch")
     cfg_dict = cfg.to_dict()
 
@@ -93,12 +58,14 @@ def main(argv):
     # let_it_run can be a single value if it applies to all phases.
     # Phase...............0             1           2           3           4
     min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
-    success_threshold   = [9.5,         9.5,        9.5,        9.5,        9.5]
+    success_threshold   = [9.5,         9.5,        9.5,        10.0,       9.5]
     failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
     let_it_run          = False #can be a scalar or list of same size as above lists
-    burn_in_period      = 100 #num iterations before we consider stopping or promoting to next level
-    max_iterations      = 1000
-    num_trials          = 10
+    chkpt_int           = 10    #num iters between storing new checkpoints
+    burn_in_period      = 10000  #num iterations before we consider stopping or promoting to next level
+    perturb_int         = 400   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
+    max_iterations      = 5000
+    num_trials          = 4
 
     # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
     PerturbationController(_checkpoint_path, num_trials)
@@ -106,7 +73,7 @@ def main(argv):
     # Define the stopping logic for PBT runs - this requires mean reward to stay at the threshold for multiple consiecutive
     # iterations, rather than just stopping on an outlier spike.
     stopper = StopSimple(max_iterations     = max_iterations,
-                         avg_over_latest    = 5,
+                         avg_over_latest    = 20,
                          success_threshold  = success_threshold[difficulty_level]
                         )
 
@@ -126,18 +93,18 @@ def main(argv):
     cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config, env_task_fn = curriculum_fn)
 
     # Add exploration noise params
-    """
+    #cfg.rl_module(_enable_rl_module_api = False) #disables the RL module API, which allows exploration config to be defined for ray 2.6
+
     explore_config = cfg_dict["exploration_config"]
     #print("///// Explore config:\n", pretty_print(explore_config))
-    explore_config = cfg_dict["exploration_config"]
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.1, 0.5) #this param is specific to GaussianNoise
-    explore_config["random_timesteps"]          = 0 #tune.qrandint(0, 20000, 50000) #was 20000
+    explore_config["stddev"]                    = tune.uniform(0.2, 0.6) #this param is specific to GaussianNoise
+    explore_config["random_timesteps"]          = 100000 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = 500000  #tune.choice([100000, 400000]) #was 900k
-    """
-    cfg.exploration(explore = True)
+    explore_config["scale_timesteps"]           = 2000000  #tune.choice([100000, 400000]) #was 900k
+    exp_switch                                  = True #tune.choice([False, True, True])
+    cfg.exploration(explore = exp_switch, exploration_config = explore_config)
     #cfg.exploration(explore = False)
 
     # Computing resources - Ray allocates 1 cpu per rollout worker and one cpu per env (2 cpus) per trial.
@@ -151,8 +118,8 @@ def main(argv):
     # This config will run 5 parallel trials on the Tensorbook.
     cfg.resources(  num_gpus                    = 0.5, #for the local worker, which does the learning & evaluation runs
                     num_cpus_for_local_worker   = 1,
-                    num_cpus_per_trainer_worker = 1, #also applies to the local worker and evaluation workers
-                    num_gpus_per_trainer_worker = 0  #this has to allow gpu left over for local worker & evaluation workers also
+                    num_cpus_per_worker         = 1, #also applies to the local worker and evaluation workers
+                    num_gpus_per_worker         = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 
     cfg.rollouts(   #num_rollout_workers         = 1, #num remote workers _per trial_ (remember that there is a local worker also)
@@ -160,15 +127,18 @@ def main(argv):
                     num_envs_per_worker         = 1,
                     rollout_fragment_length     = 256, #timesteps pulled from a sampler
                     batch_mode                  = "complete_episodes",
+    )
+
+    cfg.fault_tolerance(
                     recreate_failed_workers     = True,
     )
 
     # Evaluation process
-    cfg.evaluation( evaluation_interval         = 10, #iterations
+    cfg.evaluation( evaluation_interval         = 10, #iterations between evals
                     evaluation_duration         = 15, #units specified next
                     evaluation_duration_unit    = "episodes",
                     evaluation_parallel_to_training = True, #True requires evaluation_num_workers > 0
-                    evaluation_num_workers      = 2,
+                    evaluation_num_workers      = 1,
     )
 
     # Debugging assistance
@@ -179,62 +149,77 @@ def main(argv):
     # Custom callbacks from the training algorithm
     cfg.callbacks(  CdaCallbacks)
 
+    """
     # ===== Training algorithm HPs for PPO =================================================
 
     # NOTE: lr_schedule is only defined for policy gradient algos
     # NOTE: all items below lr_schedule are PPO-specific
     cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
                     train_batch_size            = 1024, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    lr                          = tune.loguniform(1e-6, 3e-4),
+                    lr                          = tune.loguniform(1e-6, 2e-4),
                     #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
-                    sgd_minibatch_size          = 128, #must be <= train_batch_size (and divide into it)
+                    sgd_minibatch_size          = 32, #128, #must be <= train_batch_size (and divide into it)
                     entropy_coeff               = tune.uniform(0.0005, 0.01),
                     kl_coeff                    = tune.uniform(0.3, 0.8),
                     #clip_actions                = True,
                     clip_param                  = tune.uniform(0.05, 0.4),
+                    grad_clip                   = tune.uniform(10, 40),
     )
 
     # Add dict for model structure
     model_config = cfg_dict["model"]
-    model_config["fcnet_hiddens"]               = [256, 128]
+    model_config["no_final_linear"]             = True #requires that final hidden layer is the size of the NN output
+    model_config["fcnet_hiddens"]               = [256, 256, 4]
     model_config["fcnet_activation"]            = "relu"
     cfg.training(model = model_config)
 
-    """
-    # ===== Training algorithm HPs for SAC ==================================================
+    # ===== Training algorithm HPs for DDPG =================================================
 
+    cfg.training(   actor_hiddens               = [256, 256],
+                    actor_hidden_activation     = "relu",
+                    actor_lr                    = tune.loguniform(1e-6, 1e-3),
+
+                    critic_hiddens              = [256, 256],
+                    critic_hidden_activation    = "relu",
+                    critic_lr                   = tune.loguniform(1e-6, 1e-3),
+
+                    n_step                      = tune.choice([1, 2, 3]),
+                    gamma                       = 0.995,
+                    tau                         = tune.choice([0.001, 0.002, 0.003, 0.004, 0.005]),
+
+    )
+    """
+
+    # ===== Training algorithm HPs for SAC ==================================================
     opt_config = cfg_dict["optimization"]
-    opt_config["actor_learning_rate"]           = tune.loguniform(1e-6, 1e-3) #default 0.0003
-    opt_config["critic_learning_rate"]          = tune.loguniform(1e-6, 1e-3) #default 0.0003
-    opt_config["entropy_learning_rate"]         = tune.loguniform(1e-4, 1e-3) #default 0.0003
+    opt_config["actor_learning_rate"]           = tune.loguniform(1e-6, 1e-4) #default 0.0003
+    opt_config["critic_learning_rate"]          = tune.loguniform(1e-6, 1e-4) #default 0.0003
+    opt_config["entropy_learning_rate"]         = tune.loguniform(1e-6, 1e-4) #default 0.0003
 
     policy_config = cfg_dict["policy_model_config"]
-    policy_config["fcnet_hiddens"]              = [256, 128]
+    policy_config["fcnet_hiddens"]              = [256, 256]
     policy_config["fcnet_activation"]           = "relu"
 
     q_config = cfg_dict["q_model_config"]
-    q_config["fcnet_hiddens"]                   = [256, 128]
+    q_config["fcnet_hiddens"]                   = [256, 256]
     q_config["fcnet_activation"]                = "relu"
 
     cfg.training(   twin_q                      = True,
-                    gamma                       = 0.999,
-                    train_batch_size            = 256, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    initial_alpha               = 1.0,
+                    gamma                       = 0.995,
+                    train_batch_size            = 1024, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
+                    initial_alpha               = 0.02, #tune.loguniform(0.002, 0.04),
                     tau                         = 0.005,
-                    n_step                      = 1,
+                    n_step                      = 1, #tune.choice([1, 2, 3]),
+                    grad_clip                   = 1.0, #tune.uniform(0.5, 1.0),
                     optimization_config         = opt_config,
                     policy_model_config         = policy_config,
                     q_model_config              = q_config,
     )
-    """
 
     # ===== Final setup =========================================================================
 
-    #print("\n///// {} training params are:\n".format(algo))
-    #print(pretty_print(cfg.to_dict()))
-
-    chkpt_int                                   = 10                    #num iters between storing new checkpoints
-    perturb_int                                 = burn_in_period        #num iters between policy perturbations (must be a multiple of chkpt period)
+    print("\n///// {} training params are:\n".format(algo))
+    print(pretty_print(cfg.to_dict()))
 
     scheduler = PopulationBasedTraining(
                     time_attr                   = "training_iteration", #type of interval for considering trial continuation
@@ -243,20 +228,22 @@ def main(argv):
                     perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
                     burn_in_period              = burn_in_period,       #num initial iterations before any perturbations occur
                     quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
-                    resample_probability        = 0.5,                  #resampling and mutation probability at each decision point
+                    resample_probability        = 0.5,                  #resampling vs mutation probability at each decision point
                     synch                       = False,                #True:  all trials must finish before each perturbation decision is made
                                                                         # if any trial errors then all trials hang!
                                                                         #False:  each trial finishes & decides based on available info at that time,
                                                                         # then immediately moves on. If True and one trial dies, then PBT hangs and all
                                                                         # remaining trials go into perpetual PAUSED state.
-                    hyperparam_mutations={                              #resample distributions
-                    #    "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
-                    #    "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
-                    #    "optimization/entropy_learning_rate"     :   tune.loguniform(1e-4, 1e-3),
-                        "lr"                                    :   tune.loguniform(1e-6, 1e-3),
-                        "entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
-                        "kl_coeff"                              :   tune.uniform(0.3, 0.8),
-                        "clip_param"                            :   tune.uniform(0.05, 0.4),
+                    hyperparam_mutations = {                            #resample distributions
+                    #for SAC:
+                        "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
+                        "optimization/entropy_learning_rate"     :   tune.loguniform(1e-6, 1e-3),
+                    # for PPO:
+                        #"lr"                                    :   tune.loguniform(1e-6, 2e-4),
+                        #"entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
+                        #"kl_coeff"                              :   tune.uniform(0.3, 0.8),
+                        #"clip_param"                            :   tune.uniform(0.05, 0.4),
                     },
     )
 
@@ -265,18 +252,19 @@ def main(argv):
                     mode                        = "max",
                     scheduler                   = scheduler,
                     num_samples                 = num_trials,
-                    #max_concurrent_trials      = 8
                 )
 
     run_config = RunConfig(
                     name                        = "cda0",
-                    local_dir                   = "~/ray_results",
+                    local_dir                   = "~/ray_results", #for ray <= 2.5
+                    #storage_path                = "~/ray_results", #required if not using remote storage for ray 2.6
                     stop                        = stopper,
                     #stop                        = {"episode_reward_mean":       success_threshold[difficulty_level],
                     #                               "training_iteration":        max_iterations,
                     #                               },
-                    sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir
-                    verbose                     = 3, #3 is default
+                    sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir, ray 2.5
+                    #sync_config                 = tune.SyncConfig(syncer = None, upload_dir = None), #for single-node or shared checkpoint dir, ray 2.6
+                    #verbose                     = 3, #3 is default
                     checkpoint_config           = air.CheckpointConfig(
                                                     checkpoint_frequency        = chkpt_int,
                                                     checkpoint_score_attribute  = "episode_reward_mean",
