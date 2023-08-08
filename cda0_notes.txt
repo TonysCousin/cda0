@@ -3127,12 +3127,38 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 8/6/23
 
-* Run 1683e training level 4 with SAC on lc-cmd branch, no PBT.
+* Run 1683e training level 4 with SAC on lc-cmd branch, no PBT. Coincides with commit be4ed1a.
 	* Added exception trapping wrappers on the 3 primary methods of the SimpleHighwayRamp class to
 	  help identify where the segfaults may be coming from.
 	* Changed GPU allocation from 0.1 for every worker to only 0.5 for local worker and none for
 	  sampling workers. This forces Ray to schedule only 2 trials simultaneously, as it had been
 	  doing for a long time. I hope this minimizes the segfaults.
+	* All 4 trials completed their 5000 iterations - no segfaults!
+	* All 4 showed rmean > 0 between 1M and 2M steps, then generally stayed in that region for the
+	  remainder of their ~3M total steps. Two of them achieved rmean > 5, one for a sustained time.
+	  All had rmax > 8, the best ones were in the 9.8 to 10.2 vicinity. However, all had rmin ~-10,
+	  except for a few short excursions to ~0.
+	* Troublingly, all trials showed evaluation results with rmax ~-10 throughout.
+
+	* Got warning "install gputil for system monitoring"
+
+***	* THIS WORKED!!! Many inference runs all go to completion, with total reward > 2, usually ~8,
+	  regardless of the starting lane. For lane 2 starts, I ran several cases with starting relative
+	  position of 0-4. In every case, the agent quickly adjusted its speed downward as necessary to
+	  fall in line behind the neighbor platoon. Close scrutiny of the log shows that it was actively
+	  adjusting speed to narrowly avoid neighbor 3 as it changed lanes right behind it, and just
+	  before lane 2 disappeared (initiated with < 150 m remaining). This report is for trial #1,
+	  checkpoint 4510.
+	* Trial #2, checkpoint 5000, performs similarly, but not quite as well. It is better at not
+	  immediately getting out of lane 1. But on some lane 2 starts it attempts to change lanes just
+	  before the merge point, so goes off-roading. However, many times it does the merge just fine.
+	* In both trials it is obvious the agent has learned to slow down & get behind the neighbors
+	  rather than speed up to get in front.
+	* I can't explain why the eval rewards were so terrible - they don't reflect my inference.
+	* Both of these trials are now saved in the project directory, under
+	  training/SAC/p256-256-v256-256/L4-1683e. Saved screen shots/videos there as well.
+
+* Installed kazam (with apt install) in the cda0 conda env to allow capturing of screen videos.
 
 
 
@@ -3147,7 +3173,6 @@ Todo
 - collect stats on action distribution in each channel.
 - add full action masking to avoid illegal lane changes ever (annealed)
 - Maybe a similar redefinition of speed command?
-- Try DDPG
 
 
 
