@@ -2,7 +2,6 @@ import sys
 import ray
 from ray import air, tune
 from ray.tune import Tuner
-from ray.tune.schedulers import PopulationBasedTraining
 from ray.tune.tune_config import TuneConfig
 from ray.tune.logger import pretty_print
 from ray.air import RunConfig
@@ -12,9 +11,7 @@ import ray.rllib.algorithms.ddpg as ddpg
 
 from stop_simple import StopSimple
 from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
-from simple_highway_with_ramp import curriculum_fn
 from cda_callbacks import CdaCallbacks
-from perturbation_control import PerturbationController
 
 """This program tunes (explores) hyperparameters to find a good set suitable for training.
     Usage is:
@@ -37,7 +34,7 @@ _checkpoint_path = None
 
 def main(argv):
 
-    difficulty_level = 0
+    difficulty_level = 5
     if len(argv) > 1:
         difficulty_level = min(max(int(argv[1]), 0), SimpleHighwayRampWrapper.NUM_DIFFICULTY_LEVELS)
     print("\n///// Tuning with initial environment difficulty level {}".format(difficulty_level))
@@ -55,20 +52,11 @@ def main(argv):
 
     # Define the stopper object that decides when to terminate training.
     # All list objects (min_timesteps, success_threshold, failure_threshold) must be of length equal to num phases in use.
-    # let_it_run can be a single value if it applies to all phases.
-    # Phase...............0             1           2           3           4
-    min_timesteps       = [1500000,     1500000,    1000000,    1500000,    2000000]
-    success_threshold   = [9.5,         9.5,        9.5,        10.0,       9.5]
-    failure_threshold   = [6.0,         6.0,        6.0,        6.0,        6.0]
-    let_it_run          = False #can be a scalar or list of same size as above lists
+    # Phase...............0             1           2           3           4           5
+    success_threshold   = [9.5,         9.5,        9.5,        10.0,       8.0,        7.0]
     chkpt_int           = 10    #num iters between storing new checkpoints
-    burn_in_period      = 10000  #num iterations before we consider stopping or promoting to next level
-    perturb_int         = 400   #num iterations between perturbations (after burn-in period); must be multiple of chkpt_int
-    max_iterations      = 5000
+    max_iterations      = 6000
     num_trials          = 4
-
-    # Set up a communication path with the CdaCallbacks to properly control PBT perturbation cycles
-    PerturbationController(_checkpoint_path, num_trials)
 
     # Define the stopping logic for PBT runs - this requires mean reward to stay at the threshold for multiple consiecutive
     # iterations, rather than just stopping on an outlier spike.
@@ -80,8 +68,6 @@ def main(argv):
     # Define the custom environment for Ray
     env_config = {}
     env_config["difficulty_level"]              = difficulty_level
-    #env_config["stopper"]                       = stopper #object must be instantiated above
-    env_config["burn_in_iters"]                 = burn_in_period
     env_config["time_step_size"]                = 0.5
     env_config["debug"]                         = 0
     env_config["verify_obs"]                    = False
@@ -89,8 +75,7 @@ def main(argv):
     env_config["randomize_start_dist"]          = True
     env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
     env_config["neighbor_start_loc"]            = 0.0 #dist downtrack from beginning of lane 1 for n3, m
-    #env_config["init_ego_lane"]                 = 0
-    cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config, env_task_fn = curriculum_fn)
+    cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config)
 
     # Add exploration noise params
     #cfg.rl_module(_enable_rl_module_api = False) #disables the RL module API, which allows exploration config to be defined for ray 2.6
@@ -134,61 +119,22 @@ def main(argv):
     )
 
     # Evaluation process
+    """
     cfg.evaluation( evaluation_interval         = 10, #iterations between evals
                     evaluation_duration         = 15, #units specified next
                     evaluation_duration_unit    = "episodes",
                     evaluation_parallel_to_training = True, #True requires evaluation_num_workers > 0
                     evaluation_num_workers      = 1,
     )
+    """
 
     # Debugging assistance
     cfg.debugging(  log_level                   = "WARN",
                     seed                        = 17, #tune.choice([2, 17, 666, 4334, 10003, 29771, 38710, 50848, 81199])
     )
 
-    # Custom callbacks from the training algorithm
+    # Custom callbacks from the training algorithm - supports starting from a checkpoint
     cfg.callbacks(  CdaCallbacks)
-
-    """
-    # ===== Training algorithm HPs for PPO =================================================
-
-    # NOTE: lr_schedule is only defined for policy gradient algos
-    # NOTE: all items below lr_schedule are PPO-specific
-    cfg.training(   gamma                       = 0.999, #tune.choice([0.99, 0.999, 0.9999]),
-                    train_batch_size            = 1024, #must be an int multiple of rollout_fragment_length * num_rollout_workers * num_envs_per_worker
-                    lr                          = tune.loguniform(1e-6, 2e-4),
-                    #lr_schedule                 = [[0, 1.0e-4], [1600000, 1.0e-4], [1700000, 1.0e-5], [7000000, 1.0e-6]],
-                    sgd_minibatch_size          = 32, #128, #must be <= train_batch_size (and divide into it)
-                    entropy_coeff               = tune.uniform(0.0005, 0.01),
-                    kl_coeff                    = tune.uniform(0.3, 0.8),
-                    #clip_actions                = True,
-                    clip_param                  = tune.uniform(0.05, 0.4),
-                    grad_clip                   = tune.uniform(10, 40),
-    )
-
-    # Add dict for model structure
-    model_config = cfg_dict["model"]
-    model_config["no_final_linear"]             = True #requires that final hidden layer is the size of the NN output
-    model_config["fcnet_hiddens"]               = [256, 256, 4]
-    model_config["fcnet_activation"]            = "relu"
-    cfg.training(model = model_config)
-
-    # ===== Training algorithm HPs for DDPG =================================================
-
-    cfg.training(   actor_hiddens               = [256, 256],
-                    actor_hidden_activation     = "relu",
-                    actor_lr                    = tune.loguniform(1e-6, 1e-3),
-
-                    critic_hiddens              = [256, 256],
-                    critic_hidden_activation    = "relu",
-                    critic_lr                   = tune.loguniform(1e-6, 1e-3),
-
-                    n_step                      = tune.choice([1, 2, 3]),
-                    gamma                       = 0.995,
-                    tau                         = tune.choice([0.001, 0.002, 0.003, 0.004, 0.005]),
-
-    )
-    """
 
     # ===== Training algorithm HPs for SAC ==================================================
     opt_config = cfg_dict["optimization"]
@@ -221,50 +167,20 @@ def main(argv):
     print("\n///// {} training params are:\n".format(algo))
     print(pretty_print(cfg.to_dict()))
 
-    scheduler = PopulationBasedTraining(
-                    time_attr                   = "training_iteration", #type of interval for considering trial continuation
-                    #metric                      = "episode_reward_mean",#duplicate the TuneConfig setup - this is the metric used to rank trials
-                    #mode                        = "max",                #duplicate the TuneConfig setup - looking for largest metric
-                    perturbation_interval       = perturb_int,          #number of iterations between continuation decisions on each trial
-                    burn_in_period              = burn_in_period,       #num initial iterations before any perturbations occur
-                    quantile_fraction           = 0.5,                  #fraction of trials to keep; must be in [0, 0.5]
-                    resample_probability        = 0.5,                  #resampling vs mutation probability at each decision point
-                    synch                       = False,                #True:  all trials must finish before each perturbation decision is made
-                                                                        # if any trial errors then all trials hang!
-                                                                        #False:  each trial finishes & decides based on available info at that time,
-                                                                        # then immediately moves on. If True and one trial dies, then PBT hangs and all
-                                                                        # remaining trials go into perpetual PAUSED state.
-                    hyperparam_mutations = {                            #resample distributions
-                    #for SAC:
-                        "optimization/actor_learning_rate"       :   tune.loguniform(1e-6, 1e-3),
-                        "optimization/critic_learning_rate"      :   tune.loguniform(1e-6, 1e-3),
-                        "optimization/entropy_learning_rate"     :   tune.loguniform(1e-6, 1e-3),
-                    # for PPO:
-                        #"lr"                                    :   tune.loguniform(1e-6, 2e-4),
-                        #"entropy_coeff"                         :   tune.uniform(0.0005, 0.008),
-                        #"kl_coeff"                              :   tune.uniform(0.3, 0.8),
-                        #"clip_param"                            :   tune.uniform(0.05, 0.4),
-                    },
-    )
-
     tune_config = TuneConfig(
                     metric                      = "episode_reward_mean",
                     mode                        = "max",
-                    scheduler                   = scheduler,
+                    #scheduler                   = scheduler,
                     num_samples                 = num_trials,
                 )
 
-    run_config = RunConfig(
+    run_config = RunConfig( #some commented-out items will allegedly be needed for Ray 2.6
                     name                        = "cda0",
                     local_dir                   = "~/ray_results", #for ray <= 2.5
                     #storage_path                = "~/ray_results", #required if not using remote storage for ray 2.6
                     stop                        = stopper,
-                    #stop                        = {"episode_reward_mean":       success_threshold[difficulty_level],
-                    #                               "training_iteration":        max_iterations,
-                    #                               },
                     sync_config                 = tune.SyncConfig(syncer = None), #for single-node or shared checkpoint dir, ray 2.5
                     #sync_config                 = tune.SyncConfig(syncer = None, upload_dir = None), #for single-node or shared checkpoint dir, ray 2.6
-                    #verbose                     = 3, #3 is default
                     checkpoint_config           = air.CheckpointConfig(
                                                     checkpoint_frequency        = chkpt_int,
                                                     checkpoint_score_attribute  = "episode_reward_mean",

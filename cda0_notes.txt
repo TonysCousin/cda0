@@ -3160,18 +3160,23 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 * Installed kazam (with apt install) in the cda0 conda env to allow capturing of screen videos.
 
+8/9/23
+
+* Created new git branch "level5" off of develop to start adding capability of neighbor vehicles
+  doing more diverse behaviors.
+
+* Cleaned up code (primarily in the tune program) to remove PBT, curriculum learning, and other
+  things that haven't been used in a long time.
+
 
 
 Todo
 - remove PBT schedule completely and the curriculum function
 - try running ray.train instead of all the tuning jobs
 - redo rewards per recent paper suggestions
-- Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
 - change replay buffer capacity from 1e6 to smaller.
 - remove time step bonus.
 - fix perturb controller not counting past new worker environments after beiing perturbed.
-- collect stats on action distribution in each channel.
-- add full action masking to avoid illegal lane changes ever (annealed)
 - Maybe a similar redefinition of speed command?
 
 
@@ -3196,6 +3201,3 @@ Longer term considerations:
 	** action space design
 	** observation space design
 	** reward structure
-
-AI: track down where Trainable/Algorithm object is instantiated and its setup() method is called, since this happens at
-    the beginning of each trial, and at each perturbation of each trial in PBT.

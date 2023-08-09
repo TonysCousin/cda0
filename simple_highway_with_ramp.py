@@ -7,10 +7,11 @@ import numpy as np
 from ray.rllib.env.env_context import EnvContext
 from ray.rllib.env.apis.task_settable_env import TaskSettableEnv
 from ray.tune.logger import pretty_print
-from perturbation_control import PerturbationController
 from hp_prng import HpPrng
 
-perturb_ctrl = PerturbationController() #create this outside the class and curriculum function so both can access it
+# Define a perturbation controller here, it is to be used - needs to be outside of the class. Needed for restarting
+# training from a checkpoint.
+perturb_ctrl = None
 
 
 class LaneChange:
@@ -492,13 +493,15 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             ego_lane_id = self._select_init_lane() #covers all difficulty levels
             ego_lane_start = self.roadway.get_lane_start_p(ego_lane_id)
 
-            # This area of code is a sandbox for figuring out best approaches to working with curriculum learning and PBT simultaneously.
-            # Some tests & comments may seem obtuse as a result.
+            # If we are using a perturbation controller, then get its read on perturbations underway
+            has_perturb_begun = False
+            if perturb_ctrl is not None:
+                has_perturb_begun = perturb_ctrl.has_perturb_begin()
 
             # If we are at difficulty level 0-3, then choose widely randomized initial conditions
             if self.difficulty_level < 4:
                 ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
-                if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
+                if self.randomize_start_dist  and  not has_perturb_begun:
                     physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                     initial_steps = 6000000 #num steps to wait before starting to shrink the max distance
                     if self.total_steps <= initial_steps:
@@ -518,7 +521,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 FINAL_STEPS     = 1 #num steps where max distance reduction ends
                 physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                 ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
-                if self.randomize_start_dist  and  not perturb_ctrl.has_perturb_begun():
+                if self.randomize_start_dist  and  not has_perturb_begun:
                     max_distance = physical_limit
                     if self.total_steps > INITIAL_STEPS:
                         max_distance = max((self.total_steps - INITIAL_STEPS) * (10.0 - physical_limit)/(FINAL_STEPS - INITIAL_STEPS) + physical_limit, 10.0)
@@ -530,11 +533,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     ego_speed = self.initialize_ramp_vehicle_speed(loc, ego_p)
                 else:
                     ego_speed = self.prng.random() * (SimpleHighwayRamp.MAX_SPEED - 5.0) + 5.0 #not practical to train at really low speeds
-
-                #if self.total_steps % 10 == 0:
-                #    print("///// reset env {}: lane = {}, ego_p = {:6.1f}, speed = {:4.1f}, total_steps = {:6}, phys limit = {:6.1f}, init count = {}, perturb? {}"
-                #        .format(self.rollout_id, ego_lane_id, ego_p, ego_speed, self.total_steps, physical_limit, perturb_ctrl.get_algo_init_count(),
-                #                perturb_ctrl.has_perturb_begun()))
 
             else: #levels 5 and up
                 ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
@@ -1416,18 +1414,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             INITIAL_BONUS = 0.01
             bonus = INITIAL_BONUS
             tune_steps = 1
-            """
-            keepalive_begin_steps   = 2e6 #effectively prevents it from being annealed
-            keepalive_end_steps     = 8e6
-            tune_steps = self.total_steps
-            if self.training:
-                tune_steps += perturb_ctrl.get_num_perturb_cycles() * 100000 #keeps counting across perturb events
-            if tune_steps > keepalive_begin_steps:
-                if tune_steps > keepalive_end_steps:
-                    bonus = 0.0
-                else:
-                    bonus -= INITIAL_BONUS * (tune_steps - keepalive_begin_steps) / (keepalive_end_steps - keepalive_begin_steps)
-            """
             reward += bonus
             if tune_steps % 1000 == 0: #TODO debug only
                 print("///// reward step = {}, keepalive bonus = {:.4f}".format(tune_steps, bonus))
@@ -1494,66 +1480,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             print("///// Full obs vector content at: {}:".format(tag))
             for j in range(self.OBS_SIZE):
                 print("      {:2d}: {}".format(j, self.obs[j]))
-
-
-######################################################################################################
-######################################################################################################
-
-
-def curriculum_fn(train_results:        dict,           #current status of training progress
-                  task_settable_env:    TaskSettableEnv,#the env model that difficulties will be applied to
-                  env_ctx,                              #???
-                 ) -> int:                              #returns the new difficulty level
-
-    """Callback that allows Ray.Tune to increase the difficulty level, based on the current training results."""
-
-    """NOTE: reconsider automated promotion logic. Skipping this logic allows manually setting
-        the level as a constant for each Tune experiment. In this way, variable HPs, like annealing LR
-        and noise levels can easily be set and scaled down through the course of a single level. It is
-        not clear how to automate the resetting of these kinds of HPs.
-    """
-
-    return task_settable_env.get_task()
-
-    # If the mean reward is above the success threshold for the current phase then advance the phase
-    assert task_settable_env is not None, "\n///// Unable to access task_settable_env in curriculum_fn."
-    phase = task_settable_env.get_task()
-    #stopper = task_settable_env.get_stopper()
-    #assert stopper is not None, "\n///// Unable to access the stopper object in curriculum_fn."
-    total_steps_sampled = task_settable_env.get_total_steps() #resets after a perturbation
-
-    #value = train_results["episode_reward_mean"]
-    #burn_in = task_settable_env.get_burn_in_iters()
-    #approx_steps_per_iter = 300.0 #for an individual environment, not across all workers
-    #iter = int(total_steps_sampled / approx_steps_per_iter)
-    #print("///// curriculum_fn: phase = {}, value = {}, approx_steps_per_iter = {}, iter = {}".format(phase, value, approx_steps_per_iter, iter))
-    #print("/////                results num_env_steps_sampled = {}, env total steps = {}"
-    #      .format(total_steps_sampled, task_settable_env.get_total_steps()))
-
-    # If there has been no perturbations performed yet (still prior to the first cycle) then
-    TARGET_PHASE = 3
-    if not perturb_ctrl.has_perturb_begun():
-
-        # When threshold number of steps expires, advance from phase 0 to phase 4; this allows the agent to start
-        # figuring out where the finish line is, but otherwise do all training at the phase 4 difficulty.
-        if phase < TARGET_PHASE  and  total_steps_sampled > 70000: #MUST OCCUR PRIOR TO FIRST PERTURB CYCLE
-            print("///// curriculum_fn advancing phase from {} to {}".format(phase, TARGET_PHASE))
-            task_settable_env.set_task(TARGET_PHASE)
-
-    # Else go straight to the target phase
-    else:
-        if phase != TARGET_PHASE:
-            task_settable_env.set_task(TARGET_PHASE)
-
-    """This section is for normal automated curriculum progression
-    if iter >= burn_in  and  value >= stopper.get_success_thresholds()[phase]:
-        print("\n///// curriculum_fn in phase {}: iter = {}, burn-in = {}, episode_reward_mean = {}"
-              .format(phase, iter, burn_in, value))
-        #task_settable_env.set_task(phase+1) #TODO uncomment to change phases
-    """
-
-    return task_settable_env.get_task() #don't return the local one, since the env may override it
-
 
 
 ######################################################################################################
