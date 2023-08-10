@@ -3168,6 +3168,15 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 * Cleaned up code (primarily in the tune program) to remove PBT, curriculum learning, and other
   things that haven't been used in a long time.
 
+* Added level 5 to the environment, which starts the neighbors in any lane, and a wide range of
+  locations and speeds. They also have ACC capability so that they won't rear-end anyone in front
+  of them. Otherwise, they stay at their original speed, and do not change lanes.
+
+* Run ? training level 5 for the first time
+	* Changed the reset() code to draw down the randomized start location over 1M steps. It
+	  had previously been only a single step, so there was effectively no randomized start
+	  location at all (always starting within the first 10 m for training runs).
+
 
 
 Todo
