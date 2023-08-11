@@ -3168,25 +3168,28 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 * Cleaned up code (primarily in the tune program) to remove PBT, curriculum learning, and other
   things that haven't been used in a long time.
 
-* Added level 5 to the environment, which starts the neighbors in any lane, and a wide range of
+* Began adding level 5 to the environment, which starts the neighbors in any lane, and a wide range of
   locations and speeds. They also have ACC capability so that they won't rear-end anyone in front
   of them. Otherwise, they stay at their original speed, and do not change lanes.
 
-* Run ? training level 5 for the first time
+8/10/23
+
+* Finished the level 5 functionality, including neighbors that do a simple ramp merge near the
+  end of lane 2. Lots of testing with the inference program on the 1683e agent.
+
+* Run 06acf training level 5 for the first time
 	* Changed the reset() code to draw down the randomized start location over 1M steps. It
 	  had previously been only a single step, so there was effectively no randomized start
 	  location at all (always starting within the first 10 m for training runs).
 
 
 
-Todo
-- remove PBT schedule completely and the curriculum function
+Considerations:
+- Tweak reward for more penalty on large speed cmd changes
 - try running ray.train instead of all the tuning jobs
 - redo rewards per recent paper suggestions
 - change replay buffer capacity from 1e6 to smaller.
 - remove time step bonus.
-- fix perturb controller not counting past new worker environments after beiing perturbed.
-- Maybe a similar redefinition of speed command?
 
 
 

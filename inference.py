@@ -295,13 +295,11 @@ class Graphics:
 
             # Get the vehicle's new location on the surface
             new_x, new_y = self._get_vehicle_coords(vehicles, v_idx)
+            new_r = int(self.scale*(new_x - self.roadway_center_x)) + self.display_center_r
+            new_s = Graphics.WINDOW_SIZE_Y - int(self.scale*(new_y - self.roadway_center_y)) - self.display_center_s
 
-            # If the vehicle is still active, then
+            # If the vehicle is still active display the vehicle in its new location.  Note that the obs vector is not scaled at this point.
             if vehicles[v_idx].active:
-
-                # Display the vehicle in its new location.  Note that the obs vector is not scaled at this point.
-                new_r = int(self.scale*(new_x - self.roadway_center_x)) + self.display_center_r
-                new_s = Graphics.WINDOW_SIZE_Y - int(self.scale*(new_y - self.roadway_center_y)) - self.display_center_s
                 pygame.draw.circle(self.windowSurface, self.veh_colors[v_idx], (new_r, new_s), self.veh_radius, 0)
 
             # Repaint the surface

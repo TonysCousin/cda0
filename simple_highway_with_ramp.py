@@ -646,7 +646,12 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 loc = 0.0
                 space_found = False
                 while not space_found:
-                    lane_id = int(self.prng.random()*3)
+                    lane_id = 0
+                    draw = self.prng.random()
+                    if draw < 0.5:
+                        lane_id = 1
+                    elif draw < 0.9:
+                        lane_id = 2
                     lane_begin = self.roadway.get_lane_start_p(lane_id)
                     loc = 0.3*self.prng.random()*SimpleHighwayRamp.SCENARIO_LENGTH + lane_begin #somewhere in the first half of the lane
                     space_found = self._verify_safe_location(n, lane_id, loc)
@@ -660,8 +665,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 self.vehicles[n].cur_speed = speed
                 self.vehicles[n].tgt_speed = speed #this will be the speed the ACC controller always tries to hit
                 self.vehicles[n].lane_change_status = "none"
-                print("///// reset: neighbor {} lane = {}, p = {:6.1f}, speed = {:4.1f}"
-                      .format(n, lane_id, loc, self.vehicles[n].cur_speed))
+                #print("///// reset: neighbor {} lane = {}, p = {:6.1f}, speed = {:4.1f}".format(n, lane_id, loc, self.vehicles[n].cur_speed))
 
         # Undefined levels
         else:
@@ -775,8 +779,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             lane_end = self.roadway.get_lane_start_p(lane) + self.roadway.get_total_lane_length(lane)
             if new_p > lane_end:
                 self.vehicles[n].active = False
-            #if self.debug > 1:
-            print("      Neighbor {} (lane {}) advanced with new_speed_cmd = {:.2f}. new_speed = {:.2f}, new_p = {:.2f}"
+            if self.debug > 1:
+                print("      Neighbor {} (lane {}) advanced with new_speed_cmd = {:.2f}. new_speed = {:.2f}, new_p = {:.2f}"
                         .format(n, self.vehicles[n].lane_id, new_speed_cmd, new_speed, new_p))
 
         # Update ego vehicle obs vector
@@ -790,7 +794,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self._verify_obs_limits("step after moving vehicles forward")
 
         #
-        #..........Update lane change status for ego vehicle (neighbors don't change lanes)
+        #..........Update lane change status for ego vehicle
         #
 
         # Determine if we are beginning or continuing a lane change maneuver.
@@ -845,6 +849,43 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     return_info["reason"] = "Ran off road; lane change initiated too late"
                     if self.debug > 1:
                         print("      DONE!  original lane ended before lane change completed.")
+
+        #
+        #..........Manage lane change for any neighbors in lane 2
+        #
+
+        # Loop through all active neighbors, looking for any that are in lane 2
+        for n in range(1, len(self.vehicles)):
+            v = self.vehicles[n]
+            if not v.active:
+                continue
+
+            if v.lane_id == 2:
+
+                # If it is in the merge zone, then
+                progress = v.p - self.roadway.get_lane_start_p(2)
+                l2_length = self.roadway.get_total_lane_length(2)
+                if progress > 0.7*l2_length:
+
+                    # Randomly decide if it's time to do a lane change
+                    if self.prng.random() < 0.05  or  progress >= 0.95*l2_length:
+
+                        # Look for a vehicle beside it in lane 1
+                        safe = True
+                        for j in range(len(self.vehicles)):
+                            if j == n:
+                                continue
+                            if self.vehicles[j].lane_id == 1  and  abs(self.vehicles[j].p - v.p) < 2.0*SimpleHighwayRamp.VEHICLE_LENGTH:
+                                safe = False
+                                break
+
+                        # If it is safe to move, then just do an immediate lane reassignment (no multi-step process like ego does)
+                        if safe:
+                            v.lane_id = 1
+
+                        # Else it is being blocked, then slow down a bit
+                        else:
+                            v.cur_speed *= 0.9
 
         #
         #..........Update ego vehicle's understanding of roadway geometry and various termination conditions
@@ -1396,8 +1437,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # If the other vehicle is in candiate's lane then check if it is too close longitudinally. Note that if a neighbor has
             # not yet been placed, its lane ID is -1
             if other.lane_id == lane_id:
-                if 0.0 <= p - other.p < 6.0*SimpleHighwayRamp.VEHICLE_LENGTH  or \
-                   0.0 <= other.p - p < 4.0*SimpleHighwayRamp.VEHICLE_LENGTH:
+                if 0.0 <= p - other.p < 5.0*SimpleHighwayRamp.VEHICLE_LENGTH  or \
+                   0.0 <= other.p - p < 3.0*SimpleHighwayRamp.VEHICLE_LENGTH:
                     safe = False
 
         return safe
@@ -1428,8 +1469,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                             f = (dist - SimpleHighwayRamp.CRITICAL_DISTANCE) / \
                                 (SimpleHighwayRamp.DISTANCE_OF_CONCERN - SimpleHighwayRamp.CRITICAL_DISTANCE)
                             speed_cmd = min(max(f*(self.vehicles[n].tgt_speed - fwd_speed) + fwd_speed, fwd_speed), speed_cmd)
-                            print("///// ** Neighbor {} ACC is active!  tgt_speed = {:.1f}, speed_cmd = {:.1f}, dist = {:5.1f}, fwd_speed = {:.1f}"
-                                .format(n, self.vehicles[n].tgt_speed, speed_cmd, dist, fwd_speed))
+                            #print("///// ** Neighbor {} ACC is active!  tgt_speed = {:.1f}, speed_cmd = {:.1f}, dist = {:5.1f}, fwd_speed = {:.1f}"
+                            #    .format(n, self.vehicles[n].tgt_speed, speed_cmd, dist, fwd_speed))
 
         return speed_cmd
 
