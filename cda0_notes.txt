@@ -3181,6 +3181,23 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Changed the reset() code to draw down the randomized start location over 1M steps. It
 	  had previously been only a single step, so there was effectively no randomized start
 	  location at all (always starting within the first 10 m for training runs).
+	* Pretty good! rmax for all 4 trials reached 6 to 10 at ~1M steps, then all of them declined
+	  a bit, but stayed > 0. rmean reached > 0 for 3 trials, but then all dropped back to
+	  [-6, -2] by the 6000 iteration mark (1.9M steps). It might be good to let it run another
+	  1M steps or more.
+	* Inference on the best trial (#3, checkpoint 4170) shows somewhat decent performance
+		* It doesn't know to avoid rear-ending a neighbor in front, even though the obs
+		  zones clearly say it is there.
+		* In lanes 0 & 1 it performs okay, but speeds are a little high (30-32 m/s).
+		* In lane 2 it reliably does an illegal lane change right out of the gate.
+
+8/11/23
+
+* Run 447ed training level 5 with SAC on the level5 branch
+	* Extended the max_iters to 10k
+	* Extended duration of the noise taper from 2M to 3M steps.
+	* Added capability to include 6 neighbor vehicles for level 5, instead of 3 to provide
+	  more opportunities to learn about close interactions.
 
 
 

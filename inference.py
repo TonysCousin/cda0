@@ -102,7 +102,9 @@ def main(argv):
     action = [0, 0]
     raw_obs, _ = env.unscaled_reset()
     vehicles = env.get_vehicle_data()
-    print("///// Neighbor speeds:  {:.1f}, {:.1f}, {:.1f}".format(vehicles[1].cur_speed, vehicles[2].cur_speed, vehicles[3].cur_speed))
+    print("///// Neighbor speeds:")
+    for i in range(1, len(vehicles)):
+        print("{}: {:.2f}".format(i, vehicles[i].cur_speed))
     graphics.update(action, raw_obs, vehicles)
     obs = env.scale_obs(raw_obs)
     step = 0
@@ -267,12 +269,13 @@ class Graphics:
         #time.sleep(20) #debug only
 
         # Set up lists of previous screen coords and display colors for each vehicle
-        self.prev_veh_r = [0, 0, 0, 0]
-        self.prev_veh_s = [0, 0, 0, 0]
-        self.veh_colors = [Graphics.EGO_COLOR, Graphics.NEIGHBOR_COLOR, Graphics.NEIGHBOR_COLOR, Graphics.NEIGHBOR_COLOR]
+        self.prev_veh_r = [0] * (SimpleHighwayRampWrapper.NUM_NEIGHBORS+1)
+        self.prev_veh_s = [0] * (SimpleHighwayRampWrapper.NUM_NEIGHBORS+1)
+        self.veh_colors = [Graphics.NEIGHBOR_COLOR] * (SimpleHighwayRampWrapper.NUM_NEIGHBORS+1)
+        self.veh_colors[0] = Graphics.EGO_COLOR
 
         # Initialize the previous vehicles' locations near the beginning of a lane (doesn't matter which lane for this step)
-        for v_idx in range(4):
+        for v_idx in range(len(self.prev_veh_r)):
             self.prev_veh_r[v_idx] = int(self.scale*(self.env.roadway.lanes[0].segments[0][0] - self.roadway_center_x)) + self.display_center_r
             self.prev_veh_s[v_idx] = Graphics.WINDOW_SIZE_Y - \
                                      int(self.scale*(self.env.roadway.lanes[0].segments[0][1] - self.roadway_center_y)) - self.display_center_s
@@ -362,7 +365,7 @@ class Graphics:
 
     def _get_vehicle_coords(self,
                             vehicles    : List, #list of all Vehicles in the scenario
-                            vehicle_id  : int   #ID of the vehicle; 0=ego, 1-3=neighbor vehicles
+                            vehicle_id  : int   #ID of the vehicle; 0=ego, others=neighbor vehicles
                            ) -> tuple:
         """Returns the map frame coordinates of the indicated vehicle based on its lane ID and distance downtrack.
 
@@ -370,7 +373,7 @@ class Graphics:
             it is not a general solution.
         """
 
-        assert 0 <= vehicle_id <= 3, "///// _get_vehicle_coords: invalid vehicle_id = {}".format(vehicle_id)
+        assert 0 <= vehicle_id < len(vehicles), "///// _get_vehicle_coords: invalid vehicle_id = {}".format(vehicle_id)
 
         road = self.env.roadway
         lane = vehicles[vehicle_id].lane_id

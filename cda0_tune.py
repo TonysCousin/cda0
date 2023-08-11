@@ -55,7 +55,7 @@ def main(argv):
     # Phase...............0             1           2           3           4           5
     success_threshold   = [9.5,         9.5,        9.5,        10.0,       8.0,        7.0]
     chkpt_int           = 10    #num iters between storing new checkpoints
-    max_iterations      = 6000
+    max_iterations      = 10000
     num_trials          = 4
 
     # Define the stopping logic for PBT runs - this requires mean reward to stay at the threshold for multiple consiecutive
@@ -88,7 +88,7 @@ def main(argv):
     explore_config["random_timesteps"]          = 100000 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = 2000000  #tune.choice([100000, 400000]) #was 900k
+    explore_config["scale_timesteps"]           = 3000000  #tune.choice([100000, 400000]) #was 900k
     exp_switch                                  = True #tune.choice([False, True, True])
     cfg.exploration(explore = exp_switch, exploration_config = explore_config)
     #cfg.exploration(explore = False)
@@ -185,7 +185,7 @@ def main(argv):
                     checkpoint_config           = air.CheckpointConfig(
                                                     checkpoint_frequency        = chkpt_int,
                                                     checkpoint_score_attribute  = "episode_reward_mean",
-                                                    num_to_keep                 = 1, #if > 1 hard to tell which one is the best
+                                                    num_to_keep                 = 2, #if > 1 hard to tell which one is the best
                                                     checkpoint_at_end           = True
                     )
                 )
