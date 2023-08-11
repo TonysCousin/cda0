@@ -52,7 +52,7 @@ def main(argv):
                     "init_ego_lane":        start_lane,
                     #"neighbor_speed":       29.1,
                     #"neighbor_start_loc":   0.0, #dist downtrack from beginning of lane 1 for n3, m
-                    "merge_relative_pos":   relative_pos, #neighbor vehicle that we want ego to be beside when starting in lane 2
+                    "merge_relative_pos":   relative_pos, #neighbor vehicle that we want ego to be beside when starting in lane 2 (level 4 only)
                 }
     env = SimpleHighwayRampWrapper(env_config)
     #print("///// Environment configured. Params are:")
@@ -293,11 +293,18 @@ class Graphics:
             # Grab the background under where we want the vehicle to appear & erase the old vehicle
             pygame.draw.circle(self.windowSurface, Graphics.BLACK, (self.prev_veh_r[v_idx], self.prev_veh_s[v_idx]), self.veh_radius, 0)
 
-            # Display the vehicle in its new location.  Note that the obs vector is not scaled at this point.
+            # Get the vehicle's new location on the surface
             new_x, new_y = self._get_vehicle_coords(vehicles, v_idx)
-            new_r = int(self.scale*(new_x - self.roadway_center_x)) + self.display_center_r
-            new_s = Graphics.WINDOW_SIZE_Y - int(self.scale*(new_y - self.roadway_center_y)) - self.display_center_s
-            pygame.draw.circle(self.windowSurface, self.veh_colors[v_idx], (new_r, new_s), self.veh_radius, 0)
+
+            # If the vehicle is still active, then
+            if vehicles[v_idx].active:
+
+                # Display the vehicle in its new location.  Note that the obs vector is not scaled at this point.
+                new_r = int(self.scale*(new_x - self.roadway_center_x)) + self.display_center_r
+                new_s = Graphics.WINDOW_SIZE_Y - int(self.scale*(new_y - self.roadway_center_y)) - self.display_center_s
+                pygame.draw.circle(self.windowSurface, self.veh_colors[v_idx], (new_r, new_s), self.veh_radius, 0)
+
+            # Repaint the surface
             pygame.display.update()
             #print("   // Graphics: moving vehicle {} from r,s = ({:4d}, {:4d}) to ({:4d}, {:4d}) and new x,y = ({:5.0f}, {:5.0f})"
             #        .format(v_idx, self.prev_veh_r[v_idx], self.prev_veh_s[v_idx], new_r, new_s, new_x, new_y))

@@ -73,8 +73,9 @@ def main(argv):
     env_config["verify_obs"]                    = True
     env_config["training"]                      = True
     env_config["randomize_start_dist"]          = True
-    env_config["neighbor_speed"]                = 29.1 #29.1 m/s is posted speed limit; only applies for appropriate diff levels
-    env_config["neighbor_start_loc"]            = 0.0 #dist downtrack from beginning of lane 1 for n3, m
+    env_config["neighbor_speed"]                = 29.1  #29.1 m/s is posted speed limit; only applies for appropriate diff levels
+    env_config["neighbor_start_loc"]            = 0.0   #dist downtrack from beginning of lane 1 for n3, m
+    env_config["ignore_neighbor_crashes"]       = True  #if true, a crash between two neighbor vehicles won't stop the episode
     cfg.environment(env = SimpleHighwayRampWrapper, env_config = env_config)
 
     # Add exploration noise params
