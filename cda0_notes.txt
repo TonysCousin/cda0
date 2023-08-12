@@ -3198,6 +3198,33 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Extended duration of the noise taper from 2M to 3M steps.
 	* Added capability to include 6 neighbor vehicles for level 5, instead of 3 to provide
 	  more opportunities to learn about close interactions.
+	* Of the two trials, one showed very good reward plots, and a second shows promise.
+	  Trial 2 reached rmax > 9 and sustained > 8, with its rmean peaking at 7 and even
+	  rmin > 0. It terminated slightly early, after 9569 iters, since the success threahold
+	  was set at rmean > 7.0 over 20 iters. It started with noise stddev = 0.56, but performed
+	  poorly until ~1.5M steps (50% decay in the noise level).
+	* Total training time was ~8.0 hr.
+	* Inference on trial 2
+		* It still has a habit of rear-ending neighbors. Detailed log study of one case
+		  shows that it first detected a forward neighbor while going 23 m/s, then
+		  agent gradually sped up as it got closer, hitting > 33 m/s just prior to the
+		  crash. So it had exceeded the speed limit by then, and was not worrying about
+		  any merge activity. This suggests a need for additional training.
+
+8/12/23
+
+* Run 15e0d training level 5 with SAC on the level5 branch
+	* Set noise stddev HP range down to [0.1, 0.4]
+	* Set noise scaling duration as a tunable HP, allowing choice of 2M, 3M or 4M steps.
+	* Increased the success criterion to rmean > 8.0
+	* Increased to request for 8 trials, in order to handle the more HP combinations.
+	* Increased max iterations from 10k to 14k
+	* Increased num_cpus_for_local_worker from 1 to 4 and num_cpus_per_worker from 1 to 4
+	  to see if this can increase throughput a bit.
+	* Doubled the speed command penalty multiplier from 0.2 to 0.4 to encourage smoothness.
+	* Doubled the penalty for crashing from -20 to -40.
+
+CHECK TIMESTAMPS ON LOG FOR ITERS/HR
 
 
 

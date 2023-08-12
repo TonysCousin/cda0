@@ -1571,7 +1571,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If there was a multi-car crash or off-roading (single-car crash) then set a penalty, larger for multi-car crash
             if crash:
-                reward = -20.0
+                reward = -40.0
                 explanation = "Crashed into a vehicle. "
 
             elif off_road:
@@ -1626,7 +1626,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             # Small penalty for widely varying speed commands
             if self.difficulty_level > 0:
                 cmd_diff = abs(self.obs[self.EGO_DES_SPEED] - self.obs[self.EGO_DES_SPEED_PREV]) / SimpleHighwayRamp.MAX_SPEED
-                penalty = 0.2 * cmd_diff * cmd_diff
+                penalty = 0.4 * cmd_diff * cmd_diff
                 reward -= penalty
                 if penalty > 0.0001:
                     explanation += "Spd cmd pen {:.4f}. ".format(penalty)
