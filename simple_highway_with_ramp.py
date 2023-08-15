@@ -972,6 +972,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         reward, expl = self._get_reward(done, crash, ran_off_road, stopped_vehicle)
         return_info["reward_detail"] = expl
 
+        if self.obs[self.NEIGHBOR_IN_EGO_ZONE] > 0.0: #TODO debug only
+            print("///// step: Rollout {} step {} neighbor in ego zone! Step reward = {:.1f}".format(self.rollout_id, self.total_steps, reward))
+
         # Verify that the obs are within design limits
         self._verify_obs_limits("step after reward calc")
 
@@ -1618,6 +1621,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                         explanation = "Successful episode! {} steps".format(self.steps_since_reset)
                     else:
                         explanation = "Completed episode, but no bonus due to rule violation."
+
+            if self.total_steps > 1000000: #TODO debug only
+                print("///// Rollout {} episode final reward at {} steps = {:.1f} due to {}".format(self.rollout_id, self.total_steps, reward, explanation))
 
         # Else, episode still underway
         else:

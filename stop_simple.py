@@ -17,12 +17,16 @@ class StopSimple(Stopper):
                  avg_over_latest    : int   = 10,       #num most recent iterations over which statistics will be calculated
                  avg_threshold      : float = 1.0,      #mean reward above which we can call it a win
                  min_threshold      : float = None,     #min reward above which we can call it a win
+                 max_fail_threshold : float = None,     #max reward below which we can say it's a clear failure
+                 burn_in            : int   = 0,        #num iterations before considering a failure stop
                 ):
 
         self.max_iterations = max_iterations
         self.most_recent = avg_over_latest #num recent trials to consider when deciding to stop
         self.success_avg_threshold = avg_threshold
         self.success_min_threshold = min_threshold
+        self.failure_max_threshold = max_fail_threshold
+        self.burn_in = burn_in
         self.trials = {}
 
 
@@ -81,6 +85,13 @@ class StopSimple(Stopper):
                     # Else, no min threshold required so it is a success
                     else:
                         print("\n///// Stopping trial - SUCCESS!  Recent rmean = {}\n".format(avg_of_mean))
+                        return True
+
+                # Fail if avg of max rewards over recent history is below the failure threshold
+                if self.failure_max_threshold is not None  and  total_iters >= self.burn_in:
+                    avg_of_max = mean(self.trials[trial_id]["max_rewards"])
+                    if avg_of_max < self.failure_max_threshold:
+                        print("\n///// Stopping trial - FAILURE!  Recent rmax = {}\n".format(avg_of_max))
                         return True
 
                 # Stop if max iterations reached

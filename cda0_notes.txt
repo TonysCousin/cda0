@@ -3276,7 +3276,7 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 8/14/23
 
-* Run 20faa training level 5 with SAC on branch level 5
+* Run 16009 training level 5 with SAC on branch level 5
 	* Fixed defect in code that was supposed to place neighbor #1 in front of ego, but may not
 	  have done that as often as desired.
 	* Changed reset() to place neighbor #2 (usually) in front of ego, but in adjacent through
@@ -3284,11 +3284,39 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Changed reset() to distribute remaining neighbors equally among the 3 lanes.
 	* Reduced penalty for changing lanes (to encourage this as a rear-end avoidance mvr).
 	* Slightly increased speed penalty.
+	* Reward plots show that normally rmin > -40 by a long margin. How can this be if the
+	  reward for a collision is -40?
+	* Pretty good - three trials ended with rmean > 5 and two of them with rmin > 0; not
+	  quite enough for automatic success, but close.
+	* Inference on trial 3 (the 2nd best one) shows that it still really likes to rear-end
+	  neighbors. It seems a little better at respecting speed limit. In one case it attempted
+	  to slow drastically when the neighbor_in_ego_zone flag went high, but it was too late.
+	  In lane 2 it also crashed by merging into the side of a neighbor - totally ignoring it.
+	* These behaviors make me wonder if crashing is actually not happening during training,
+	  which would explain the large rmin and the fact that it acts like it doesn't know what
+	  to do.
+	* Trial 6 (the best one) was able to slow down to avoid a rear-end. More often, it
+	  collided with neighbors in front.
+	* It is becoming clear that with the obs vector available, the MDP doesn't have good info
+	  about how fast the forward neighbor is going, only a delta speed and the ego speed, so
+	  these have to be combined before it would know what speed to command, and since they
+	  are in different scales, it is probably not easy to do. Seems the NN would work better
+	  if the action was acceleration instead of absolute target speed.  Then it only needs
+	  to consider the neighbor's delta speed and adjust accel in proportion to that number.
+	* Log shows that many iterations experience no crashes (in dozens of episodes), as the
+	  min episode reward is > ~-20. Many are, in fact, > 0. Crash reward is -40.
+
+8/15/23
+
+* Run f2df6 training level 5 with SAC on level5 branch
+	* Added debug stmts to give clues to rear-end crashes during training. No other changes.
 
 
 
 
 Considerations:
+- Move to action[0] as accel rather than tgt speed
+
 - Tweak reward for more penalty on large speed cmd changes
 - try running ray.train instead of all the tuning jobs
 - redo rewards per recent paper suggestions

@@ -55,17 +55,21 @@ def main(argv):
     # Phase...............0             1           2           3           4           5
     success_threshold   = [9.5,         9.5,        9.5,        10.0,       8.0,        8.0]
     min_threshold       = [None,        None,       None,       None,       None,       0.0]
+    fail_threshold      = [-12.0,       -12.0,      -12.0,      -12.0,      -12.0,      -12.0]
     avg_over_latest     = 400   #num most recent iters that are averaged to meet stopping criteria
     chkpt_int           = 10    #num iters between storing new checkpoints
-    max_iterations      = 12000
-    num_trials          = 8
+    max_iterations      = 6000
+    burn_in             = 500   #num iters before considering failure stopping
+    num_trials          = 2
 
     # Define the stopping logic - this requires mean reward to stay at the threshold for multiple consiecutive
     # iterations, rather than just stopping on an outlier spike.
     stopper = StopSimple(max_iterations     = max_iterations,
                          avg_over_latest    = avg_over_latest,
                          avg_threshold      = success_threshold[difficulty_level],
-                         min_threshold      = min_threshold[difficulty_level]
+                         min_threshold      = min_threshold[difficulty_level],
+                         max_fail_threshold = fail_threshold[difficulty_level],
+                         burn_in            = burn_in,
                         )
 
     # Define the custom environment for Ray
