@@ -8,17 +8,21 @@ from ray.rllib.env.apis.task_settable_env import TaskSettableEnv
 class StopSimple(Stopper):
     """Determines when to stop a trial, based on the running average of the mean reward (not just the "instantaneous" value
         for a single iteration).
+        NOTE: if both avg_threshold and min_threshold are specified, then the trial has to meet both of those conditions
+        simultaneously, over the specified period in order to consider it successful.
     """
 
     def __init__(self,
                  max_iterations     : int   = None,     #max total iterations alloweed over all phases combined
                  avg_over_latest    : int   = 10,       #num most recent iterations over which statistics will be calculated
-                 success_threshold  : float = 1.0,      #reward above which we can call it a win; use a list for multi-phase
+                 avg_threshold      : float = 1.0,      #mean reward above which we can call it a win
+                 min_threshold      : float = None,     #min reward above which we can call it a win
                 ):
 
         self.max_iterations = max_iterations
         self.most_recent = avg_over_latest #num recent trials to consider when deciding to stop
-        self.success_avg_threshold = success_threshold
+        self.success_avg_threshold = avg_threshold
+        self.success_min_threshold = min_threshold
         self.trials = {}
 
 
@@ -41,14 +45,17 @@ class StopSimple(Stopper):
             if not math.isnan(ep_mean):
                 mean_rew = ep_mean
             self.trials[trial_id]["mean_rewards"].append(mean_rew)
+
             max_rew = -100.0
             if not math.isnan(result["episode_reward_max"]):
                 max_rew = result["episode_reward_max"]
             self.trials[trial_id]["max_rewards"].append(max_rew)
+
             min_rew = -100.0
             if not math.isnan(result["episode_reward_min"]):
                 min_rew = result["episode_reward_min"]
             self.trials[trial_id]["min_rewards"].append(min_rew)
+
             if ep_mean < self.trials[trial_id]["worst_mean"]:
                 self.trials[trial_id]["worst_mean"] = ep_mean
             if ep_mean > self.trials[trial_id]["best_mean"]:
@@ -60,11 +67,21 @@ class StopSimple(Stopper):
 
             # Else the deque is full so we can start analyzing stop criteria
             else:
-                # Stop if avg of mean rewards over recent history is above the succcess threshold
+                # If avg of mean rewards over recent history is above the succcess threshold
                 avg_of_mean = mean(self.trials[trial_id]["mean_rewards"])
                 if avg_of_mean >= self.success_avg_threshold:
-                    print("\n///// Stopping trial - SUCCESS!\n")
-                    return True
+
+                    # If min threshold is defined then if it is exceeded also call it a success
+                    if self.success_min_threshold is not None:
+                        avg_of_min = mean(self.trials[trial_id]["min_rewards"])
+                        if avg_of_min >= self.success_min_threshold:
+                            print("\n///// Stopping trial - SUCCESS!  Recent rmean = {}, rmin = {}\n".format(avg_of_mean, avg_of_min))
+                            return True
+
+                    # Else, no min threshold required so it is a success
+                    else:
+                        print("\n///// Stopping trial - SUCCESS!  Recent rmean = {}\n".format(avg_of_mean))
+                        return True
 
                 # Stop if max iterations reached
                 if self.max_iterations is not None  and  total_iters >= self.max_iterations:

@@ -54,15 +54,18 @@ def main(argv):
     # All list objects (min_timesteps, success_threshold, failure_threshold) must be of length equal to num phases in use.
     # Phase...............0             1           2           3           4           5
     success_threshold   = [9.5,         9.5,        9.5,        10.0,       8.0,        8.0]
+    min_threshold       = [None,        None,       None,       None,       None,       0.0]
+    avg_over_latest     = 400   #num most recent iters that are averaged to meet stopping criteria
     chkpt_int           = 10    #num iters between storing new checkpoints
     max_iterations      = 14000
     num_trials          = 8
 
-    # Define the stopping logic for PBT runs - this requires mean reward to stay at the threshold for multiple consiecutive
+    # Define the stopping logic - this requires mean reward to stay at the threshold for multiple consiecutive
     # iterations, rather than just stopping on an outlier spike.
     stopper = StopSimple(max_iterations     = max_iterations,
-                         avg_over_latest    = 20,
-                         success_threshold  = success_threshold[difficulty_level]
+                         avg_over_latest    = avg_over_latest,
+                         avg_threshold      = success_threshold[difficulty_level],
+                         min_threshold      = min_threshold[difficulty_level]
                         )
 
     # Define the custom environment for Ray
@@ -88,7 +91,7 @@ def main(argv):
     explore_config["random_timesteps"]          = 100000 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = tune.choice([2000000, 3000000, 400000])
+    explore_config["scale_timesteps"]           = tune.choice([2000000, 3000000, 4000000])
     exp_switch                                  = True #tune.choice([False, True, True])
     cfg.exploration(explore = exp_switch, exploration_config = explore_config)
     #cfg.exploration(explore = False)
@@ -103,8 +106,8 @@ def main(argv):
     #       number of possible simultaneous trials (as well as gpu memory).
     # This config will run 5 parallel trials on the Tensorbook.
     cfg.resources(  num_gpus                    = 0.5, #for the local worker, which does the learning & evaluation runs
-                    num_cpus_for_local_worker   = 4,
-                    num_cpus_per_worker         = 4, #also applies to the local worker and evaluation workers
+                    num_cpus_for_local_worker   = 2,
+                    num_cpus_per_worker         = 2, #also applies to the local worker and evaluation workers
                     num_gpus_per_worker         = 0  #this has to allow gpu left over for local worker & evaluation workers also
     )
 

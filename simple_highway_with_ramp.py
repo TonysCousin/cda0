@@ -498,7 +498,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         ego_lane_id = None
         ego_p = None
         ego_speed = None
-        max_distance = 1.0
+        max_ego_dist = 1.0
         if self.training:
             ego_lane_id = self._select_init_lane() #covers all difficulty levels
             ego_lane_start = self.roadway.get_lane_start_p(ego_lane_id)
@@ -515,13 +515,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                     initial_steps = 6000000 #num steps to wait before starting to shrink the max distance
                     if self.total_steps <= initial_steps:
-                        max_distance = physical_limit
+                        max_ego_dist = physical_limit
                     else:
-                        max_distance = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(1e6 - initial_steps) + physical_limit,
+                        max_ego_dist = max((self.total_steps - initial_steps) * (10.0 - physical_limit)/(1e6 - initial_steps) + physical_limit,
                                         10.0) #decreases over time steps
-                    ego_p = self.prng.random() * max_distance + ego_lane_start
+                    ego_p = self.prng.random() * max_ego_dist + ego_lane_start
                     if ego_lane_id == 1:    #TODO: for testing lane 2 learning only!
-                        ego_p = self.prng.random() * (max_distance - 800.0) + 800.0
+                        ego_p = self.prng.random() * (max_ego_dist - 800.0) + 800.0
                 ego_speed = self.prng.random() * 5.0 + 30.0 #value in [5, 35] m/s
 
             elif self.difficulty_level == 4  or  self.difficulty_level == 5:
@@ -532,10 +532,10 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 physical_limit = min(self.roadway.get_total_lane_length(ego_lane_id), SimpleHighwayRamp.SCENARIO_LENGTH) - 10.0
                 ego_p = self.prng.random() * 3.0*SimpleHighwayRamp.VEHICLE_LENGTH + ego_lane_start
                 if self.randomize_start_dist  and  not has_perturb_begun:
-                    max_distance = physical_limit
+                    max_ego_dist = physical_limit
                     if self.total_steps > INITIAL_STEPS:
-                        max_distance = max((self.total_steps - INITIAL_STEPS) * (10.0 - physical_limit)/(FINAL_STEPS - INITIAL_STEPS) + physical_limit, 10.0)
-                    ego_p = self.prng.random() * max_distance + ego_lane_start
+                        max_ego_dist = max((self.total_steps - INITIAL_STEPS) * (10.0 - physical_limit)/(FINAL_STEPS - INITIAL_STEPS) + physical_limit, 10.0)
+                    ego_p = self.prng.random() * max_ego_dist + ego_lane_start
 
                 # For level 4 we want to sync the agent in lane 2 to force it to avoid a collision by positioning it right next to the neighbors
                 if self.difficulty_level == 4  and  ego_lane_id == 2:
@@ -555,7 +555,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Else, we are doing inference, so allow configrable overrides if present
         else:
             ego_lane_id = int(self.prng.random()*3) if self.init_ego_lane is None  else  self.init_ego_lane
-            ego_p = self.prng.random() * 30.0*SimpleHighwayRamp.VEHICLE_LENGTH if self.init_ego_dist is None  else  self.init_ego_dist
+            ego_p = self.prng.random() * 20.0*SimpleHighwayRamp.VEHICLE_LENGTH if self.init_ego_dist is None  else  self.init_ego_dist
             ego_p += self.roadway.get_lane_start_p(ego_lane_id)
 
             # If difficulty level 4, then always use the config value for merge relative position
@@ -566,8 +566,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
         if self.debug > 1:
             print("///// reset: ego defined: lane = {}, p = {:.1f}, speed = {:.1f}".format(ego_lane_id, ego_p, ego_speed))
-        #print("///// reset: ego_lane_id = {}, ego_p = {:6.1f}, max_distance = {:6.1f}, total_steps = {}"
-        #      .format(ego_lane_id, ego_p, max_distance, self.total_steps))
+        #print("///// reset: ego_lane_id = {}, ego_p = {:6.1f}, max_ego_dist = {:6.1f}, total_steps = {}"
+        #      .format(ego_lane_id, ego_p, max_ego_dist, self.total_steps))
 
         # Reinitialize the ego vehicle and the whole observation vector
         ego_rem, lid, la, lb, l_rem, rid, ra, rb, r_rem = self.roadway.get_current_lane_geom(ego_lane_id, ego_p)
@@ -641,23 +641,37 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Level 5 (neighbors have differing speeds, lanes and starting locations, and have ACC capability to avoid forward collisions)
         elif self.difficulty_level == 5:
 
-            # In level 5 they can start anywhere, at differing speeds
+            # Place the neighbors, one at a time
             for n in range(1, len(self.vehicles)): #don't look at the ego vehicle (0)
 
-                # Choose its location, but avoid being too close to another vehicle, longitudinally
                 lane_id = 0
                 loc = 0.0
-                space_found = False
-                while not space_found:
-                    lane_id = 0
-                    draw = self.prng.random()
-                    if draw < 0.5:
+
+                # For neighbor #1, frequently force it to be downtrack of the ego vehicle, and #2 similarly downtrack but in the next
+                # through lane, both to force learning of a rear-end situation
+                if n <= 2  and  self.prng.random() < 0.9:
+                    if n == 1:
+                        lane_id = ego_lane_id
+                    elif ego_lane_id == 1:
+                        lane_id = 0
+                    else:
                         lane_id = 1
-                    elif draw < 0.8:
-                        lane_id = 2
-                    lane_begin = self.roadway.get_lane_start_p(lane_id)
-                    loc = 0.3*self.prng.random()*SimpleHighwayRamp.SCENARIO_LENGTH + lane_begin #somewhere in the first half of the lane
-                    space_found = self._verify_safe_location(n, lane_id, loc)
+                    loc = ego_p + min(self.prng.random()*200.0 + 3.0*SimpleHighwayRamp.VEHICLE_LENGTH, self.roadway.get_total_lane_length(lane_id))
+
+                # Else, choose the neighbor's location, but avoid being too close to another vehicle, longitudinally
+                else:
+                    space_found = False
+                    while not space_found:
+                        lane_id = 0
+                        draw = self.prng.random()
+                        if draw < 0.333:
+                            lane_id = 1
+                        elif draw < 0.667:
+                            lane_id = 2
+                        lane_begin = self.roadway.get_lane_start_p(lane_id)
+                        max_dist = min(max(max_ego_dist, 0.3*SimpleHighwayRamp.SCENARIO_LENGTH), self.roadway.get_total_lane_length(lane_id) - 50.0)
+                        loc = self.prng.random()*max_dist + lane_begin
+                        space_found = self._verify_safe_location(n, lane_id, loc)
 
                 # Store the initial state of this neighbor
                 self.vehicles[n].lane_id = lane_id
@@ -871,7 +885,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 if progress > 0.7*l2_length:
 
                     # Randomly decide if it's time to do a lane change
-                    if self.prng.random() < 0.05  or  progress >= 0.95*l2_length:
+                    if self.prng.random() < 0.05  or  l2_length - progress < 150.0:
 
                         # Look for a vehicle beside it in lane 1
                         safe = True
@@ -888,7 +902,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
                         # Else it is being blocked, then slow down a bit
                         else:
-                            v.cur_speed *= 0.85
+                            v.cur_speed *= 0.8
 
         #
         #..........Update ego vehicle's understanding of roadway geometry and various termination conditions
@@ -1632,7 +1646,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     explanation += "Spd cmd pen {:.4f}. ".format(penalty)
 
             # Penalty for deviating from roadway speed limit
-            speed_mult = 0.25
+            speed_mult = 0.3
             if self.difficulty_level == 1  or  self.difficulty_level == 2:
                 speed_mult *= 2.0
 
@@ -1646,7 +1660,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
 
             # If a lane change was initiated, apply a penalty depending on how soon after the previous lane change
             if self.lane_change_count == 1:
-                penalty = 0.1 + 0.02*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
+                penalty = 0.05 + 0.005*(SimpleHighwayRamp.MAX_STEPS_SINCE_LC - self.obs[self.STEPS_SINCE_LN_CHG])
                 reward -= penalty
                 explanation += "Ln chg pen {:.4f}. ".format(penalty)
 

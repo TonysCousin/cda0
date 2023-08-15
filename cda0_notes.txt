@@ -3223,8 +3223,68 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	  to see if this can increase throughput a bit.
 	* Doubled the speed command penalty multiplier from 0.2 to 0.4 to encourage smoothness.
 	* Doubled the penalty for crashing from -20 to -40.
+	* During training, htop shows only 2 cpus being used (each fully), and the gpu is seeing
+	  30-50% utilization.
+	* Trial 0 terminated successfully early. But it had rmin ~-10. In inference it performs
+	  well except that it consistently rear-ends slower neighbors.
+	* Trial 2 terminated successfully early, at which time its rmin = 4.9. Inferens shows it
+	  rear-ending a neighbor twice, but also 2 cases where it slowed and avoided a rear-end.
+	  It also slowed way down at end of lane 2 to avoid merging into heavy lane 1 traffic
+	  (it ran off road, but avoided a crash); this happened multiple times, even though 
+	  traffic cleared so it could have merged after greatly slowing.
 
-CHECK TIMESTAMPS ON LOG FOR ITERS/HR
+* Run 58533 training level 5 with SAC on branch level5
+	* Enhanced stopper to require both rmean and rmin to exceed specified thresholds. Set
+	  these thresholds at 8.0 and 0.0, respectively, and increased rqmt that they must be
+	  held for 100 iterations instead of 20, to force longer learning.
+	* Changed num_gpus from 0.5 to 0.33 to encourage 3 simultaneous trials.
+	* 7 of 8 trials died prematurely due to unknown error (segfault?). One trial finished
+	  unimpressively.
+
+* Run 4414e training level 5 with SAC on branch level5
+	* No changes from previous to the training itself.
+	* Playing with resource allocations for performance only.
+	* Good run. Three of 8 trials had segfaults. But trial 2 scored a winner after ~2M steps,
+	  and 3 others achieved rmean > 0 for extended time, two of them > 5.
+	* Trial 7 ended with a SystemError where rllib/policy/sample_batch.py did something with
+	  a list object that gave "bad argument to internal function".
+	* Inference on trial 2 shows that it can't avoid a rear-end situation. Also, it chose to
+	  change from lane 2 (close to the end) to lane 1 even though a neighbor was there, so
+	  it crashed for -40 pts instead of going off-road for -11 pts or slowing down enough to
+	  change lanes behind it for almost no loss. It feels like the agent just hasn't seen
+	  enough of these situations to understand them.
+
+8/13/23
+
+* Run cfc78 training level 5 with SAC on branch level5 (previous 2 runs died due to weird Ray error)
+	* Increased stopper avg_over_latest from 100 to 400 iterations to help ensure consistent
+	  performance before calling it good.
+	* Modified reset() to a) force neighbor 1 to be in front of ego 80% of the time, and b)
+	  resize the distribution geometry of neighbors to better match the ego's distro space
+	  so that they aren't so often located all behind ego.
+	* Changed step() to more aggressively slow neighbors coming to the end of lane 2 if they
+	  are blocked from making a lane change.
+	* No good. Most trials had rmax ~10, but only 2 had rmin > 0 and their rmean was ~5. I
+	  think this is because of so many rear-end collisions, the agent often never finishes an
+	  episode successfully.
+	* Inference on trial 2 shows it still likes to drive ~34 m/s and rear-end neighbors. When
+	  starting in lane 1, it likes to change to lane 0 immediately, which is less populated, so
+	  it can just pass by a lot of the traffic.
+	* After run, I found a code defect that was placing neighbor 1 often behind the ego vehicle
+	  rather than usually in front of it, so maybe it didn't get as much rear-end experience as
+	  I thought.
+
+8/14/23
+
+* Run ? training level 5 with SAC on branch level 5
+	* Fixed defect in code that was supposed to place neighbor #1 in front of ego, but may not
+	  have done that as often as desired.
+	* Changed reset() to place neighbor #2 (usually) in front of ego, but in adjacent through
+	  lane, to help prevent a run-around maneuver.
+	* Changed reset() to distribute remaining neighbors equally among the 3 lanes.
+	* Reduced penalty for changing lanes (to encourage this as a rear-end avoidance mvr).
+	* Slightly increased speed penalty.
+
 
 
 
