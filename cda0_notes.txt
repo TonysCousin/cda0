@@ -3276,7 +3276,7 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 8/14/23
 
-* Run ? training level 5 with SAC on branch level 5
+* Run 20faa training level 5 with SAC on branch level 5
 	* Fixed defect in code that was supposed to place neighbor #1 in front of ego, but may not
 	  have done that as often as desired.
 	* Changed reset() to place neighbor #2 (usually) in front of ego, but in adjacent through

@@ -57,7 +57,7 @@ def main(argv):
     min_threshold       = [None,        None,       None,       None,       None,       0.0]
     avg_over_latest     = 400   #num most recent iters that are averaged to meet stopping criteria
     chkpt_int           = 10    #num iters between storing new checkpoints
-    max_iterations      = 14000
+    max_iterations      = 12000
     num_trials          = 8
 
     # Define the stopping logic - this requires mean reward to stay at the threshold for multiple consiecutive
