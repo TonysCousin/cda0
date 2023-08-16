@@ -17,14 +17,20 @@ class Graphics:
     LANE_EDGE_COLOR = WHITE
     NEIGHBOR_COLOR  = (64, 128, 255)
     EGO_COLOR       = (168, 168, 0) #yellow
-    PLOT_AXES_COLOR = (0, 0, 255)
-    DATA_COLOR      = (128, 128, 128)
+    PLOT_AXES_COLOR = (100,   200, 200)
+    DATA_COLOR      = (180, 180, 180)
 
     # Other graphics constants
     LANE_WIDTH = Roadway.WIDTH
-    WINDOW_SIZE_X = 1800
-    WINDOW_SIZE_Y = 800
-    REAL_TIME_RATIO = 5.0   #Factor faster than real time
+    WINDOW_SIZE_R = 1800        #window width, pixels
+    WINDOW_SIZE_S = 800         #window height, pixels
+    REAL_TIME_RATIO = 5.0       #Factor faster than real time
+
+    # Geometry of data plots
+    PLOT_H          = 150 #height of each plot, pixels
+    PLOT_W          = 200 #width of each plot, pixels
+    PLOT1_R         = WINDOW_SIZE_R/2 - PLOT_W/2 #corner of plot #1
+    PLOT1_S         = WINDOW_SIZE_S/2
 
 
     def __init__(self,
@@ -41,7 +47,7 @@ class Graphics:
         self.display_freq = Graphics.REAL_TIME_RATIO / env.time_step_size
 
         # set up the window
-        self.windowSurface = pygame.display.set_mode((Graphics.WINDOW_SIZE_X, Graphics.WINDOW_SIZE_Y), 0, 32)
+        self.windowSurface = pygame.display.set_mode((Graphics.WINDOW_SIZE_R, Graphics.WINDOW_SIZE_S), 0, 32)
         pygame.display.set_caption('cda0')
 
         # set up fonts
@@ -72,8 +78,8 @@ class Graphics:
         # viewport origin is at upper left, with +s pointing downward.  Leave a few pixels of buffer on all sides
         # of the display so the lines don't bump the edge.
         buffer = 8 #pixels
-        display_width = Graphics.WINDOW_SIZE_X - 2*buffer
-        display_height = Graphics.WINDOW_SIZE_Y - 2*buffer
+        display_width = Graphics.WINDOW_SIZE_R - 2*buffer
+        display_height = Graphics.WINDOW_SIZE_S - 2*buffer
         roadway_width = x_max - x_min
         roadway_height = y_max - y_min
         ar_display = display_width / display_height
@@ -83,8 +89,8 @@ class Graphics:
             self.scale = display_width / roadway_width
         self.roadway_center_x = x_min + 0.5*(x_max - x_min)
         self.roadway_center_y = y_min + 0.5*(y_max - y_min)
-        self.display_center_r = Graphics.WINDOW_SIZE_X // 2
-        self.display_center_s = Graphics.WINDOW_SIZE_Y // 2
+        self.display_center_r = Graphics.WINDOW_SIZE_R // 2
+        self.display_center_s = Graphics.WINDOW_SIZE_S // 2
         #print("      Graphics init: scale = {}, display center r,s = ({:4d}, {:4d}), roadway center x,y = ({:5.0f}, {:5.0f})"
         #        .format(self.scale, self.display_center_r, self.display_center_s, self.roadway_center_x, self.roadway_center_y))
 
@@ -105,10 +111,18 @@ class Graphics:
         # Initialize the previous vehicles' locations near the beginning of a lane (doesn't matter which lane for this step)
         for v_idx in range(len(self.prev_veh_r)):
             self.prev_veh_r[v_idx] = int(self.scale*(self.env.roadway.lanes[0].segments[0][0] - self.roadway_center_x)) + self.display_center_r
-            self.prev_veh_s[v_idx] = Graphics.WINDOW_SIZE_Y - \
+            self.prev_veh_s[v_idx] = Graphics.WINDOW_SIZE_S - \
                                      int(self.scale*(self.env.roadway.lanes[0].segments[0][1] - self.roadway_center_y)) - self.display_center_s
         #TODO: draw rectangles instead of circles, with length = vehicle length & width = 0.5*lane width
         self.veh_radius = int(0.25 * Graphics.LANE_WIDTH * self.scale) #radius of icon in pixels
+
+        #
+        #..........Add live data plots to the display
+        #
+
+        # Plot ego speed
+        self.plot_ego_speed = Plot(self.windowSurface, Graphics.PLOT1_R, Graphics.PLOT1_S, Graphics.PLOT_H, Graphics.PLOT_W, 0.0, \
+                                   SimpleHighwayRampWrapper.MAX_SPEED, title = "Ego speed")
 
 
     def update(self,
@@ -127,7 +141,7 @@ class Graphics:
             # Get the vehicle's new location on the surface
             new_x, new_y = self._get_vehicle_coords(vehicles, v_idx)
             new_r = int(self.scale*(new_x - self.roadway_center_x)) + self.display_center_r
-            new_s = Graphics.WINDOW_SIZE_Y - int(self.scale*(new_y - self.roadway_center_y)) - self.display_center_s
+            new_s = Graphics.WINDOW_SIZE_S - int(self.scale*(new_y - self.roadway_center_y)) - self.display_center_s
 
             # If the vehicle is still active display the vehicle in its new location.  Note that the obs vector is not scaled at this point.
             if vehicles[v_idx].active:
@@ -141,6 +155,9 @@ class Graphics:
             # Update the previous location
             self.prev_veh_r[v_idx] = new_r
             self.prev_veh_s[v_idx] = new_s
+
+        # Update data plots
+        self.plot_ego_speed.update(vehicles[0].cur_speed)
 
         # Pause until the next time step
         self.pgclock.tick(self.display_freq)
@@ -164,8 +181,8 @@ class Graphics:
         # Find the scaled lane end-point pixel locations (these is centerline of the lane)
         r0 = self.scale*(x0 - self.roadway_center_x) + self.display_center_r
         r1 = self.scale*(x1 - self.roadway_center_x) + self.display_center_r
-        s0 = Graphics.WINDOW_SIZE_Y - (self.scale*(y0 - self.roadway_center_y) + self.display_center_s)
-        s1 = Graphics.WINDOW_SIZE_Y - (self.scale*(y1 - self.roadway_center_y) + self.display_center_s)
+        s0 = Graphics.WINDOW_SIZE_S - (self.scale*(y0 - self.roadway_center_y) + self.display_center_s)
+        s1 = Graphics.WINDOW_SIZE_S - (self.scale*(y1 - self.roadway_center_y) + self.display_center_s)
 
         # Find the scaled width of the lane
         ws = 0.5 * w * self.scale
@@ -242,7 +259,7 @@ class Plot:
                  width      : int,              #width of the plot, pixels
                  min_y      : float,            #min value of data to be plotted on Y axis
                  max_y      : float,            #max value of data to be plotted on Y axis
-                 num_steps  : int       = 150,  #num time steps that will be plotted along X axis
+                 max_steps  : int       = 180,  #max num time steps that will be plotted along X axis
                  axis_color : tuple     = Graphics.PLOT_AXES_COLOR, #color of the axes
                  data_color : tuple     = Graphics.DATA_COLOR, #color of the data curve being plotted
                  title      : str       = None  #Title above the plot
@@ -250,7 +267,7 @@ class Plot:
         """Defines and draws the empty plot on the screen, with axes and title."""
 
         assert max_y > min_y, "///// Plot defined with illegal min_y = {}, max_y = {}".format(min_y, max_y)
-        assert num_steps > 0, "///// Plot defined with illegal num_steps = {}".format(num_steps)
+        assert max_steps > 0, "///// Plot defined with illegal max_steps = {}".format(max_steps)
         assert corner_r >= 0, "///// Plot defined with illegal corner_r = {}".format(corner_r)
         assert corner_s >= 0, "///// Plot defined with illegal corner_s = {}".format(corner_s)
         assert height > 0,    "///// Plot defined with illegal height = {}".format(height)
@@ -263,13 +280,13 @@ class Plot:
         self.width = width
         self.min_y = min_y
         self.max_y = max_y
-        self.num_steps = num_steps
+        self.max_steps = max_steps
         self.data_color = data_color
 
         FONT_SIZE = 12
 
         # Determine scale factors for the data
-        self.r_scale = self.width / num_steps #pixels per time step
+        self.r_scale = self.width / max_steps #pixels per time step
         self.s_scale = self.height / (max_y - min_y) #pixels per unit of data value
 
         # Initialize drawing coordinates for the data curve (in (r, s) pixel location)
@@ -282,7 +299,7 @@ class Plot:
 
         # Create the plot's text on a separate surface and copy it to the display surface
         if title is not None:
-            font = pygame.font.Font('freesans.ttf', FONT_SIZE)
+            font = pygame.font.Font("/home/starkj/bin/FreeSans.ttf", FONT_SIZE)
             text = font.render(title, True, axis_color, Graphics.BLACK)
             text_rect = text.get_rect()
             text_rect.center = (corner_r + width//2, corner_s - FONT_SIZE//2)
@@ -292,16 +309,21 @@ class Plot:
 
 
     def update(self,
-               data):
+               data     : float,    #the real-world data value to be plotted (Y value)
+              ):
         """Adds the next sequential data point to the plot."""
 
         # If there has been no data plotted so far, then set the first point
         if self.prev_r is None:
             self.prev_r = self.cr
-            self.prev_s = self.cs + data*self.s_scale
+            self.prev_s = self.cs + Graphics.PLOT_H - data*self.s_scale
 
         # Else draw a line from the previous point to the current point
         else:
             new_r = self.prev_r + self.r_scale
-            new_s = self.cs + data*self.s_scale
-            pygame.draw.line(self.surface, )
+            new_s = self.cs + Graphics.PLOT_H - data*self.s_scale
+            if new_r <= self.cr + Graphics.PLOT_W:
+                pygame.draw.line(self.surface, self.data_color, (self.prev_r, self.prev_s), (new_r, new_s))
+                self.prev_r = new_r
+                self.prev_s = new_s
+                pygame.display.update()

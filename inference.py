@@ -46,8 +46,8 @@ def main(argv):
                     "debug":                0,
                     "difficulty_level":     learning_level,
                     "init_ego_lane":        start_lane,
-                    "training":             True,           #TODO: debug only!
-                    "randomize_start_dist": True,           #TODO: debug only
+                    #"training":             True,           #TODO: debug only!
+                    #"randomize_start_dist": True,           #TODO: debug only
                     #"neighbor_speed":       29.1,
                     #"neighbor_start_loc":   0.0, #dist downtrack from beginning of lane 1 for n3, m
                     "merge_relative_pos":   relative_pos, #neighbor vehicle that we want ego to be beside when starting in lane 2 (level 4 only)
