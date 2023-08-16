@@ -3308,13 +3308,17 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 8/15/23
 
-* Run f2df6 training level 5 with SAC on level5 branch
+* Several training runs specifically geared to debugging, not learning
 	* Added debug stmts to give clues to rear-end crashes during training. No other changes.
+	* Logs don't show a single crash! Additional debugging stmts added, but not clear.
+	* Rearranged some logic in step() to ensure that if a crash condition is present it is
+	  being accounted for, with higher priority than other conditions.
 
 
 
 
 Considerations:
+- turn off randomized start dist
 - Move to action[0] as accel rather than tgt speed
 
 - Tweak reward for more penalty on large speed cmd changes

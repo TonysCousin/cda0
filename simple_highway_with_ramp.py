@@ -536,6 +536,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     if self.total_steps > INITIAL_STEPS:
                         max_ego_dist = max((self.total_steps - INITIAL_STEPS) * (10.0 - physical_limit)/(FINAL_STEPS - INITIAL_STEPS) + physical_limit, 10.0)
                     ego_p = self.prng.random() * max_ego_dist + ego_lane_start
+                    print("/////+ reset: training w/physical_limit = {:.1f}, max_ego_dist = {:.1f}, ego_p = {:.1f}" #TODO debug only
+                          .format(physical_limit, max_ego_dist, ego_p))
 
                 # For level 4 we want to sync the agent in lane 2 to force it to avoid a collision by positioning it right next to the neighbors
                 if self.difficulty_level == 4  and  ego_lane_id == 2:
@@ -682,7 +684,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 self.vehicles[n].cur_speed = speed
                 self.vehicles[n].tgt_speed = speed #this will be the speed the ACC controller always tries to hit
                 self.vehicles[n].lane_change_status = "none"
-                #print("///// reset: neighbor {} lane = {}, p = {:6.1f}, speed = {:4.1f}".format(n, lane_id, loc, self.vehicles[n].cur_speed))
+                print("/////+ reset: neighbor {} lane = {}, p = {:6.1f}, speed = {:4.1f}".format(n, lane_id, loc, self.vehicles[n].cur_speed))
 
         # Undefined levels
         else:
@@ -808,6 +810,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         if new_ego_p >= SimpleHighwayRamp.SCENARIO_LENGTH:
             done = True
             return_info["reason"] = "SUCCESS - end of scenario!"
+            print("/////+ step: {} step {}, success - completed the track".format(self.rollout_id, self.total_steps))  #TODO debug
         self._verify_obs_limits("step after moving vehicles forward")
 
         #
@@ -848,6 +851,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     return_info["reason"] = "Ran off road; illegal lane change"
                     if self.debug > 1:
                         print("      DONE!  illegal lane change commanded.")
+                    print("/////+ step: {} step {}, illegal lane change".format(self.rollout_id, self.total_steps))  #TODO debug
 
                 # Else, we are still going; if we are exactly half-way then change the current lane ID
                 elif self.lane_change_count == SimpleHighwayRamp.HALF_LANE_CHANGE_STEPS:
@@ -866,6 +870,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     return_info["reason"] = "Ran off road; lane change initiated too late"
                     if self.debug > 1:
                         print("      DONE!  original lane ended before lane change completed.")
+                    print("/////+ step: {} step {}, late lane change".format(self.rollout_id, self.total_steps))  #TODO debug
 
         #
         #..........Manage lane change for any neighbors in lane 2
@@ -925,6 +930,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 done = True
                 ran_off_road = True
                 return_info["reason"] = "Ran off end of terminating lane"
+                print("/////+ step: {} step {}, off end of terminating lane".format(self.rollout_id, self.total_steps))  #TODO debug
 
         # Update counter for time in between lane changes
         if self.obs[self.STEPS_SINCE_LN_CHG] < SimpleHighwayRamp.MAX_STEPS_SINCE_LC:
@@ -948,15 +954,6 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self._update_obs_zones()
         self._verify_obs_limits("step after updating obs vector")
 
-        # Check that none of the vehicles has crashed into another, accounting for a lane change in progress
-        # taking up both lanes
-        crash = False
-        if not done:
-            crash = self._check_for_collisions()
-            done = crash
-            if done:
-                return_info["reason"] = "Crashed into neighbor vehicle"
-
         # If vehicle has been stopped for several time steps, then declare the episode done as a failure
         stopped_vehicle = False
         if self.vehicles[0].cur_speed < 0.5:
@@ -965,15 +962,32 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                 done = True
                 stopped_vehicle = True
                 return_info["reason"] = "Vehicle is crawling to a stop"
+                print("/////+ step: {} step {}, vehicle stopped".format(self.rollout_id, self.total_steps))  #TODO debug
         else:
             self.stopped_count = 0
+
+        # Check that none of the vehicles has crashed into another, accounting for a lane change in progress
+        # taking up both lanes. Do this check last, as it is the most severe failure, and needs to override
+        # the others in the reward evaluation.
+        crash = self._check_for_collisions()
+        if crash:
+            done = True
+            return_info["reason"] = "Crashed into neighbor vehicle"
+            print("/////+ step: {} step {}, crash!".format(self.rollout_id, self.total_steps))  #TODO debug
 
         # Determine the reward resulting from this time step's action
         reward, expl = self._get_reward(done, crash, ran_off_road, stopped_vehicle)
         return_info["reward_detail"] = expl
+        print("/////+ step: {} step {}, returning reward of {}, {}".format(self.rollout_id, self.total_steps, reward, expl))  #TODO debug
+
 
         if self.obs[self.NEIGHBOR_IN_EGO_ZONE] > 0.0: #TODO debug only
-            print("///// step: Rollout {} step {} neighbor in ego zone! Step reward = {:.1f}".format(self.rollout_id, self.total_steps, reward))
+            ex = ""
+            if reward <= -10.0:
+                ex = expl
+            print("///// step: Rollout {} step {} neighbor in ego zone! Step reward = {:.2f} {}".format(self.rollout_id, self.total_steps, reward, ex))
+            print("      lane_change_count = {}, steps since LC = {}, actions = {}"
+                  .format(self.lane_change_count, self.obs[self.STEPS_SINCE_LN_CHG], cmd))
 
         # Verify that the obs are within design limits
         self._verify_obs_limits("step after reward calc")
@@ -1531,8 +1545,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                         # Mark it so only if it involves the ego vehicle or we are worried about all crashes
                         if i == 0  or  j == 0  or  not self.ignore_neighbor_crashes:
                             crash = True
-                            if self.debug > 1:
-                                print("      CRASH in same lane between vehicles {} and {} near {:.2f} m in lane {}"
+                            #if self.debug > 1:
+                            print("      CRASH in same lane between vehicles {} and {} near {:.2f} m in lane {}"
                                         .format(i, j, va.p, va.lane_id))
                             break
 
@@ -1578,8 +1592,9 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                    ):
         """Returns the reward for the current time step (float).  The reward should be in [-1, 1] for any situation."""
 
-        if self.debug > 1:
-            print("///// Entering _get_reward. done = {}, crash = {}, off_road = {}".format(done, crash, off_road))
+        #if self.debug > 1: #TODO debug
+        print("///// Entering _get_reward rollout {}, step {}. done = {}, crash = {}, off_road = {}"
+              .format(self.rollout_id, self.total_steps, done, crash, off_road))
         reward = 0.0
         explanation = ""
 
@@ -1622,7 +1637,7 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                     else:
                         explanation = "Completed episode, but no bonus due to rule violation."
 
-            if self.total_steps > 1000000: #TODO debug only
+            if self.total_steps > 100000: #TODO debug only
                 print("///// Rollout {} episode final reward at {} steps = {:.1f} due to {}".format(self.rollout_id, self.total_steps, reward, explanation))
 
         # Else, episode still underway
