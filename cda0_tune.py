@@ -58,9 +58,9 @@ def main(argv):
     fail_threshold      = [-12.0,       -12.0,      -12.0,      -12.0,      -12.0,      -12.0]
     avg_over_latest     = 400   #num most recent iters that are averaged to meet stopping criteria
     chkpt_int           = 10    #num iters between storing new checkpoints
-    max_iterations      = 6000
+    max_iterations      = 12000
     burn_in             = 500   #num iters before considering failure stopping
-    num_trials          = 2
+    num_trials          = 8
 
     # Define the stopping logic - this requires mean reward to stay at the threshold for multiple consiecutive
     # iterations, rather than just stopping on an outlier spike.
@@ -79,7 +79,7 @@ def main(argv):
     env_config["debug"]                         = 0
     env_config["verify_obs"]                    = True
     env_config["training"]                      = True
-    env_config["randomize_start_dist"]          = True
+    env_config["randomize_start_dist"]          = False
     env_config["neighbor_speed"]                = 29.1  #29.1 m/s is posted speed limit; only applies for appropriate diff levels
     env_config["neighbor_start_loc"]            = 0.0   #dist downtrack from beginning of lane 1 for n3, m
     env_config["ignore_neighbor_crashes"]       = True  #if true, a crash between two neighbor vehicles won't stop the episode

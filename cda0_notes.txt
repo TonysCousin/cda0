@@ -3313,6 +3313,31 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Logs don't show a single crash! Additional debugging stmts added, but not clear.
 	* Rearranged some logic in step() to ensure that if a crash condition is present it is
 	  being accounted for, with higher priority than other conditions.
+	* No difinitive conclusions, however, on cause or existence of any particular problem.
+	  Several short runs show that it is really rare that a crash reward is actually handed
+	  out, even though it seems rear-end or near-rear-end events are fairly common. Python's
+	  inability to properly sequence stdout output frustrates attempts to trace down the
+	  flow of logic in this code.
+
+* Run 0675c training level 5 with SAC on the level5 branch
+	* Implementing the step() changes noted above to improve detection & penalizing of
+	  crashes.
+	* Turned off randomized_start_dist, since it seems to be contributing to too many early
+	  episodes that score a completion reward without any opportunity to experience a crash
+	  and therefore burn in poor habits early.
+	* No better. Several trials had rmax close to 10 at some point, and a couple had rmean
+	  > 0 near the end. The best one had rmin = 0.3 at the end.
+	* Inference on that best trial demonstrated high speed driving and no regard for rear-
+	  ending neighbors. So the previous fixes didn't do what was intended. 
+	* Log analysis shows what should be marked as crashes in the same lane being called
+	  nothing and allowed to proceed during training.
+
+8/16/23
+
+* Lots of code inspection & debugging. Still seeing weird inconsistencies with crash conditions
+  not always being recognized the same in different parts of the code. Realized that each trial
+  experiences 1 "recognized" crash early, then never again, and found that reset() is not clearing
+  the self.vehicles[] data structure.
 
 
 
