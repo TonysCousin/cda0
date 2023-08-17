@@ -56,7 +56,7 @@ def main(argv):
     success_threshold   = [9.5,         9.5,        9.5,        10.0,       8.0,        8.0]
     min_threshold       = [None,        None,       None,       None,       None,       0.0]
     fail_threshold      = [-12.0,       -12.0,      -12.0,      -12.0,      -12.0,      -12.0]
-    avg_over_latest     = 400   #num most recent iters that are averaged to meet stopping criteria
+    avg_over_latest     = 200   #num most recent iters that are averaged to meet stopping criteria
     chkpt_int           = 10    #num iters between storing new checkpoints
     max_iterations      = 12000
     burn_in             = 500   #num iters before considering failure stopping
@@ -91,11 +91,11 @@ def main(argv):
     explore_config = cfg_dict["exploration_config"]
     #print("///// Explore config:\n", pretty_print(explore_config))
     explore_config["type"]                      = "GaussianNoise" #default OrnsteinUhlenbeckNoise doesn't work well here
-    explore_config["stddev"]                    = tune.uniform(0.1, 0.4) #this param is specific to GaussianNoise
+    explore_config["stddev"]                    = tune.uniform(0.1, 0.3) #this param is specific to GaussianNoise
     explore_config["random_timesteps"]          = 10000 #tune.qrandint(0, 20000, 50000) #was 20000
     explore_config["initial_scale"]             = 1.0
     explore_config["final_scale"]               = 0.1 #tune.choice([1.0, 0.01])
-    explore_config["scale_timesteps"]           = tune.choice([2000000, 3000000, 4000000])
+    explore_config["scale_timesteps"]           = tune.choice([3000000, 4000000])
     exp_switch                                  = True #tune.choice([False, True, True])
     cfg.exploration(explore = exp_switch, exploration_config = explore_config)
     #cfg.exploration(explore = False)

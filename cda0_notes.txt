@@ -3337,7 +3337,24 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 * Lots of code inspection & debugging. Still seeing weird inconsistencies with crash conditions
   not always being recognized the same in different parts of the code. Realized that each trial
   experiences 1 "recognized" crash early, then never again, and found that reset() is not clearing
-  the self.vehicles[] data structure.
+  the self.vehicles[] data structure. Fixing this definitely shows more recognized crashes - I
+  think this is the elusive answer I've been searching for the past few days.
+
+* Run 875cf training level 5 with SAC on branch level5
+	* Fixed reset() to clear vehicle data from previous episode before any setup begins.
+	* Trial 0 shows rmax ~10 from ~2.2M steps to the end (near 4M), and rmean ~-4 over all
+	  that. Inference on it shows really good speed mgmt to avoid rear-ends! It is overly
+	  conservative, though slowing abruptly whenever a neighbor appears in zone 5 (immediately
+	  in front). However, it fails to do a lane change from the merge ramp, even when there is
+	  no traffic blocking, other than near the front of zone 1 (farthest forward on left side).
+	  It would rather run off the road than take even a slight chance on a crash, which says
+	  the crash penalty is too severe.
+
+8/17/23
+
+* Run 86df0 training level 5 with SAC on branch level5
+	* Changed reward penalty for a crash from -40 to -15. We now have failure rewards of
+	  -10 for off-road, -12 for stopping and -15 for crash, and no randomized start.
 
 
 
