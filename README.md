@@ -1,7 +1,6 @@
-# CDA0
-Initial prototype AI agent for cooperative driving automation (CDA)
+# CDA0 (Armando)
 This project is the first in what is expected to be a series of projects of increasing complexity to train AI agents that help solve some problems in Cooperative Driving Automation (CDA).
-We used the [Ray/RLlib platform](https://docs.ray.io/en/latest/rllib/index.html), version 2.5.1, for training agents using Reinforcement Learning (RL).
+I used the [Ray/RLlib platform](https://docs.ray.io/en/latest/rllib/index.html), version 2.5.1, for training agents using Reinforcement Learning (RL).
 
 ![Agent driving in lane 0](images/lane0.gif)
 
@@ -31,7 +30,7 @@ The environment model returns a reward to the agent after each time step, for tr
 #### Observation Space
 The observation vector contains 56 elements, which are detailed in the [main environment class](simple_highway_with_ramp.py#237).
 In short, it includes current and previous actual speed, current and previous desired speed, current and previous lane change command, steps since previous lane change, and distance remaining in the current lane, plus several sensor zones.
-There are 9 geographical zones surrounding the ego vehicle's current location that give it information about what is happening in that small space.
+There are 9 geographical zones surrounding the ego vehicle's current location, each of which gives it information about what is happening in that small zone.
 There are two rows of zones in front of the ego vehicle, and a zone each on its left, right, and rear.
 They indicate whether there is drivable pavement there (a lane exists), if the lane is reachable from ego's current location (e.g. not separated by grass), whether it is occupied by another vehicle, and if so, that vehicle's speed and downtrack location.
 
@@ -40,12 +39,13 @@ The environment accepts two continuous actions in [-1, 1].
 - Desired speed, which the environment scales to [0, 36] m/s
 - Lane change command, which is interpreted as:
 	- [-1, -0.5) -> change lane left
-	- [-0.5, 0.5) -> stay in current lane
-	- [0.5, 1] -> change lane right
+	- [-0.5, 0.5] -> stay in current lane
+	- (0.5, 1] -> change lane right
 
 For simplicity, it is assumed that there is a lower-level controller that can handle vehicle steering to make the lane change happen.
 The only requirement for this agent is to determine when a lane change is to begin.
 Once it issues such a command, the maneuver gets underway and cannot be interrupted; until the lane change maneuver is complete, additional lane change commands are ignored.
+For longitudinal motion, the environment places physical limits on both acceleration and jerk, so desired speed commands cannot always be obeyed immediately.
 
 #### Reward
 The reward encourages the agent to stay close to the posted speed limit and to limit how much it changes speeds or lanes.
@@ -96,5 +96,7 @@ This software is published under the [Apache 2.0 open source license](LICENSE), 
 It was written by John Stark.
 
 ## More Videos
-[Lane 1 start](images/lane1a.gif)	[Lane 1 start](images/lane1b.gif)
-[Lane 2 start](images/lane2a.gif)
+![Lane 1 start](images/lane1a.gif)	![Lane 1 start](images/lane1b.gif)
+![Lane 2 start](images/lane2a.gif)
+![Lane 2 start](images/lane2b.gif)
+![Lane 2 crash](images/lane2_crash.gif)
