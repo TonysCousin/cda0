@@ -103,7 +103,7 @@ def main(argv):
     graphics.update(action, raw_obs, vehicles)
     obs = env.scale_obs(raw_obs)
     step = 0
-    time.sleep(4)
+    time.sleep(8)
     while not done:
         step += 1
         action = algo.compute_single_action(obs, explore = False)

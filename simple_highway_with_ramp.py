@@ -1540,6 +1540,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                         # Mark the involved vehicles as out of service
                         va.active = False
                         vb.active = False
+                        va.crashed = True
+                        vb.crashed = True
 
                         # Mark it so only if it involves the ego vehicle or we are worried about all crashes
                         if i == 0  or  j == 0  or  not self.ignore_neighbor_crashes:
@@ -1566,6 +1568,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
                                 # Mark the involved vehicles as out of service
                                 va.active = False
                                 vb.active = False
+                                va.crashed = True
+                                vb.crashed = True
 
                                 # Mark it so only if it involves the ego vehicle or we are worried about all crashes
                                 if i == 0  or  j == 0  or  not self.ignore_neighbor_crashes:
@@ -2024,9 +2028,10 @@ class Vehicle:
 
         self.lane_id = -1                   #-1 is an illegal value
         self.p = 0.0                        #P coordinate of vehicle center in parametric frame, m
+        self.prev_accel = 0.0               #Forward actual acceleration in previous time step, m/s^2
         self.lane_change_status = "none"    #Initialized to no lane change underway
         self.active = True                  #is the vehicle an active part of the scenario? If false, it is invisible
-        self.prev_accel = 0.0               #Forward actual acceleration in previous time step, m/s^2
+        self.crashed = False                #has this vehicle crashed into another?
 
 
     def advance_vehicle_spd(self,
