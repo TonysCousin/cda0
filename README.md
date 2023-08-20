@@ -3,6 +3,8 @@ Initial prototype AI agent for cooperative driving automation (CDA)
 This project is the first in what is expected to be a series of projects of increasing complexity to train AI agents that help solve some problems in Cooperative Driving Automation (CDA).
 We use the [Ray/RLlib platform](https://docs.ray.io/en/latest/rllib/index.html) for training agents using Reinforcement Learning (RL).
 
+![Agent driving in lane 0](images/lane0.gif)
+
 ## Repo Summary
 This particular repo contains code that represents a simple highway driving scenario and trains a single RL agent to safely drive in that (simulated) environment.
 Its primary purpose was to gain experience with the Ray training platform and with RL techniques and issues related to automated driving.
@@ -11,7 +13,6 @@ The driving problem is formulated as an episodic problem (there is a definite en
 The RL agent takes in observations of the world - for this project, they are idealized and readily available - and its neural network (NN) maps those observations into an appropriate set of actions for a given small time step.
 The environment model then moves the world model forward by one time step, by calculating the new state of the world and the agent using the programmed dynamics.
 It takes in the agent's current actions, determines the new state of the world, and returns a new set of observations that the agent senses.
-![Agent driving in lane 0](images/lane0.mp4)
 
 ## Environment Model
 The environment represents a 2 km section of two-lane highway with an on-ramp on the right side.
@@ -35,15 +36,17 @@ They indicate whether there is drivable pavement there (a lane exists), if the l
 #### Action Space
 The environment accepts two continuous actions in [-1, 1].
 - Desired speed, which the environment scales to [0, 36] m/s
-- Lane change command, which is interpreted as
--- [-1, -0.5) -> change lane left
--- [-0.5, 0.5) -> stay in current lane
--- [0.5, 1] -> change lane right
+- Lane change command, which is interpreted as:
+[-1, -0.5) -> change lane left
+[-0.5, 0.5) -> stay in current lane
+[0.5, 1] -> change lane right
 
 #### Reward
 The reward encourages the agent to stay close to the posted speed limit and to limit how much it changes speeds or lanes.
 
-# Inference
+## Training
+
+## Inference
 The [inference program](inference.py) includes a graphical display of the simulation in live operation.
 Everything in the simulation is scaled consistently, except the display of lane width, which is greatly exaggerated for easier visibility.
 Inference runs an episode at 5x real time just to keep things interesting for the viewer.
