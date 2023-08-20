@@ -39,9 +39,10 @@ They indicate whether there is drivable pavement there (a lane exists), if the l
 The environment accepts two continuous actions in [-1, 1].
 - Desired speed, which the environment scales to [0, 36] m/s
 - Lane change command, which is interpreted as:
-- [-1, -0.5) -> change lane left
-- [-0.5, 0.5) -> stay in current lane
-- [0.5, 1] -> change lane right
+	- [-1, -0.5) -> change lane left
+	- [-0.5, 0.5) -> stay in current lane
+	- [0.5, 1] -> change lane right
+
 For simplicity, it is assumed that there is a lower-level controller that can handle vehicle steering to make the lane change happen.
 The only requirement for this agent is to determine when a lane change is to begin.
 Once it issues such a command, the maneuver gets underway and cannot be interrupted; until the lane change maneuver is complete, additional lane change commands are ignored.
@@ -80,7 +81,8 @@ where <level> is the difficulty level of the environment; if not specified, it w
 The agent shown in the video clip above is operating at level 5, which includes 6 randomized neighbors, and is the highest level defined.
 The levels are described in more detail at the top of the [environment code](simple_highway_with_ramp.py).
 Since Ray generates a large amount of log info, and this program contributes some key info to the log as well (all written to stdout), you may prefer to capture all that in a file for future reference.
-To capture all the stdout as well as stderr info, while simultaneously watching it scroll on the terminal window, you can use a command like this:
+To capture all the stdout as well as stderr info, for improved debugging, while simultaneously watching it scroll on the terminal window, you can use a command like this:
+`python -u cda0_tune.py 5 > >(tee ~/tmp/log) 2> >(tee -a ~/tmp/log) >&2`
 
 #### A note about difficulty levels
 At one point, I was playing with the application of curriculum learning, which opened up a whole rabbit hole of interesting research.
@@ -89,6 +91,10 @@ In a round-about way, this also led me to do some Population Based Training (PBT
 For several reasons, I found PBT and curriculum learning to be inappropriate for this particular problem, so abandoned them.
 But you'll find the code still here, so there are several pieces of code in the repo that are no longer actively in use.
 
-## License, Authoriship, etc
+## License & Authorship
+This software is published under the [Apache 2.0 open source license](LICENSE), and can be used and distributed according to the terms of that license.
+It was written by John Stark.
 
 ## More Videos
+[Lane 1 start](images/lane1a.gif)	[Lane 1 start](images/lane1b.gif)
+[Lane 2 start](images/lane2a.gif)
