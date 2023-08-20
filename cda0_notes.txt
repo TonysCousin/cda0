@@ -3352,16 +3352,33 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 8/17/23
 
-* Run 86df0 training level 5 with SAC on branch level5
+* Run 86df0 training level 5 with SAC on branch level5. Corresponds to commit 0cbe6d0.
 	* Changed reward penalty for a crash from -40 to -15. We now have failure rewards of
 	  -10 for off-road, -12 for stopping and -15 for crash, and no randomized start.
+	* Trial 2 works really well!  Training plots showed rmean ~0, but steady, with rmax ~10
+	  for this trial. Many inference runs show that it largely avoids rear-ends, but is
+	  aggressive enough on the merge ramp to slide into most tight spots. It occasionally
+	  crashes during a lane change. It seems these traits could be resolved with more
+	  extended training. It handles many situations where its episode reward is wee below
+	  0, but it survives, which is the desired behavior.
+***	* THIS IS THE ANSWER!  The cda0 project can be concluded with this agent. Stored the
+	  checkpoint as usual, under the training sub-dir, but that isn't part of the git repo.
+	  Made a copy of it in new sub-dir "checkpoints" that is now in the repo. This
+	  checkpoint is named "l5-speed-cmd" since it is interpreting action[0] as an absolute
+	  speed command.
+
+8/18/23
+
+* Worked on graphics improvements - added crash indicator and beefed up the ego speed plot.
+	* Used the free Greenfish icon editor on Windows (couldn't get it to run on Linux).
+* Demonstrated that inference works (and the agent handles well) cases with 8 and 10 neighbors.
 
 
 
 
 Considerations:
-- turn off randomized start dist
 - Move to action[0] as accel rather than tgt speed
+- do a lot more training to ensure smooth handling of some of the more rare cases, maybe with 8 neighbors?
 
 - Tweak reward for more penalty on large speed cmd changes
 - try running ray.train instead of all the tuning jobs
