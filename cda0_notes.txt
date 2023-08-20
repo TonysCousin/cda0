@@ -3160,19 +3160,231 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 
 * Installed kazam (with apt install) in the cda0 conda env to allow capturing of screen videos.
 
+8/9/23
+
+* Created new git branch "level5" off of develop to start adding capability of neighbor vehicles
+  doing more diverse behaviors.
+
+* Cleaned up code (primarily in the tune program) to remove PBT, curriculum learning, and other
+  things that haven't been used in a long time.
+
+* Began adding level 5 to the environment, which starts the neighbors in any lane, and a wide range of
+  locations and speeds. They also have ACC capability so that they won't rear-end anyone in front
+  of them. Otherwise, they stay at their original speed, and do not change lanes.
+
+8/10/23
+
+* Finished the level 5 functionality, including neighbors that do a simple ramp merge near the
+  end of lane 2. Lots of testing with the inference program on the 1683e agent.
+
+* Run 06acf training level 5 for the first time
+	* Changed the reset() code to draw down the randomized start location over 1M steps. It
+	  had previously been only a single step, so there was effectively no randomized start
+	  location at all (always starting within the first 10 m for training runs).
+	* Pretty good! rmax for all 4 trials reached 6 to 10 at ~1M steps, then all of them declined
+	  a bit, but stayed > 0. rmean reached > 0 for 3 trials, but then all dropped back to
+	  [-6, -2] by the 6000 iteration mark (1.9M steps). It might be good to let it run another
+	  1M steps or more.
+	* Inference on the best trial (#3, checkpoint 4170) shows somewhat decent performance
+		* It doesn't know to avoid rear-ending a neighbor in front, even though the obs
+		  zones clearly say it is there.
+		* In lanes 0 & 1 it performs okay, but speeds are a little high (30-32 m/s).
+		* In lane 2 it reliably does an illegal lane change right out of the gate.
+
+8/11/23
+
+* Run 447ed training level 5 with SAC on the level5 branch
+	* Extended the max_iters to 10k
+	* Extended duration of the noise taper from 2M to 3M steps.
+	* Added capability to include 6 neighbor vehicles for level 5, instead of 3 to provide
+	  more opportunities to learn about close interactions.
+	* Of the two trials, one showed very good reward plots, and a second shows promise.
+	  Trial 2 reached rmax > 9 and sustained > 8, with its rmean peaking at 7 and even
+	  rmin > 0. It terminated slightly early, after 9569 iters, since the success threahold
+	  was set at rmean > 7.0 over 20 iters. It started with noise stddev = 0.56, but performed
+	  poorly until ~1.5M steps (50% decay in the noise level).
+	* Total training time was ~8.0 hr.
+	* Inference on trial 2
+		* It still has a habit of rear-ending neighbors. Detailed log study of one case
+		  shows that it first detected a forward neighbor while going 23 m/s, then
+		  agent gradually sped up as it got closer, hitting > 33 m/s just prior to the
+		  crash. So it had exceeded the speed limit by then, and was not worrying about
+		  any merge activity. This suggests a need for additional training.
+
+8/12/23
+
+* Run 15e0d training level 5 with SAC on the level5 branch
+	* Set noise stddev HP range down to [0.1, 0.4]
+	* Set noise scaling duration as a tunable HP, allowing choice of 2M, 3M or 4M steps.
+	* Increased the success criterion to rmean > 8.0
+	* Increased to request for 8 trials, in order to handle the more HP combinations.
+	* Increased max iterations from 10k to 14k
+	* Increased num_cpus_for_local_worker from 1 to 4 and num_cpus_per_worker from 1 to 4
+	  to see if this can increase throughput a bit.
+	* Doubled the speed command penalty multiplier from 0.2 to 0.4 to encourage smoothness.
+	* Doubled the penalty for crashing from -20 to -40.
+	* During training, htop shows only 2 cpus being used (each fully), and the gpu is seeing
+	  30-50% utilization.
+	* Trial 0 terminated successfully early. But it had rmin ~-10. In inference it performs
+	  well except that it consistently rear-ends slower neighbors.
+	* Trial 2 terminated successfully early, at which time its rmin = 4.9. Inferens shows it
+	  rear-ending a neighbor twice, but also 2 cases where it slowed and avoided a rear-end.
+	  It also slowed way down at end of lane 2 to avoid merging into heavy lane 1 traffic
+	  (it ran off road, but avoided a crash); this happened multiple times, even though 
+	  traffic cleared so it could have merged after greatly slowing.
+
+* Run 58533 training level 5 with SAC on branch level5
+	* Enhanced stopper to require both rmean and rmin to exceed specified thresholds. Set
+	  these thresholds at 8.0 and 0.0, respectively, and increased rqmt that they must be
+	  held for 100 iterations instead of 20, to force longer learning.
+	* Changed num_gpus from 0.5 to 0.33 to encourage 3 simultaneous trials.
+	* 7 of 8 trials died prematurely due to unknown error (segfault?). One trial finished
+	  unimpressively.
+
+* Run 4414e training level 5 with SAC on branch level5
+	* No changes from previous to the training itself.
+	* Playing with resource allocations for performance only.
+	* Good run. Three of 8 trials had segfaults. But trial 2 scored a winner after ~2M steps,
+	  and 3 others achieved rmean > 0 for extended time, two of them > 5.
+	* Trial 7 ended with a SystemError where rllib/policy/sample_batch.py did something with
+	  a list object that gave "bad argument to internal function".
+	* Inference on trial 2 shows that it can't avoid a rear-end situation. Also, it chose to
+	  change from lane 2 (close to the end) to lane 1 even though a neighbor was there, so
+	  it crashed for -40 pts instead of going off-road for -11 pts or slowing down enough to
+	  change lanes behind it for almost no loss. It feels like the agent just hasn't seen
+	  enough of these situations to understand them.
+
+8/13/23
+
+* Run cfc78 training level 5 with SAC on branch level5 (previous 2 runs died due to weird Ray error)
+	* Increased stopper avg_over_latest from 100 to 400 iterations to help ensure consistent
+	  performance before calling it good.
+	* Modified reset() to a) force neighbor 1 to be in front of ego 80% of the time, and b)
+	  resize the distribution geometry of neighbors to better match the ego's distro space
+	  so that they aren't so often located all behind ego.
+	* Changed step() to more aggressively slow neighbors coming to the end of lane 2 if they
+	  are blocked from making a lane change.
+	* No good. Most trials had rmax ~10, but only 2 had rmin > 0 and their rmean was ~5. I
+	  think this is because of so many rear-end collisions, the agent often never finishes an
+	  episode successfully.
+	* Inference on trial 2 shows it still likes to drive ~34 m/s and rear-end neighbors. When
+	  starting in lane 1, it likes to change to lane 0 immediately, which is less populated, so
+	  it can just pass by a lot of the traffic.
+	* After run, I found a code defect that was placing neighbor 1 often behind the ego vehicle
+	  rather than usually in front of it, so maybe it didn't get as much rear-end experience as
+	  I thought.
+
+8/14/23
+
+* Run 16009 training level 5 with SAC on branch level 5
+	* Fixed defect in code that was supposed to place neighbor #1 in front of ego, but may not
+	  have done that as often as desired.
+	* Changed reset() to place neighbor #2 (usually) in front of ego, but in adjacent through
+	  lane, to help prevent a run-around maneuver.
+	* Changed reset() to distribute remaining neighbors equally among the 3 lanes.
+	* Reduced penalty for changing lanes (to encourage this as a rear-end avoidance mvr).
+	* Slightly increased speed penalty.
+	* Reward plots show that normally rmin > -40 by a long margin. How can this be if the
+	  reward for a collision is -40?
+	* Pretty good - three trials ended with rmean > 5 and two of them with rmin > 0; not
+	  quite enough for automatic success, but close.
+	* Inference on trial 3 (the 2nd best one) shows that it still really likes to rear-end
+	  neighbors. It seems a little better at respecting speed limit. In one case it attempted
+	  to slow drastically when the neighbor_in_ego_zone flag went high, but it was too late.
+	  In lane 2 it also crashed by merging into the side of a neighbor - totally ignoring it.
+	* These behaviors make me wonder if crashing is actually not happening during training,
+	  which would explain the large rmin and the fact that it acts like it doesn't know what
+	  to do.
+	* Trial 6 (the best one) was able to slow down to avoid a rear-end. More often, it
+	  collided with neighbors in front.
+	* It is becoming clear that with the obs vector available, the MDP doesn't have good info
+	  about how fast the forward neighbor is going, only a delta speed and the ego speed, so
+	  these have to be combined before it would know what speed to command, and since they
+	  are in different scales, it is probably not easy to do. Seems the NN would work better
+	  if the action was acceleration instead of absolute target speed.  Then it only needs
+	  to consider the neighbor's delta speed and adjust accel in proportion to that number.
+	* Log shows that many iterations experience no crashes (in dozens of episodes), as the
+	  min episode reward is > ~-20. Many are, in fact, > 0. Crash reward is -40.
+
+8/15/23
+
+* Several training runs specifically geared to debugging, not learning
+	* Added debug stmts to give clues to rear-end crashes during training. No other changes.
+	* Logs don't show a single crash! Additional debugging stmts added, but not clear.
+	* Rearranged some logic in step() to ensure that if a crash condition is present it is
+	  being accounted for, with higher priority than other conditions.
+	* No difinitive conclusions, however, on cause or existence of any particular problem.
+	  Several short runs show that it is really rare that a crash reward is actually handed
+	  out, even though it seems rear-end or near-rear-end events are fairly common. Python's
+	  inability to properly sequence stdout output frustrates attempts to trace down the
+	  flow of logic in this code.
+
+* Run 0675c training level 5 with SAC on the level5 branch
+	* Implementing the step() changes noted above to improve detection & penalizing of
+	  crashes.
+	* Turned off randomized_start_dist, since it seems to be contributing to too many early
+	  episodes that score a completion reward without any opportunity to experience a crash
+	  and therefore burn in poor habits early.
+	* No better. Several trials had rmax close to 10 at some point, and a couple had rmean
+	  > 0 near the end. The best one had rmin = 0.3 at the end.
+	* Inference on that best trial demonstrated high speed driving and no regard for rear-
+	  ending neighbors. So the previous fixes didn't do what was intended. 
+	* Log analysis shows what should be marked as crashes in the same lane being called
+	  nothing and allowed to proceed during training.
+
+8/16/23
+
+* Lots of code inspection & debugging. Still seeing weird inconsistencies with crash conditions
+  not always being recognized the same in different parts of the code. Realized that each trial
+  experiences 1 "recognized" crash early, then never again, and found that reset() is not clearing
+  the self.vehicles[] data structure. Fixing this definitely shows more recognized crashes - I
+  think this is the elusive answer I've been searching for the past few days.
+
+* Run 875cf training level 5 with SAC on branch level5
+	* Fixed reset() to clear vehicle data from previous episode before any setup begins.
+	* Trial 0 shows rmax ~10 from ~2.2M steps to the end (near 4M), and rmean ~-4 over all
+	  that. Inference on it shows really good speed mgmt to avoid rear-ends! It is overly
+	  conservative, though slowing abruptly whenever a neighbor appears in zone 5 (immediately
+	  in front). However, it fails to do a lane change from the merge ramp, even when there is
+	  no traffic blocking, other than near the front of zone 1 (farthest forward on left side).
+	  It would rather run off the road than take even a slight chance on a crash, which says
+	  the crash penalty is too severe.
+
+8/17/23
+
+* Run 86df0 training level 5 with SAC on branch level5. Corresponds to commit 0cbe6d0.
+	* Changed reward penalty for a crash from -40 to -15. We now have failure rewards of
+	  -10 for off-road, -12 for stopping and -15 for crash, and no randomized start.
+	* Trial 2 works really well!  Training plots showed rmean ~0, but steady, with rmax ~10
+	  for this trial. Many inference runs show that it largely avoids rear-ends, but is
+	  aggressive enough on the merge ramp to slide into most tight spots. It occasionally
+	  crashes during a lane change. It seems these traits could be resolved with more
+	  extended training. It handles many situations where its episode reward is wee below
+	  0, but it survives, which is the desired behavior.
+***	* THIS IS THE ANSWER!  The cda0 project can be concluded with this agent. Stored the
+	  checkpoint as usual, under the training sub-dir, but that isn't part of the git repo.
+	  Made a copy of it in new sub-dir "checkpoints" that is now in the repo. This
+	  checkpoint is named "l5-speed-cmd" since it is interpreting action[0] as an absolute
+	  speed command.
+
+8/18/23
+
+* Worked on graphics improvements - added crash indicator and beefed up the ego speed plot.
+	* Used the free Greenfish icon editor on Windows (couldn't get it to run on Linux).
+* Demonstrated that inference works (and the agent handles well) cases with 8 and 10 neighbors.
 
 
-Todo
-- remove PBT schedule completely and the curriculum function
+
+
+Considerations:
+- Move to action[0] as accel rather than tgt speed
+- do a lot more training to ensure smooth handling of some of the more rare cases, maybe with 8 neighbors?
+
+- Tweak reward for more penalty on large speed cmd changes
 - try running ray.train instead of all the tuning jobs
 - redo rewards per recent paper suggestions
-- Consider adding back in changes since 9eb13 on 6/24 (stored in ~/tmp/modern)
 - change replay buffer capacity from 1e6 to smaller.
 - remove time step bonus.
-- fix perturb controller not counting past new worker environments after beiing perturbed.
-- collect stats on action distribution in each channel.
-- add full action masking to avoid illegal lane changes ever (annealed)
-- Maybe a similar redefinition of speed command?
 
 
 
@@ -3196,6 +3408,3 @@ Longer term considerations:
 	** action space design
 	** observation space design
 	** reward structure
-
-AI: track down where Trainable/Algorithm object is instantiated and its setup() method is called, since this happens at
-    the beginning of each trial, and at each perturbation of each trial in PBT.

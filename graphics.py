@@ -1,80 +1,382 @@
-import time
-import pygame, sys
+from cmath import inf
+import math
+import pygame
 from pygame.locals import *
+import gymnasium
+from typing import List
+from simple_highway_ramp_wrapper import SimpleHighwayRampWrapper
+from simple_highway_with_ramp    import Roadway
 
-# set up pygame
-pygame.init()
+"""Provides all the graphics display for the inference program."""
 
-# set up the window
-windowSurface = pygame.display.set_mode((500, 400), 0, 32)
-pygame.display.set_caption('Hello world!')
+class Graphics:
 
-# set up the colors
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-RED = (255, 0, 0)
-GREEN = (0, 255, 0)
-BLUE = (0, 0, 255)
+    # set up the colors & fonts
+    BLACK           = (  0,   0,   0)
+    WHITE           = (255, 255, 255)
+    LANE_EDGE_COLOR = WHITE
+    NEIGHBOR_COLOR  = ( 64, 128, 255)
+    EGO_COLOR       = (168, 168, 0) #yellow
+    PLOT_AXES_COLOR = (200, 200,  50)
+    DATA_COLOR      = WHITE
+    REFERENCE_COLOR = (120,  90,   0)
+    BASIC_FONT_SIZE = 14
+    LARGE_FONT_SIZE = 18
 
-# set up fonts
-basicFont = pygame.font.SysFont(None, 48)
+    # Other graphics constants
+    LANE_WIDTH = Roadway.WIDTH
+    WINDOW_SIZE_R = 1800        #window width, pixels
+    WINDOW_SIZE_S = 800         #window height, pixels
+    REAL_TIME_RATIO = 5.0       #Factor faster than real time
 
-# set up the text
-text = basicFont.render('Hello world!', True, WHITE, BLUE)
-textRect = text.get_rect()
-textRect.centerx = windowSurface.get_rect().centerx
-textRect.centery = windowSurface.get_rect().centery
+    # Geometry of data plots
+    PLOT_H          = 150 #height of each plot, pixels
+    PLOT_W          = 200 #width of each plot, pixels
+    PLOT1_R         = WINDOW_SIZE_R/2 - PLOT_W/2 #corner of plot #1
+    PLOT1_S         = WINDOW_SIZE_S/2
 
-# draw the white background onto the surface
-windowSurface.fill(WHITE)
 
-# draw a green polygon onto the surface
-pygame.draw.polygon(windowSurface, GREEN, ((146, 0), (291, 106), (236, 277), (56, 277), (0, 106)))
+    def __init__(self,
+                 env    : gymnasium.Env
+                ):
+        """Initializes the graphics and draws the roadway background display."""
 
-# draw some blue lines onto the surface
-pygame.draw.line(windowSurface, BLUE, (60, 60), (120, 60), 4)
-pygame.draw.line(windowSurface, BLUE, (120, 60), (60, 120))
-pygame.draw.line(windowSurface, BLUE, (60, 120), (120, 120), 4)
+        # Save the environment for future reference
+        self.env = env
 
-# draw a blue circle onto the surface
-pygame.draw.circle(windowSurface, BLUE, (300, 50), 20, 0)
+        # set up pygame
+        pygame.init()
+        self.pgclock = pygame.time.Clock()
+        self.display_freq = Graphics.REAL_TIME_RATIO / env.time_step_size
 
-# draw a red ellipse onto the surface
-pygame.draw.ellipse(windowSurface, RED, (300, 250, 40, 80), 1)
+        # set up the window
+        self.window_surface = pygame.display.set_mode((Graphics.WINDOW_SIZE_R, Graphics.WINDOW_SIZE_S), 0, 32)
+        pygame.display.set_caption('cda0')
 
-# draw the text's background rectangle onto the surface
-pygame.draw.rect(windowSurface, RED, (textRect.left - 20, textRect.top - 20, textRect.width + 40, textRect.height + 40))
+        # set up fonts
+        self.basic_font = pygame.font.Font("images/FreeSans.ttf", Graphics.BASIC_FONT_SIZE)
+        self.large_font = pygame.font.Font("images/FreeSans.ttf", Graphics.LARGE_FONT_SIZE)
 
-# get a pixel array of the surface
-pixArray = pygame.PixelArray(windowSurface)
-pixArray[480][380] = BLACK
-del pixArray
+        # draw the background onto the surface
+        self.window_surface.fill(Graphics.BLACK)
 
-# draw the text onto the surface
-windowSurface.blit(text, textRect)
+        # Loop through all segments of all lanes and find the extreme coordinates to determine our bounding box
+        x_min = inf
+        y_min = inf
+        x_max = -inf
+        y_max = -inf
+        for lane in env.roadway.lanes:
+            for seg in lane.segments:
+                x_min = min(x_min, seg[0], seg[2])
+                y_min = min(y_min, seg[1], seg[3])
+                x_max = max(x_max, seg[0], seg[2])
+                y_max = max(y_max, seg[1], seg[3])
 
-# draw the window onto the screen
-pygame.display.update()
+        # Add a buffer all around to ensure we have room to draw the edge lines, which are 1/2 lane width away
+        x_min -= 0.5*Graphics.LANE_WIDTH
+        y_min -= 0.5*Graphics.LANE_WIDTH
+        x_max += 0.5*Graphics.LANE_WIDTH
+        y_max += 0.5*Graphics.LANE_WIDTH
 
-# Move the blue dot around the screen
-cx = 300
-cy = 50
-for m in range(30):
-    # Erase the existing dot
-    pygame.draw.circle(windowSurface, WHITE, (cx, cy), 20, 0)
-    # Change the location
-    cx += 3
-    cy += 8
-    pygame.draw.circle(windowSurface, BLUE, (cx, cy), 20, 0)
-    pygame.display.update()
-    # Pause
-    print("Moved dot to ({}, {})".format(cx, cy))
-    time.sleep(0.5)
+        # Define the transform between roadway coords (x, y) and display viewport pixels (r, s).  Note that
+        # viewport origin is at upper left, with +s pointing downward.  Leave a few pixels of buffer on all sides
+        # of the display so the lines don't bump the edge.
+        buffer = 8 #pixels
+        display_width = Graphics.WINDOW_SIZE_R - 2*buffer
+        display_height = Graphics.WINDOW_SIZE_S - 2*buffer
+        roadway_width = x_max - x_min
+        roadway_height = y_max - y_min
+        ar_display = display_width / display_height
+        ar_roadway = roadway_width / roadway_height
+        self.scale = display_height / roadway_height     #pixels/meter
+        if ar_roadway > ar_display:
+            self.scale = display_width / roadway_width
+        self.roadway_center_x = x_min + 0.5*(x_max - x_min)
+        self.roadway_center_y = y_min + 0.5*(y_max - y_min)
+        self.display_center_r = Graphics.WINDOW_SIZE_R // 2
+        self.display_center_s = Graphics.WINDOW_SIZE_S // 2
+        #print("      Graphics init: scale = {}, display center r,s = ({:4d}, {:4d}), roadway center x,y = ({:5.0f}, {:5.0f})"
+        #        .format(self.scale, self.display_center_r, self.display_center_s, self.roadway_center_x, self.roadway_center_y))
 
-# run the game loop - default provided by the example
-while True:
+        # Loop through the lane segments and draw the left and right edge lines of each
+        for lane in env.roadway.lanes:
+            for seg in lane.segments:
+                self._draw_segment(seg[0], seg[1], seg[2], seg[3], Graphics.LANE_WIDTH)
 
-    for event in pygame.event.get():
-        if event.type == QUIT:
-            pygame.quit()
-            sys.exit()
+        pygame.display.update()
+        #time.sleep(20) #debug only
+
+        # Initialize the crash image in case it will be necessary
+        self.crash_image = pygame.image.load("images/crash16.bmp").convert()
+
+        # Set up lists of previous screen coords and display colors for each vehicle
+        self.prev_veh_r = [0] * (SimpleHighwayRampWrapper.NUM_NEIGHBORS+1)
+        self.prev_veh_s = [0] * (SimpleHighwayRampWrapper.NUM_NEIGHBORS+1)
+        self.veh_colors = [Graphics.NEIGHBOR_COLOR] * (SimpleHighwayRampWrapper.NUM_NEIGHBORS+1)
+        self.veh_colors[0] = Graphics.EGO_COLOR
+
+        # Initialize the previous vehicles' locations near the beginning of a lane (doesn't matter which lane for this step)
+        for v_idx in range(len(self.prev_veh_r)):
+            self.prev_veh_r[v_idx] = int(self.scale*(self.env.roadway.lanes[0].segments[0][0] - self.roadway_center_x)) + self.display_center_r
+            self.prev_veh_s[v_idx] = Graphics.WINDOW_SIZE_S - \
+                                     int(self.scale*(self.env.roadway.lanes[0].segments[0][1] - self.roadway_center_y)) - self.display_center_s
+        #TODO: draw rectangles instead of circles, with length = vehicle length & width = 0.5*lane width
+        self.veh_radius = int(0.25 * Graphics.LANE_WIDTH * self.scale) #radius of icon in pixels
+
+        #
+        #..........Add live data plots to the display
+        #
+
+        # Plot ego speed
+        self.plot_ego_speed = Plot(self.window_surface, Graphics.PLOT1_R, Graphics.PLOT1_S, Graphics.PLOT_H, Graphics.PLOT_W, 0.0, \
+                                   SimpleHighwayRampWrapper.MAX_SPEED, title = "Ego speed, m/s")
+        self.plot_ego_speed.add_reference_line(SimpleHighwayRampWrapper.ROAD_SPEED_LIMIT, Graphics.REFERENCE_COLOR)
+
+
+    def update(self,
+               action  : list,      #vector of actions for the ego vehicle for the current time step
+               obs     : list,      #vector of observations of the ego vehicle for the current time step
+               vehicles: list,      #list of Vehicle objects, with item [0] as the ego vehicle
+              ):
+        """Paints all updates on the display screen, including the new motion of every vehicle and any data plots."""
+
+        # Loop through each vehicle in the scenario
+        for v_idx in range(len(vehicles)):
+
+            # Grab the background under where we want the vehicle to appear & erase the old vehicle
+            pygame.draw.circle(self.window_surface, Graphics.BLACK, (self.prev_veh_r[v_idx], self.prev_veh_s[v_idx]), self.veh_radius, 0)
+
+            # Get the vehicle's new location on the surface
+            new_x, new_y = self._get_vehicle_coords(vehicles, v_idx)
+            new_r, new_s = self._map2screen(new_x, new_y)
+
+            # If the vehicle is still active display the vehicle in its new location.  Note that the obs vector is not scaled at this point.
+            if vehicles[v_idx].active:
+                pygame.draw.circle(self.window_surface, self.veh_colors[v_idx], (new_r, new_s), self.veh_radius, 0)
+
+            # Else if the vehicle has crashed, then display the crash symbol at its location
+            elif vehicles[v_idx].crashed:
+                image_rect = list(self.crash_image.get_rect())
+                r_offset = (image_rect[2] - image_rect[0])//2
+                s_offset = (image_rect[3] - image_rect[1])//2
+                pos = self.crash_image.get_rect().move(new_r - r_offset, new_s - s_offset) #defines the upper-left corner of the image
+                self.window_surface.blit(self.crash_image, pos)
+
+            # Repaint the surface
+            pygame.display.update()
+            #print("   // Graphics: moving vehicle {} from r,s = ({:4d}, {:4d}) to ({:4d}, {:4d}) and new x,y = ({:5.0f}, {:5.0f})"
+            #        .format(v_idx, self.prev_veh_r[v_idx], self.prev_veh_s[v_idx], new_r, new_s, new_x, new_y))
+
+            # Update the previous location
+            self.prev_veh_r[v_idx] = new_r
+            self.prev_veh_s[v_idx] = new_s
+
+        # Update data plots
+        self.plot_ego_speed.update(vehicles[0].cur_speed)
+
+        # Pause until the next time step
+        self.pgclock.tick(self.display_freq)
+
+
+    def close(self):
+        pygame.quit()
+
+
+    def _draw_segment(self,
+                      x0        : float,
+                      y0        : float,
+                      x1        : float,
+                      y1        : float,
+                      w         : float
+                     ):
+        """Draws a single lane segment on the display, which consists of the left and right edge lines.
+            ASSUMES that all segments are oriented with headings between 0 and 90 deg for simplicity.
+        """
+
+        # Find the scaled lane end-point pixel locations (these is centerline of the lane)
+        r0, s0 = self._map2screen(x0, y0)
+        r1, s1 = self._map2screen(x1, y1)
+
+        # Find the scaled width of the lane
+        ws = 0.5 * w * self.scale
+
+        angle = math.atan2(y1-y0, x1-x0) #radians in [-pi, pi]
+        sin_a = math.sin(angle)
+        cos_a = math.cos(angle)
+
+        # Find the screen coords of the left edge line
+        left_r0 = r0 - ws*sin_a
+        left_r1 = r1 - ws*sin_a
+        left_s0 = s0 - ws*cos_a
+        left_s1 = s1 - ws*cos_a
+
+        # Find the screen coords of the right edge line
+        right_r0 = r0 + ws*sin_a
+        right_r1 = r1 + ws*sin_a
+        right_s0 = s0 + ws*cos_a
+        right_s1 = s1 + ws*cos_a
+
+        # Draw the edge lines
+        pygame.draw.line(self.window_surface, Graphics.LANE_EDGE_COLOR, (left_r0, left_s0), (left_r1, left_s1))
+        pygame.draw.line(self.window_surface, Graphics.LANE_EDGE_COLOR, (right_r0, right_s0), (right_r1, right_s1))
+
+
+    def _get_vehicle_coords(self,
+                            vehicles    : List, #list of all Vehicles in the scenario
+                            vehicle_id  : int   #ID of the vehicle; 0=ego, others=neighbor vehicles
+                           ) -> tuple:
+        """Returns the map frame coordinates of the indicated vehicle based on its lane ID and distance downtrack.
+
+            CAUTION: these calcs are hard-coded to the specific roadway geometry in this code,
+            it is not a general solution.
+        """
+
+        assert 0 <= vehicle_id < len(vehicles), "///// _get_vehicle_coords: invalid vehicle_id = {}".format(vehicle_id)
+
+        road = self.env.roadway
+        lane = vehicles[vehicle_id].lane_id
+        x = road.param_to_map_frame(vehicles[vehicle_id].p, lane)
+        y = None
+        if lane < 2:
+            y = road.lanes[lane].segments[0][1]
+        else:
+            ddt = (x - road.lanes[2].start_x)/Roadway.COS_LANE2_ANGLE
+            if ddt < road.lanes[2].segments[0][4]: #vehicle is in seg 0
+                seg0x0 = road.lanes[2].segments[0][0]
+                seg0y0 = road.lanes[2].segments[0][1]
+                seg0x1 = road.lanes[2].segments[0][2]
+                seg0y1 = road.lanes[2].segments[0][3]
+
+                factor = ddt / road.lanes[2].segments[0][4]
+                x = seg0x0 + factor*(seg0x1 - seg0x0)
+                y = seg0y0 + factor*(seg0y1 - seg0y0)
+
+            else: #vehicle is in seg 1
+                y = road.lanes[2].segments[1][1]
+
+        return x, y
+
+
+    def _map2screen(self,
+                     x      : float,        #X coordinate in map frame
+                     y      : float,        #Y coordinate in map frame
+                    ) -> tuple:             #Returns (r, s) coordinates in the screen frame (pixels)
+        """Converts an (x, y) point in the map frame to a (r, s) point in the screen coordinates."""
+
+        r = int(self.scale*(x - self.roadway_center_x)) + self.display_center_r
+        s = Graphics.WINDOW_SIZE_S - int(self.scale*(y - self.roadway_center_y)) - self.display_center_s
+        return r, s
+
+
+######################################################################################################
+######################################################################################################
+
+
+class Plot:
+    """Displays an x-y plot of time series data on the screen."""
+
+    def __init__(self,
+                 surface    : pygame.Surface,   #the Pygame surface to draw on
+                 corner_r   : int,              #X coordinate of the upper-left corner, screen pixels
+                 corner_s   : int,              #Y coordinate of the upper-left corner, screen pixels
+                 height     : int,              #height of the plot, pixels
+                 width      : int,              #width of the plot, pixels
+                 min_y      : float,            #min value of data to be plotted on Y axis
+                 max_y      : float,            #max value of data to be plotted on Y axis
+                 max_steps  : int       = 180,  #max num time steps that will be plotted along X axis
+                 axis_color : tuple     = Graphics.PLOT_AXES_COLOR, #color of the axes
+                 data_color : tuple     = Graphics.DATA_COLOR, #color of the data curve being plotted
+                 title      : str       = None  #Title above the plot
+                ):
+        """Defines and draws the empty plot on the screen, with axes and title."""
+
+        assert max_y > min_y, "///// Plot defined with illegal min_y = {}, max_y = {}".format(min_y, max_y)
+        assert max_steps > 0, "///// Plot defined with illegal max_steps = {}".format(max_steps)
+        assert corner_r >= 0, "///// Plot defined with illegal corner_r = {}".format(corner_r)
+        assert corner_s >= 0, "///// Plot defined with illegal corner_s = {}".format(corner_s)
+        assert height > 0,    "///// Plot defined with illegal height = {}".format(height)
+        assert width > 0,     "///// Plot defined with illegal width = {}".format(width)
+
+        self.surface = surface
+        self.cr = corner_r
+        self.cs = corner_s
+        self.height = height
+        self.width = width
+        self.min_y = min_y
+        self.max_y = max_y
+        self.max_steps = max_steps
+        self.axis_color = axis_color
+        self.data_color = data_color
+
+        # Determine scale factors for the data
+        self.r_scale = self.width / max_steps #pixels per time step
+        self.s_scale = self.height / (max_y - min_y) #pixels per unit of data value
+
+        # Initialize drawing coordinates for the data curve (in (r, s) pixel location)
+        self.prev_r = None
+        self.prev_s = None
+
+        # Draw the axes - for numbering, assume that the given min & max are "nice" numbers, so don't need to search
+        # for nearest nice numbers.
+        self.basic_font = pygame.font.Font("images/FreeSans.ttf", Graphics.BASIC_FONT_SIZE)
+        pygame.draw.line(surface, axis_color, (corner_r, corner_s+height), (corner_r+width, corner_s+height))
+        pygame.draw.line(surface, axis_color, (corner_r, corner_s+height), (corner_r, corner_s))
+        self._make_y_label(min_y, corner_s + height)
+        self._make_y_label(max_y, corner_s)
+
+        # Create the plot's text on a separate surface and copy it to the display surface
+        if title is not None:
+            text = self.basic_font.render(title, True, axis_color, Graphics.BLACK)
+            text_rect = text.get_rect()
+            text_rect.center = (corner_r + width//2, corner_s - Graphics.BASIC_FONT_SIZE)
+            surface.blit(text, text_rect)
+
+        pygame.display.update()
+
+
+    def add_reference_line(self,
+                           y_value  : float,
+                           color    : tuple,
+                          ):
+        """Draws a horizontal line across the plot at the specified y value."""
+
+        assert self.min_y <= y_value <= self.max_y, "///// Error: Plot.add_reference_line called with invalid y_value = {}".format(y_value)
+
+        s = self.cs + Graphics.PLOT_H - y_value*self.s_scale
+        pygame.draw.line(self.surface, color, (self.cr, s), (self.cr + Graphics.PLOT_W, s))
+
+
+    def update(self,
+               data     : float,    #the real-world data value to be plotted (Y value)
+              ):
+        """Adds the next sequential data point to the plot."""
+
+        # If there has been no data plotted so far, then set the first point
+        if self.prev_r is None:
+            self.prev_r = self.cr
+            self.prev_s = self.cs + Graphics.PLOT_H - data*self.s_scale
+
+        # Else draw a line from the previous point to the current point
+        else:
+            new_r = self.prev_r + self.r_scale
+            new_s = self.cs + Graphics.PLOT_H - data*self.s_scale
+            if new_r <= self.cr + Graphics.PLOT_W:
+                pygame.draw.line(self.surface, self.data_color, (self.prev_r, self.prev_s), (new_r, new_s))
+                self.prev_r = new_r
+                self.prev_s = new_s
+                pygame.display.update()
+
+
+    def _make_y_label(self,
+                      val       : float,    #value to be displayed
+                      location  : int,      #vertical (s) coordinate for the center of the label, pixels
+                     ):
+        """Creates a numeric label for the Y axis, placing it at the specified vertical location. Displayed value
+            will be truncated to the nearest integer from the given value.  Label will be displayed on the surface.
+        """
+
+        label = "{:.0f}".format(val)
+        text = self.basic_font.render(label, True, self.axis_color, Graphics.BLACK)
+        text_rect = text.get_rect()
+        text_rect.center = (self.cr - (len(label) + 1)*Graphics.BASIC_FONT_SIZE//2, location)
+        self.surface.blit(text, text_rect)

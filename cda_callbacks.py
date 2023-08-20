@@ -14,12 +14,16 @@ class CdaCallbacks (DefaultCallbacks):
     """
 
     def __init__(self,
-                 legacy_callbacks_dict: Dict[str, callable] = None
+                 legacy_callbacks_dict: Dict[str, callable]      = None,
+                 use_perturbation_controller :              bool = False,
                 ):
         super().__init__(legacy_callbacks_dict)
 
-        self.info = PerturbationController()
-        self._checkpoint_path = self.info.get_checkpoint_path()
+        self._use_perturbation_controller = use_perturbation_controller
+        self._checkpoint_path = None
+        if use_perturbation_controller:
+            self.info = PerturbationController()
+            self._checkpoint_path = self.info.get_checkpoint_path()
         #print("///// CdaCallback instantiated! algo counter = ", self.info.get_algo_init_count())
 
 
@@ -42,7 +46,8 @@ class CdaCallbacks (DefaultCallbacks):
         #return
 
         # Update the initialize counter
-        self.info.increment_algo_init()
+        if self._use_perturbation_controller:
+            self.info.increment_algo_init()
 
         # If there is no checkpoint specified, then return now
         if self._checkpoint_path is None:
@@ -50,7 +55,7 @@ class CdaCallbacks (DefaultCallbacks):
             return
 
         # Once perturbations begin we don't want to be loading checkpoints any more, so return
-        if self.info.has_perturb_begun():
+        if self._use_perturbation_controller  and  self.info.has_perturb_begun():
             return
         print("///// CdaCallbacks restoring model from checkpoint ", self._checkpoint_path)
 
