@@ -93,8 +93,8 @@ class SimpleHighwayRampWrapper(SimpleHighwayRamp):
         scaled[self.EGO_SPEED_PREV]     = obs[self.EGO_SPEED_PREV]      / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
         scaled[self.STEPS_SINCE_LN_CHG] = obs[self.STEPS_SINCE_LN_CHG]  / SimpleHighwayRamp.MAX_STEPS_SINCE_LC  #range [0, 1]
         scaled[self.NEIGHBOR_IN_EGO_ZONE] = obs[self.NEIGHBOR_IN_EGO_ZONE]
-        scaled[self.EGO_DES_SPEED]      = obs[self.EGO_DES_SPEED]       / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
-        scaled[self.EGO_DES_SPEED_PREV] = obs[self.EGO_DES_SPEED_PREV]  / SimpleHighwayRamp.MAX_SPEED           #range [0, 1]
+        scaled[self.EGO_DES_ACCEL]      = obs[self.EGO_DES_ACCEL]       / SimpleHighwayRamp.MAX_ACCEL           #range [-1, 1]
+        scaled[self.EGO_DES_ACCEL_PREV] = obs[self.EGO_DES_ACCEL_PREV]  / SimpleHighwayRamp.MAX_ACCEL           #range [-1, 1]
         scaled[self.LC_CMD]             = obs[self.LC_CMD]
         scaled[self.LC_CMD_PREV]        = obs[self.LC_CMD_PREV]
 

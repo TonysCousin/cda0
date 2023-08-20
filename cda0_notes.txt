@@ -3373,29 +3373,35 @@ AI: redo coordinate transforms, then verify latest results with new inference pr
 	* Used the free Greenfish icon editor on Windows (couldn't get it to run on Linux).
 * Demonstrated that inference works (and the agent handles well) cases with 8 and 10 neighbors.
 
+* Run 66075 training level 5 with SAC on new branch accel_experiment
+	* Modified the environment to interpret action[0] as acceleration command instead of
+	  desired speed. Used the same reward penalty calcs that were used for large speed cmd
+	  changes, but everything else was left unchanged. This is just to see if there is a
+	  noticeable difference in ability to learn or agent's performance once trained.
+	* Run died due to segfault after 4 trials were complete. None of those 4 performed well.
+	  Trial 3 reached rmax ~10 at 8500 iters, but rmean never got above -10.
+	* Trial 3 doesn't perform well in inference either. But one noticeable difference from
+	  the 86df0 agent is that its speed profile is much smoother.
+
+8/19/23
+
+* Run 18efa training level 5 with SAC on branch accel_experiment - identical setup as previous,
+	* Previous run had a lot of high noise values, and this one drew several trials with a
+	  lot less noise, so hoping that will make a difference.
+	* 7 of 8 trials errored out very early. The remaining one did not perform well. Its
+	  rmax reached ~10 at a couple points, but rmean stayed < -14 through 6600 iterations,
+	  so I killed it.
+	* This is an experiment that may be worth picking up sometime in the future.
+
 
 
 
 Considerations:
-- Move to action[0] as accel rather than tgt speed
-- do a lot more training to ensure smooth handling of some of the more rare cases, maybe with 8 neighbors?
-
 - Tweak reward for more penalty on large speed cmd changes
 - try running ray.train instead of all the tuning jobs
 - redo rewards per recent paper suggestions
 - change replay buffer capacity from 1e6 to smaller.
 - remove time step bonus.
-
-
-
-
-Near-term considerations:
-- implement level 5 with random lanes & crash avoidance neighbors
-
-Longer term considerations:
-- study graph ML
-- study path planning to replace near-sighted agent
-
 
 *** Variables under manual control:
 	* batch size

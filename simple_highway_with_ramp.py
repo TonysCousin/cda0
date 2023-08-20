@@ -276,8 +276,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.STEPS_SINCE_LN_CHG =  5 #num time steps since the previous lane change was initiated
         self.NEIGHBOR_IN_EGO_ZONE = 6 #if any neighbor vehicle is in the ego zone, then this value will be 1 if it is in front of the
                                      # ego vehicle or -1 if it is behind the ego vehicle. If no neigbhor is present, value = 0
-        self.EGO_DES_SPEED      =  7 #agent's most recent speed command, m/s (action feedback from this step)
-        self.EGO_DES_SPEED_PREV =  8 #desired speed from previous time step, m/s
+        self.EGO_DES_ACCEL      =  7 #agent's most recent acceleration command, m/s (action feedback from this step)
+        self.EGO_DES_ACCEL_PREV =  8 #desired acceleration from previous time step, m/s
         self.LC_CMD             =  9 #agent's most recent lane change command, quantized (values map to the enum class LaneChange)
         self.LC_CMD_PREV        = 10 #lane change command from previous time step, quantized
 
@@ -342,6 +342,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # So here we must anticipate that scaling and leave the limits open enough to accommodate it.
         max_rel_speed = SimpleHighwayRamp.MAX_SPEED / SimpleHighwayRamp.ROAD_SPEED_LIMIT
         lower_obs = np.zeros((self.OBS_SIZE)) #most values are 0, so only the others are explicitly set below
+        lower_obs[self.EGO_DES_ACCEL]       = -SimpleHighwayRamp.MAX_ACCEL
+        lower_obs[self.EGO_DES_ACCEL_PREV]  = -SimpleHighwayRamp.MAX_ACCEL
         lower_obs[self.LC_CMD]              = LaneChange.CHANGE_LEFT
         lower_obs[self.LC_CMD_PREV]         = LaneChange.CHANGE_LEFT
         lower_obs[self.NEIGHBOR_IN_EGO_ZONE]= -1.0
@@ -358,8 +360,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         upper_obs = np.ones(self.OBS_SIZE) #most values are 1
         upper_obs[self.EGO_SPEED]           = SimpleHighwayRamp.MAX_SPEED
         upper_obs[self.EGO_SPEED_PREV]      = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.EGO_DES_SPEED]       = SimpleHighwayRamp.MAX_SPEED
-        upper_obs[self.EGO_DES_SPEED_PREV]  = SimpleHighwayRamp.MAX_SPEED
+        upper_obs[self.EGO_DES_ACCEL]       = SimpleHighwayRamp.MAX_ACCEL
+        upper_obs[self.EGO_DES_ACCEL_PREV]  = SimpleHighwayRamp.MAX_ACCEL
         upper_obs[self.EGO_LANE_REM]        = SimpleHighwayRamp.SCENARIO_LENGTH + SimpleHighwayRamp.SCENARIO_BUFFER_LENGTH
         upper_obs[self.LC_CMD]              = LaneChange.CHANGE_RIGHT
         upper_obs[self.LC_CMD_PREV]         = LaneChange.CHANGE_RIGHT
@@ -709,8 +711,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         self.obs[self.LC_CMD_PREV]          = LaneChange.STAY_IN_LANE
         self.obs[self.EGO_SPEED]            = ego_speed
         self.obs[self.EGO_SPEED_PREV]       = ego_speed
-        self.obs[self.EGO_DES_SPEED]        = ego_speed
-        self.obs[self.EGO_DES_SPEED_PREV]   = ego_speed
+        self.obs[self.EGO_DES_ACCEL]        = 0.0
+        self.obs[self.EGO_DES_ACCEL_PREV]   = 0.0
         self.obs[self.EGO_LANE_REM]         = ego_rem
         self.obs[self.STEPS_SINCE_LN_CHG]   = SimpleHighwayRamp.MAX_STEPS_SINCE_LC
         self._verify_obs_limits("reset after populating main obs with ego stuff")
@@ -777,18 +779,18 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             action[1] = 0.0
 
         # Unscale the action inputs (both actions are in [-1, 1])
-        desired_speed = (action[0] + 1.0)/2.0 * SimpleHighwayRamp.MAX_SPEED
+        desired_accel = action[0] * SimpleHighwayRamp.MAX_ACCEL
         lc_cmd = int(math.floor(action[1] + 0.5))
         #print("///// step: incoming cmd[1] = {:5.2f}, lc_cmd = {:2}, current lane = {}, p = {:7.2f}, steps = {}"
         #      .format(cmd[1], lc_cmd, self.vehicles[0].lane_id, self.vehicles[0].p, self.steps_since_reset))
 
         # Move the ego vehicle downtrack. This doesn't account for possible lane changes, which are handled seperately, below.
-        new_ego_speed, new_ego_p = self.vehicles[0].advance_vehicle_spd(desired_speed)
+        new_ego_speed, new_ego_p = self.vehicles[0].advance_vehicle_accel(desired_accel)
         if new_ego_p > SimpleHighwayRamp.SCENARIO_LENGTH:
             new_ego_p = SimpleHighwayRamp.SCENARIO_LENGTH #limit it to avoid exceeding NN input validation rules
         if self.debug > 1:
-            print("      Vehicle 0 advanced with new_speed_cmd = {:.2f}. new_speed = {:.2f}, new_p = {:.2f}"
-                    .format(desired_speed, new_ego_speed, new_ego_p))
+            print("      Vehicle 0 advanced with desired_accel = {:.2f}. new_speed = {:.2f}, new_p = {:.2f}"
+                    .format(desired_accel, new_ego_speed, new_ego_p))
 
         # Move each of the active neighbor vehicles downtrack.
         for n in range(1, len(self.vehicles)):
@@ -811,8 +813,8 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
         # Update ego vehicle obs vector
         self.obs[self.EGO_SPEED_PREV] = self.obs[self.EGO_SPEED]
         self.obs[self.EGO_SPEED] = new_ego_speed
-        self.obs[self.EGO_DES_SPEED_PREV] = self.obs[self.EGO_DES_SPEED]
-        self.obs[self.EGO_DES_SPEED] = desired_speed
+        self.obs[self.EGO_DES_ACCEL_PREV] = self.obs[self.EGO_DES_ACCEL]
+        self.obs[self.EGO_DES_ACCEL] = desired_accel
         if new_ego_p >= SimpleHighwayRamp.SCENARIO_LENGTH:
             done = True
             return_info["reason"] = "SUCCESS - end of scenario!"
@@ -1656,13 +1658,13 @@ class SimpleHighwayRamp(TaskSettableEnv):  #Based on OpenAI gym 0.26.1 API
             if penalty > 0.0001:
                 explanation += "Ln cmd pen {:.4f}. ".format(penalty)
 
-            # Small penalty for widely varying speed commands
+            # Small penalty for widely varying accel commands
             if self.difficulty_level > 0:
-                cmd_diff = abs(self.obs[self.EGO_DES_SPEED] - self.obs[self.EGO_DES_SPEED_PREV]) / SimpleHighwayRamp.MAX_SPEED
+                cmd_diff = abs(self.obs[self.EGO_DES_ACCEL] - self.obs[self.EGO_DES_ACCEL_PREV]) / SimpleHighwayRamp.MAX_ACCEL
                 penalty = 0.4 * cmd_diff * cmd_diff
                 reward -= penalty
                 if penalty > 0.0001:
-                    explanation += "Spd cmd pen {:.4f}. ".format(penalty)
+                    explanation += "Accel cmd pen {:.4f}. ".format(penalty)
 
             # Penalty for deviating from roadway speed limit
             speed_mult = 0.3
