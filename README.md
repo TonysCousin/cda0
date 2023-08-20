@@ -96,7 +96,9 @@ This software is published under the [Apache 2.0 open source license](LICENSE), 
 It was written by John Stark.
 
 ## More Videos
-![Lane 1 start](images/lane1a.gif)	![Lane 1 start](images/lane1b.gif)
+![Lane 1 start](images/lane1a.gif)
+![Lane 1 start](images/lane1b.gif)
 ![Lane 2 start](images/lane2a.gif)
 ![Lane 2 start](images/lane2b.gif)
+The training was not perfected...sometimes our agent will crash!
 ![Lane 2 crash](images/lane2_crash.gif)
